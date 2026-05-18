@@ -1,0 +1,304 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Company;
+use App\Models\Order;
+use App\Models\Quote;
+use App\Repositories\QuoteRepository;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class QuoteService
+{
+    public function __construct(
+        public readonly QuoteRepository $repository,
+        private DocumentSequenceService $sequenceService,
+        private OrderService $orderService,
+    ) {}
+
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
+
+    public function search(array $filters = [], int $perPage = 15): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    {
+        return $this->repository->search($filters, $perPage);
+    }
+
+    public function create(array $data): Quote
+    {
+        return DB::transaction(function () use ($data) {
+            $items = $data['items'] ?? [];
+            unset($data['items']);
+
+            $company = Company::firstOrFail();
+
+            $data['company_id']   = $company->id;
+            $data['fiscal_year_id'] = $company->current_fiscal_year_id;
+            $data['number']       = $this->sequenceService->nextNumber($company, 'devis');
+            $data['created_by']   = Auth::id();
+            $data['status']       = $data['status'] ?? 'brouillon';
+
+            // Calculate totals from items
+            [$subtotal, $taxTotal] = $this->calculateTotals($items);
+            $discount = (int) ($data['global_discount_amount'] ?? 0);
+
+            $data['subtotal_ht']            = $subtotal;
+            $data['total_discount']         = $discount;
+            $data['total_tax']              = $taxTotal;
+            $data['total_ttc']              = $subtotal + $taxTotal - $discount;
+            $data['global_discount_amount'] = $discount;
+
+            $quote = Quote::create($data);
+            $this->syncItems($quote, $items);
+            $this->recalculate($quote);
+
+            return $quote->fresh();
+        });
+    }
+
+    public function update(Quote $quote, array $data): Quote
+    {
+        return DB::transaction(function () use ($quote, $data) {
+            $items = $data['items'] ?? null;
+            unset($data['items']);
+
+            $quote->update($data);
+
+            if ($items !== null) {
+                $quote->items()->delete();
+                $this->syncItems($quote, $items);
+            }
+
+            $this->recalculate($quote);
+            return $quote->fresh();
+        });
+    }
+
+    public function delete(Quote $quote): bool
+    {
+        if (!in_array($quote->status, ['brouillon', 'refuse', 'annule'])) {
+            throw new \RuntimeException('Seuls les devis en brouillon, refusés ou annulés peuvent être supprimés.');
+        }
+        return $quote->delete();
+    }
+
+    // ── Workflow transitions ──────────────────────────────────────────────────
+
+    /** brouillon → envoye */
+    public function send(Quote $quote): Quote
+    {
+        if ($quote->status !== 'brouillon') {
+            throw new \RuntimeException('Seul un devis en brouillon peut être marqué comme envoyé.');
+        }
+        $quote->update(['status' => 'envoye']);
+        return $quote->fresh();
+    }
+
+    /** envoye → accepte (validation client) */
+    public function accept(Quote $quote): Quote
+    {
+        if (!in_array($quote->status, ['envoye', 'brouillon'])) {
+            throw new \RuntimeException('Le devis doit être envoyé avant d\'être accepté.');
+        }
+        $quote->update([
+            'status'       => 'accepte',
+            'validated_by' => Auth::id(),
+            'validated_at' => now(),
+        ]);
+        return $quote->fresh();
+    }
+
+    /** envoye → refuse */
+    public function refuse(Quote $quote): Quote
+    {
+        if (!in_array($quote->status, ['envoye', 'brouillon'])) {
+            throw new \RuntimeException('Seul un devis envoyé peut être refusé.');
+        }
+        $quote->update(['status' => 'refuse']);
+        return $quote->fresh();
+    }
+
+    /** any → annule */
+    public function cancel(Quote $quote): Quote
+    {
+        // [FIX-VENTES-08] 'converti' must also be blocked: the order already exists and
+        // cancelling the quote would leave the order in an inconsistent parent-less state.
+        if (in_array($quote->status, ['annule', 'accepte', 'converti'])) {
+            throw new \RuntimeException('Ce devis ne peut pas être annulé (statut : ' . $quote->status . ').');
+        }
+        $quote->update(['status' => 'annule']);
+        return $quote->fresh();
+    }
+
+    /**
+     * Accept the quote AND immediately convert it to a sales order in one atomic step.
+     * Works from status brouillon or envoye.
+     * Returns the newly created Order.
+     */
+    public function acceptAndConvert(Quote $quote): Order
+    {
+        if (!in_array($quote->status, ['brouillon', 'envoye'])) {
+            throw new \RuntimeException(
+                'Le devis doit être en brouillon ou envoyé pour être validé. Statut actuel : ' . $quote->status . '.'
+            );
+        }
+        if ($quote->converted_to_order_id) {
+            throw new \RuntimeException('Ce devis a déjà été converti en commande.');
+        }
+
+        // Accept first, then convert — all in one DB transaction
+        $quote->update([
+            'status'       => 'accepte',
+            'validated_by' => Auth::id(),
+            'validated_at' => now(),
+        ]);
+
+        return $this->convertToOrder($quote);
+    }
+
+    /**
+     * Convert this quote into a confirmed sales order.
+     * Requires status = accepte.
+     */
+    public function convertToOrder(Quote $quote): Order
+    {
+        if ($quote->status !== 'accepte') {
+            throw new \RuntimeException('Le devis doit être accepté par le client avant d\'être converti en commande. Statut actuel : ' . $quote->status . '.');
+        }
+        if ($quote->converted_to_order_id) {
+            throw new \RuntimeException('Ce devis a déjà été converti en commande.');
+        }
+
+        return DB::transaction(function () use ($quote) {
+            $company = Company::firstOrFail();
+            $orderNumber = $this->sequenceService->nextNumber($company, 'commande');
+
+            // [FIX-MAJEUR] Propagate all financial and contractual fields from quote
+            $order = Order::create([
+                'company_id'             => $company->id,
+                'client_id'              => $quote->client_id,
+                'fiscal_year_id'         => $quote->fiscal_year_id,
+                'quote_id'               => $quote->id,
+                'number'                 => $orderNumber,
+                'issued_at'              => now()->toDateString(),
+                'status'                 => 'confirme',
+                'subtotal_ht'            => $quote->subtotal_ht,
+                'total_discount'         => $quote->total_discount,
+                'total_tax'              => $quote->total_tax,
+                'total_ttc'              => $quote->total_ttc,
+                'global_discount_amount' => $quote->global_discount_amount,
+                'global_discount_percent'=> $quote->global_discount_percent,
+                'currency_code'          => $quote->currency_code ?? 'XOF',
+                'exchange_rate'          => $quote->exchange_rate  ?? 1,
+                'reference'              => $quote->reference,
+                'notes'                  => $quote->notes,
+                'terms'                  => $quote->terms,
+                'footer_note'            => $quote->footer_note,
+                'created_by'             => Auth::id(),
+            ]);
+
+            foreach ($quote->items as $item) {
+                $order->items()->create([
+                    'product_id'       => $item->product_id,
+                    'description'      => $item->description,
+                    'unit_id'          => $item->unit_id,
+                    'quantity'         => $item->quantity,
+                    'unit_price'       => $item->unit_price,
+                    'discount_percent' => $item->discount_percent,
+                    'tax_rate_id'      => $item->tax_rate_id,
+                    'tax_rate_value'   => $item->tax_rate_value,
+                    'line_total_ht'    => $item->line_total_ht,
+                    'line_tax'         => $item->line_tax,
+                    'line_total_ttc'   => $item->line_total_ttc,
+                    'sort_order'       => $item->sort_order,
+                ]);
+            }
+
+            // Reserve stock for all stockable items, exactly as OrderService::confirm() does.
+            // This is necessary because the order is created directly with status='confirme',
+            // bypassing the normal brouillon→confirme transition that would call reserveStock().
+            $this->orderService->reserveStock($order);
+
+            // [FIX-MAJEUR] Mark quote as 'converti' (distinct from simply 'accepte')
+            $quote->update([
+                'status'               => 'converti',
+                'converted_to_order_id'=> $order->id,
+            ]);
+
+            return $order;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    private function syncItems(Quote $quote, array $items): void
+    {
+        foreach ($items as $i => $item) {
+            if (empty($item['description']) && empty($item['product_id'])) {
+                continue;
+            }
+
+            $qty   = (float) ($item['quantity'] ?? 1);
+            $price = (float) ($item['unit_price'] ?? 0);
+            $disc  = (float) ($item['discount_percent'] ?? 0);
+            $tax   = (float) ($item['tax_rate_value'] ?? 0);
+            $ht    = (int) round($qty * $price * (1 - $disc / 100));
+            $lineTax = (int) round($ht * ($tax / 100));
+            $ttc   = $ht + $lineTax;
+
+            $quote->items()->create([
+                'product_id'       => $item['product_id'] ?? null,
+                'description'      => $item['description'] ?? '',
+                'unit_id'          => $item['unit_id'] ?? null,
+                'quantity'         => $qty,
+                'unit_price'       => (int) $price,
+                'discount_percent' => $disc,
+                'tax_rate_id'      => $item['tax_rate_id'] ?? null,
+                'tax_rate_value'   => $tax,
+                'line_total_ht'    => $ht,
+                'line_tax'         => $lineTax,
+                'line_total_ttc'   => $ttc,
+                'sort_order'       => $i,
+            ]);
+        }
+    }
+
+    private function calculateTotals(array $items): array
+    {
+        $subtotal = 0;
+        $taxTotal = 0;
+
+        foreach ($items as $item) {
+            $qty   = (float) ($item['quantity'] ?? 1);
+            $price = (float) ($item['unit_price'] ?? 0);
+            $disc  = (float) ($item['discount_percent'] ?? 0);
+            $tax   = (float) ($item['tax_rate_value'] ?? 0);
+            $ht    = $qty * $price * (1 - $disc / 100);
+            $subtotal += $ht;
+            $taxTotal += $ht * ($tax / 100);
+        }
+
+        return [(int) round($subtotal), (int) round($taxTotal)];
+    }
+
+    private function recalculate(Quote $quote): void
+    {
+        $quote->load('items');
+
+        $subtotal = (int) $quote->items->sum('line_total_ht');
+        $taxTotal = (int) $quote->items->sum('line_tax');
+        $discount = (int) ($quote->global_discount_amount ?? 0);
+        $total    = $subtotal + $taxTotal - $discount;
+
+        $quote->update([
+            'subtotal_ht'    => $subtotal,
+            'total_tax'      => $taxTotal,
+            'total_discount' => $discount,
+            'total_ttc'      => $total,
+        ]);
+    }
+}

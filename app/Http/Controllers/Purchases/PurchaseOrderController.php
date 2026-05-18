@@ -1,0 +1,162 @@
+<?php
+
+namespace App\Http\Controllers\Purchases;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Purchase\StorePurchaseOrderRequest;
+use App\Http\Requests\Purchase\UpdatePurchaseOrderRequest;
+use App\Models\Company;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
+use App\Services\PurchaseOrderService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
+
+class PurchaseOrderController extends Controller
+{
+    public function __construct(private PurchaseOrderService $service) {}
+
+    public function index(Request $request)
+    {
+        $this->authorize('viewAny', PurchaseOrder::class);
+        $filters = $request->only(['supplier_id', 'status', 'search']);
+        $purchaseOrders = $this->service->search($filters, 15);
+        $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
+
+        return view('achats.commandes.index', compact('purchaseOrders', 'filters', 'suppliers'));
+    }
+
+    public function create()
+    {
+        $this->authorize('create', PurchaseOrder::class);
+        $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
+        $products  = Product::active()->orderBy('name')->get(['id', 'name', 'reference', 'purchase_price']);
+
+        return view('achats.commandes.create', compact('suppliers', 'products'));
+    }
+
+    public function store(StorePurchaseOrderRequest $request)
+    {
+        $this->authorize('create', PurchaseOrder::class);
+        $po = $this->service->create($request->validated());
+
+        return redirect()
+            ->route('achats.commandes.show', $po)
+            ->with('success', 'Commande achat ' . $po->number . ' créée avec succès.');
+    }
+
+    public function show(PurchaseOrder $commande)
+    {
+        $this->authorize('view', $commande);
+        $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
+
+        return view('achats.commandes.show', compact('purchaseOrder'));
+    }
+
+    public function edit(PurchaseOrder $commande)
+    {
+        $this->authorize('update', $commande);
+        $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
+        $suppliers     = Supplier::active()->orderBy('name')->get(['id', 'name']);
+        $products      = Product::active()->orderBy('name')->get(['id', 'name', 'reference', 'purchase_price']);
+
+        return view('achats.commandes.edit', compact('purchaseOrder', 'suppliers', 'products'));
+    }
+
+    public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $commande)
+    {
+        $this->authorize('update', $commande);
+        $this->service->update($commande, $request->validated());
+
+        return redirect()
+            ->route('achats.commandes.show', $commande)
+            ->with('success', 'Commande achat mise à jour.');
+    }
+
+    public function destroy(PurchaseOrder $commande)
+    {
+        $this->authorize('delete', $commande);
+        try {
+            $this->service->delete($commande);
+            return redirect()
+                ->route('achats.commandes.index')
+                ->with('success', 'Commande achat supprimée.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * GET achats/commandes/{purchaseOrder}/pdf — download or stream PDF.
+     */
+    public function pdf(PurchaseOrder $commande, Request $request)
+    {
+        $this->authorize('view', $commande);
+        $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
+        $settings      = Company::first()?->documentSetting;
+
+        $pdf = Pdf::loadView('achats.pdf.purchase-order', compact('purchaseOrder', 'settings'))
+            ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+
+        $filename = 'BC_' . str_replace(['/', '\\', ' '], '-', $purchaseOrder->number) . '.pdf';
+
+        return $request->boolean('preview')
+            ? $pdf->stream($filename)
+            : $pdf->download($filename);
+    }
+
+    /**
+     * POST achats/commandes/{commande}/confirm
+     * Confirm a draft purchase order (brouillon → confirme).
+     */
+    public function confirm(PurchaseOrder $commande)
+    {
+        $this->authorize('validate', $commande);
+        try {
+            // [ACHATS-PRO-APPROVAL] Bloque la confirmation logistique si l'approbation est requise et non donnée.
+            app(\App\Services\PoApprovalService::class)->assertApprovedForConfirm($commande);
+
+            $this->service->confirm($commande);
+            return redirect()
+                ->route('achats.commandes.show', $commande)
+                ->with('success', 'Commande ' . $commande->number . ' confirmée.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * POST achats/commandes/{commande}/reception
+     * Create a reception from all PO items.
+     */
+    public function createReception(PurchaseOrder $commande)
+    {
+        $this->authorize('update', $commande);
+        try {
+            $reception = $this->service->createReception($commande);
+            return redirect()
+                ->route('achats.receptions.show', $reception)
+                ->with('success', 'Réception ' . $reception->number . ' créée. Veuillez confirmer les quantités reçues.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * POST achats/commandes/{commande}/facture
+     * Create a supplier invoice from this PO.
+     */
+    public function createSupplierInvoice(PurchaseOrder $commande)
+    {
+        $this->authorize('update', $commande);
+        try {
+            $invoice = $this->service->createSupplierInvoice($commande);
+            return redirect()
+                ->route('achats.factures-fournisseurs.show', $invoice)
+                ->with('success', 'Facture fournisseur ' . $invoice->number . ' créée avec succès.');
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+}

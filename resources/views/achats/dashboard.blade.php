@@ -1,0 +1,187 @@
+@extends('layouts.erp')
+@section('title', 'Achats — Tableau de bord')
+
+@section('breadcrumb')
+    <a href="{{ route('dashboard') }}" class="hover:text-gray-700">Accueil</a>
+    <span class="mx-1">/</span>
+    <span class="text-gray-900 font-medium">Achats</span>
+@endsection
+
+@section('content')
+@php $fmt = fn($n) => number_format((int) $n, 0, ',', ' '); @endphp
+
+<div class="space-y-6">
+
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Tableau de bord Achats</h1>
+            <p class="text-sm text-gray-500">Vue d'ensemble · commandes, réceptions, factures, échéances, fournisseurs</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('achats.commandes.index') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">Commandes</a>
+            <a href="{{ route('achats.factures-fournisseurs.index') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">Factures FF</a>
+            <a href="{{ route('achats.rfq.index') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">📋 RFQ</a>
+            <a href="{{ route('achats.approval.pending') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">✋ Approbations</a>
+            <a href="{{ route('achats.schedules.upcoming') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">💰 Échéances</a>
+            <a href="{{ route('achats.dashboard.matching') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">3-way matching</a>
+            <a href="{{ route('achats.dashboard.suppliers') }}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">📊 Évaluation FF</a>
+            @can('purchase_orders.create')
+            <a href="{{ route('achats.dashboard.restock-po') }}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg">⚡ Générer PO réappro</a>
+            @endcan
+        </div>
+    </div>
+
+    {{-- KPIs --}}
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase">PO en cours</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $kpis['open_po_count'] }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">{{ $fmt($kpis['open_po_value']) }} FCFA</p>
+        </div>
+
+        <a href="{{ route('achats.commandes.index') }}" class="bg-white rounded-xl border-2 border-blue-200 hover:border-blue-300 p-5 transition-colors block">
+            <p class="text-xs font-medium text-blue-600 uppercase">📦 À réceptionner</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-blue-700">{{ $kpis['awaiting_receipt'] }}</p>
+            <p class="text-xs text-blue-500 mt-0.5">commandes confirmées</p>
+        </a>
+
+        <a href="{{ route('achats.factures-fournisseurs.index') }}" class="bg-white rounded-xl border-2 border-orange-200 hover:border-orange-300 p-5 transition-colors block">
+            <p class="text-xs font-medium text-orange-600 uppercase">💰 FF à payer</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-orange-700">{{ $kpis['invoices_to_pay_count'] }}</p>
+            <p class="text-xs text-orange-500 mt-0.5">{{ $fmt($kpis['invoices_to_pay_amount']) }} FCFA</p>
+        </a>
+
+        <div class="bg-white rounded-xl border-2 {{ $kpis['overdue']>0 ? 'border-red-300' : 'border-gray-200' }} p-5">
+            <p class="text-xs font-medium {{ $kpis['overdue']>0 ? 'text-red-600' : 'text-gray-500' }} uppercase">⏰ En retard</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums {{ $kpis['overdue']>0 ? 'text-red-700' : 'text-gray-900' }}">{{ $kpis['overdue'] }}</p>
+            <p class="text-xs {{ $kpis['overdue']>0 ? 'text-red-500' : 'text-gray-400' }} mt-0.5">{{ $fmt($kpis['overdue_amount']) }} FCFA</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-amber-200 p-5">
+            <p class="text-xs font-medium text-amber-600 uppercase">Échéances 7j</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-amber-700">{{ $kpis['due_soon'] }}</p>
+            <p class="text-xs text-amber-500 mt-0.5">factures à payer</p>
+        </div>
+
+        <a href="{{ route('achats.demandes-achat.index') }}" class="bg-white rounded-xl border border-gray-200 hover:border-gray-300 p-5 transition-colors block">
+            <p class="text-xs font-medium text-gray-500 uppercase">📝 DA en attente</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $kpis['pending_requests'] }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">demandes d'achat</p>
+        </a>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase">Volume mois</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $fmt($kpis['month_volume']) }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">FCFA · {{ now()->translatedFormat('F') }}</p>
+        </div>
+
+        <a href="{{ route('achats.dashboard.matching') }}" class="bg-white rounded-xl border-2 {{ ($matchingPreview['qty_count']+$matchingPreview['amount_count']) > 0 ? 'border-amber-300' : 'border-emerald-300' }} p-5 transition-colors block">
+            <p class="text-xs font-medium {{ ($matchingPreview['qty_count']+$matchingPreview['amount_count']) > 0 ? 'text-amber-600' : 'text-emerald-600' }} uppercase">🔗 3-way matching</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums {{ ($matchingPreview['qty_count']+$matchingPreview['amount_count']) > 0 ? 'text-amber-700' : 'text-emerald-700' }}">
+                {{ $matchingPreview['qty_count'] + $matchingPreview['amount_count'] }}
+            </p>
+            <p class="text-xs {{ ($matchingPreview['qty_count']+$matchingPreview['amount_count']) > 0 ? 'text-amber-500' : 'text-emerald-500' }} mt-0.5">écart(s) détecté(s)</p>
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {{-- Échéances proches --}}
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-gray-700">⏰ Échéances 30 prochains jours</h2>
+                <a href="{{ route('achats.factures-fournisseurs.index') }}" class="text-xs text-blue-600 hover:underline">Tout →</a>
+            </div>
+            @if($dueSoon->isEmpty())
+                <div class="p-6 text-center text-emerald-700 text-sm">✓ Aucune échéance proche.</div>
+            @else
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Facture</th>
+                        <th class="px-4 py-2 text-left">Fournisseur</th>
+                        <th class="px-4 py-2 text-right">Reste dû</th>
+                        <th class="px-4 py-2 text-right">Échéance</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach($dueSoon as $inv)
+                    <tr class="{{ $inv->is_overdue ? 'bg-red-50/40' : '' }}">
+                        <td class="px-4 py-2 font-mono text-xs">
+                            <a href="{{ route('achats.factures-fournisseurs.show', $inv->id) }}" class="text-blue-700 hover:underline">{{ $inv->number }}</a>
+                            <div class="text-gray-400">{{ $inv->supplier_invoice_number ?? '' }}</div>
+                        </td>
+                        <td class="px-4 py-2 text-xs">{{ $inv->supplier_name }}</td>
+                        <td class="px-4 py-2 text-right tabular-nums font-medium {{ $inv->is_overdue ? 'text-red-700' : 'text-orange-700' }}">
+                            {{ $fmt($inv->remaining_amount) }}
+                        </td>
+                        <td class="px-4 py-2 text-right text-xs {{ $inv->is_overdue ? 'text-red-700 font-semibold' : 'text-gray-600' }}">
+                            {{ $inv->due_at ? \Carbon\Carbon::parse($inv->due_at)->format('d/m/Y') : '—' }}
+                            @if($inv->is_overdue) <span class="block text-xs text-red-500">(+{{ abs((int) $inv->days_to_due) }} j)</span>
+                            @elseif($inv->days_to_due !== null) <span class="block text-xs text-gray-400">dans {{ (int) $inv->days_to_due }} j</span>
+                            @endif
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @endif
+        </div>
+
+        {{-- Top 5 fournisseurs --}}
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-gray-700">🏆 Top fournisseurs (12 mois)</h2>
+                <a href="{{ route('achats.dashboard.suppliers') }}" class="text-xs text-blue-600 hover:underline">Évaluation complète →</a>
+            </div>
+            @if($topSuppliers->isEmpty())
+                <div class="p-6 text-center text-gray-400 text-sm">Aucun fournisseur actif.</div>
+            @else
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Fournisseur</th>
+                        <th class="px-4 py-2 text-right">Volume</th>
+                        <th class="px-4 py-2 text-center">Note</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach($topSuppliers as $s)
+                    @php $gradeBg = ['A'=>'bg-emerald-100 text-emerald-800','B'=>'bg-blue-100 text-blue-800','C'=>'bg-amber-100 text-amber-800','D'=>'bg-orange-100 text-orange-800','E'=>'bg-red-100 text-red-800'][$s->grade ?? 'C']; @endphp
+                    <tr>
+                        <td class="px-4 py-2">
+                            <p class="text-sm text-gray-900">{{ $s->name }}</p>
+                            <p class="text-xs text-gray-500">{{ $s->po_count ?? 0 }} commande(s)</p>
+                        </td>
+                        <td class="px-4 py-2 text-right tabular-nums">{{ $fmt($s->po_volume ?? 0) }}</td>
+                        <td class="px-4 py-2 text-center">
+                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-full {{ $gradeBg }} text-xs font-bold">{{ $s->grade ?? '—' }}</span>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @endif
+        </div>
+    </div>
+
+    {{-- Preview écarts 3-way --}}
+    @if($matchingPreview['qty_count'] > 0 || $matchingPreview['amount_count'] > 0)
+    <div class="bg-white rounded-xl border-2 border-amber-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-amber-800">🔗 Écarts 3-way matching ({{ $matchingPreview['qty_count'] + $matchingPreview['amount_count'] }})</h2>
+            <a href="{{ route('achats.dashboard.matching') }}" class="text-xs text-amber-700 hover:underline">Détail complet →</a>
+        </div>
+        <div class="px-5 py-3 text-sm text-amber-700">
+            @if($matchingPreview['qty_count'] > 0)
+                <p>{{ $matchingPreview['qty_count'] }} écart(s) quantitatif(s) entre PO ↔ réception ↔ facturation.</p>
+            @endif
+            @if($matchingPreview['amount_count'] > 0)
+                <p class="mt-1">{{ $matchingPreview['amount_count'] }} écart(s) de montant entre PO et facture liée.</p>
+            @endif
+        </div>
+    </div>
+    @endif
+
+</div>
+@endsection

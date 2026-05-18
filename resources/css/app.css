@@ -1,0 +1,373 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Système ERP pro 2025
+   Variables centralisées : couleurs, élévations, transitions, radius.
+   Modifier ici impacte toute l'app.
+═══════════════════════════════════════════════════════════════════════════ */
+:root {
+    /* Surfaces */
+    --surface-base:    #F6F8FB;   /* fond app (gris très clair, neutre, pas bleu pastel) */
+    --surface-card:    #FFFFFF;   /* fond cartes */
+    --surface-muted:   #F9FAFB;   /* fond zones secondaires */
+    --surface-elevated:#FFFFFF;   /* modales, popovers */
+
+    /* Borders */
+    --border-soft:     #EEF0F4;   /* bord léger (entre sections) */
+    --border:          #E5E7EB;   /* bord standard */
+    --border-strong:   #D1D5DB;   /* bord marqué (focus) */
+
+    /* Texte */
+    --text-primary:    #0F172A;   /* texte principal */
+    --text-secondary:  #475569;   /* texte secondaire */
+    --text-muted:      #94A3B8;   /* texte atténué */
+    --text-disabled:   #CBD5E1;
+
+    /* Marque (indigo professionnel) */
+    --brand:           #4F46E5;
+    --brand-hover:     #4338CA;
+    --brand-soft:      #EEF2FF;
+    --brand-strong:    #312E81;
+
+    /* États sémantiques */
+    --success:         #059669;
+    --success-soft:    #ECFDF5;
+    --warning:         #D97706;
+    --warning-soft:    #FFFBEB;
+    --danger:          #DC2626;
+    --danger-soft:     #FEF2F2;
+    --info:            #0284C7;
+    --info-soft:       #F0F9FF;
+
+    /* Élévations (cohérentes) */
+    --shadow-sm:    0 1px 2px 0 rgba(15, 23, 42, .04);
+    --shadow-card:  0 1px 3px 0 rgba(15, 23, 42, .04), 0 1px 2px -1px rgba(15, 23, 42, .03);
+    --shadow-md:    0 4px 12px -2px rgba(15, 23, 42, .06), 0 2px 4px -2px rgba(15, 23, 42, .04);
+    --shadow-lg:    0 12px 24px -8px rgba(15, 23, 42, .10), 0 4px 12px -4px rgba(15, 23, 42, .06);
+    --shadow-focus: 0 0 0 3px rgba(79, 70, 229, .15);
+
+    /* Radius (cohérent) */
+    --radius-sm:  6px;
+    --radius:     10px;
+    --radius-md:  12px;
+    --radius-lg:  16px;
+    --radius-xl:  20px;
+
+    /* Transitions */
+    --t-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+    --t-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    --t-slow: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Alpine.js — masquer les éléments [x-cloak] avant l'initialisation */
+[x-cloak] { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE ENHANCEMENTS — typographie, scrollbars, focus
+═══════════════════════════════════════════════════════════════════════════ */
+@layer base {
+
+    /* Body : fond neutre subtil ERP-pro (au lieu de gradient bleu pastel saturé).
+       Inline style sur body dans erp.blade.php peut surcharger — voir layout. */
+    body {
+        background-color: var(--surface-base);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Focus visible accessible (WCAG AA) */
+    :focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 2px;
+    }
+    button:focus-visible, a:focus-visible, input:focus-visible,
+    select:focus-visible, textarea:focus-visible {
+        outline: none;
+        box-shadow: var(--shadow-focus);
+    }
+
+    /* Scrollbars custom (webkit) — slim et discret */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, .15);
+        border-radius: 100px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, .25); background-clip: padding-box; border: 2px solid transparent; }
+
+    /* Selection harmonisée */
+    ::selection { background: var(--brand-soft); color: var(--brand-strong); }
+
+    /* Smooth scroll */
+    html { scroll-behavior: smooth; }
+
+    /* Inputs harmonisés (focus state cohérent) */
+    input:not([type=checkbox]):not([type=radio]):not([type=file]),
+    select, textarea {
+        transition: border-color var(--t-base), box-shadow var(--t-base), background-color var(--t-base);
+    }
+    input:not([type=checkbox]):not([type=radio]):not([type=file]):focus,
+    select:focus, textarea:focus {
+        outline: none;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENTS — classes utilitaires de l'ERP
+═══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+
+    /* ─────────────────────────────────────────────
+       Cards (modernisées : ombre douce, transition hover subtile)
+    ───────────────────────────────────────────── */
+    .card {
+        background: var(--surface-card);
+        border: 1px solid var(--border-soft);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-card);
+        transition: box-shadow var(--t-base), transform var(--t-base);
+    }
+    .card-interactive:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+
+    /* ─────────────────────────────────────────────
+       Buttons — base + variants
+       Style pro : transitions douces, hover lift, focus ring, active scale.
+    ───────────────────────────────────────────── */
+    .btn {
+        @apply inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium;
+        transition: background-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
+        position: relative;
+        white-space: nowrap;
+        user-select: none;
+    }
+    .btn:active { transform: translateY(0.5px); }
+    .btn:disabled { @apply opacity-50 cursor-not-allowed; transform: none !important; }
+
+    /* Solid buttons */
+    .btn-primary {
+        @apply text-white;
+        background: var(--brand);
+        box-shadow: 0 1px 2px rgba(79, 70, 229, .15);
+    }
+    .btn-primary:hover { background: var(--brand-hover); box-shadow: 0 4px 10px rgba(79, 70, 229, .25); }
+
+    .btn-secondary {
+        background: var(--surface-card);
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--surface-muted); color: var(--text-primary); border-color: var(--border-strong); }
+
+    .btn-danger   { @apply text-white; background: var(--danger); box-shadow: 0 1px 2px rgba(220, 38, 38, .15); }
+    .btn-danger:hover { @apply bg-red-700; box-shadow: 0 4px 10px rgba(220, 38, 38, .25); }
+    .btn-success  { @apply text-white; background: var(--success); }
+    .btn-success:hover { @apply bg-emerald-700; }
+    .btn-teal     { @apply bg-teal-600 text-white hover:bg-teal-700; }
+    .btn-amber    { @apply bg-amber-600 text-white hover:bg-amber-700; }
+    .btn-gray     { @apply bg-gray-700 text-white hover:bg-gray-800; }
+    .btn-purple   { @apply bg-purple-600 text-white hover:bg-purple-700; }
+    .btn-sky      { @apply bg-sky-600 text-white hover:bg-sky-700; }
+
+    /* Tailles */
+    .btn-sm { @apply text-xs px-2.5 py-1.5; }
+    .btn-lg { @apply text-base px-5 py-2.5; }
+
+    /* Ghost variant (action discrète) */
+    .btn-ghost {
+        background: transparent;
+        color: var(--text-secondary);
+    }
+    .btn-ghost:hover { background: var(--surface-muted); color: var(--text-primary); }
+
+    /* ─────────────────────────────────────────────
+       Badges — système harmonisé avec petite pastille
+    ───────────────────────────────────────────── */
+    .badge {
+        @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .badge::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        margin-right: 6px;
+        background: currentColor;
+        opacity: .9;
+    }
+    .badge-plain::before { display: none; }   /* opt-out de la pastille */
+
+    .badge-gray   { @apply bg-gray-100   text-gray-700; }
+    .badge-blue   { @apply bg-blue-100   text-blue-700; }
+    .badge-green  { @apply bg-green-100  text-green-700; }
+    .badge-red    { @apply bg-red-100    text-red-700; }
+    .badge-orange { @apply bg-orange-100 text-orange-700; }
+    .badge-purple { @apply bg-purple-100 text-purple-700; }
+    .badge-teal   { @apply bg-teal-100   text-teal-700; }
+    .badge-yellow { @apply bg-yellow-100 text-yellow-700; }
+    .badge-indigo { @apply bg-indigo-100 text-indigo-700; }
+    .badge-amber  { @apply bg-amber-100  text-amber-700; }
+    .badge-sky    { @apply bg-sky-100    text-sky-700; }
+
+    /* ─────────────────────────────────────────────
+       Inputs / Selects (style ERP-pro unifié)
+    ───────────────────────────────────────────── */
+    .input, .select, .textarea {
+        @apply w-full px-3 py-2 text-sm rounded-lg;
+        background: var(--surface-card);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+    }
+    .input:focus, .select:focus, .textarea:focus {
+        border-color: var(--brand);
+        box-shadow: var(--shadow-focus);
+    }
+    .input-error { border-color: var(--danger) !important; }
+    .input-error:focus { box-shadow: 0 0 0 3px rgba(220, 38, 38, .15); }
+
+    /* ─────────────────────────────────────────────
+       Tables — pro ERP avec zébrage hover et headers stables
+    ───────────────────────────────────────────── */
+    .tbl {
+        @apply min-w-full divide-y;
+        border-collapse: separate;
+        border-spacing: 0;
+        color: var(--text-primary);
+    }
+    .tbl thead {
+        background: var(--surface-muted);
+    }
+    .tbl thead th {
+        @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border);
+    }
+    .tbl tbody tr {
+        transition: background-color var(--t-fast);
+    }
+    .tbl tbody tr:hover {
+        background: var(--surface-muted);
+    }
+    .tbl tbody td {
+        @apply px-4 py-3 text-sm;
+        border-bottom: 1px solid var(--border-soft);
+    }
+    .tbl tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    /* Auth page (existant — préservé) */
+    .field-wrap { @apply relative; }
+    .field-icon {
+        @apply absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none flex items-center;
+    }
+    .auth-input {
+        @apply w-full pl-10 pr-4 py-2.5 text-sm text-gray-900 bg-gray-50 border border-gray-200 rounded-xl placeholder-gray-400 outline-none;
+        transition: border-color var(--t-base), background-color var(--t-base), box-shadow var(--t-base);
+    }
+    .auth-input:focus { @apply border-indigo-500 bg-white; box-shadow: var(--shadow-focus); }
+    .auth-input.has-error { @apply border-red-400 bg-red-50; }
+
+    .auth-btn {
+        @apply w-full py-3 text-sm font-semibold text-white bg-indigo-600 rounded-xl cursor-pointer border-0 transition active:scale-95;
+        box-shadow: 0 1px 3px rgba(79,70,229,.3), 0 4px 14px rgba(79,70,229,.2);
+    }
+    .auth-btn:hover {
+        @apply bg-indigo-700;
+        box-shadow: 0 2px 6px rgba(79,70,229,.35), 0 8px 24px rgba(79,70,229,.25);
+    }
+    .auth-checkbox { @apply w-4 h-4 rounded accent-indigo-600 cursor-pointer flex-shrink-0; }
+
+    /* Alerts */
+    .alert         { @apply flex items-center gap-2.5 px-3.5 py-3 rounded-xl text-sm mb-5; }
+    .alert-success { @apply bg-green-50 border border-green-200 text-green-700; }
+    .alert-error   { @apply bg-red-50   border border-red-200   text-rose-700; }
+    .alert-warning { @apply bg-amber-50 border border-amber-200 text-amber-700; }
+    .alert-info    { @apply bg-sky-50   border border-sky-200   text-sky-700; }
+
+    /* Titres */
+    .page-title { @apply text-xl font-bold tracking-tight; color: var(--text-primary); }
+    .section-title { @apply text-base font-semibold; color: var(--text-primary); }
+    .subtle-label { @apply text-xs font-semibold uppercase tracking-wider; color: var(--text-muted); }
+
+    /* ─────────────────────────────────────────────
+       Sidebar : indicateur actif net (barre verticale gauche)
+    ───────────────────────────────────────────── */
+    .sidebar-nav .nav-item-active {
+        position: relative;
+        background: rgba(255, 255, 255, .08);
+    }
+    .sidebar-nav .nav-item-active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 3px;
+        height: 70%;
+        background: #818CF8;
+        border-radius: 0 4px 4px 0;
+        box-shadow: 0 0 12px rgba(129, 140, 248, .5);
+    }
+
+    /* Empty state moderne */
+    .empty-state {
+        @apply flex flex-col items-center justify-center text-center py-12 px-6;
+        color: var(--text-muted);
+    }
+    .empty-state-icon {
+        @apply w-12 h-12 mb-3 rounded-full flex items-center justify-center;
+        background: var(--surface-muted);
+        color: var(--text-muted);
+    }
+
+    /* Skeleton loaders */
+    .skeleton {
+        background: linear-gradient(90deg, var(--surface-muted) 25%, #F1F5F9 50%, var(--surface-muted) 75%);
+        background-size: 200% 100%;
+        animation: skeleton-loading 1.4s ease-in-out infinite;
+        border-radius: var(--radius-sm);
+    }
+    @keyframes skeleton-loading {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UTILITIES — micro-utilitaires custom
+═══════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+
+    /* Élévations sémantiques (à utiliser plutôt que shadow-xl Tailwind) */
+    .shadow-card   { box-shadow: var(--shadow-card); }
+    .shadow-soft   { box-shadow: var(--shadow-md); }
+    .shadow-pop    { box-shadow: var(--shadow-lg); }
+
+    /* Animation fade-in-up (utilisée dans le dashboard) */
+    @keyframes fade-in-up {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up { animation: fade-in-up 280ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    /* Glass effect (header) */
+    .glass {
+        background: rgba(255, 255, 255, 0.78);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border-bottom: 1px solid rgba(99, 102, 241, .08);
+    }
+
+    /* Numbers : alignement et lisibilité */
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+}

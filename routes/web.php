@@ -1,0 +1,686 @@
+<?php
+
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ClientController;
+use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\AuditController;
+use Illuminate\Support\Facades\Route;
+
+// [UI] La racine redirige toujours vers la zone de travail.
+// Pas de page d'accueil publique — l'ERP est un outil interne.
+Route::get('/', function () {
+    return redirect()->route(auth()->check() ? 'dashboard' : 'login');
+});
+
+/*
+ * ── Vérification publique de facture (URL signée, aucune auth requise) ──────
+ * Accessible via le QR code imprimé sur la facture PDF.
+ */
+Route::get('/verifier/facture/{number}', \App\Http\Controllers\Sales\InvoiceVerifyController::class)
+    ->name('invoice.verify');
+
+Route::get('/verifier/bon-livraison/{number}', \App\Http\Controllers\Sales\DeliveryNoteVerifyController::class)
+    ->name('delivery-note.verify');
+
+Route::middleware(['auth', 'verified'])->group(function () {
+
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // ── Users (users.manage) ────────────────────────────────────────────────────
+    Route::middleware('permission:users.manage')->group(function () {
+        Route::resource('users', UserController::class)->except(['destroy']);
+        Route::patch('users/{user}/toggle', [UserController::class, 'toggleActive'])->name('users.toggle');
+    });
+
+    // ── Roles & Permissions (roles.manage) ──────────────────────────────────────
+    Route::middleware('permission:roles.manage')->group(function () {
+        Route::resource('roles', RoleController::class)->only(['index', 'show', 'edit', 'update']);
+    });
+
+    // ── Company settings (settings.manage) ──────────────────────────────────────
+    Route::middleware('permission:settings.manage')->group(function () {
+        Route::get('/parametrage', [CompanyController::class, 'edit'])->name('company.edit');
+        Route::put('/parametrage/general', [CompanyController::class, 'updateGeneral'])->name('company.update.general');
+        Route::put('/parametrage/legal', [CompanyController::class, 'updateLegal'])->name('company.update.legal');
+        Route::put('/parametrage/documents', [CompanyController::class, 'updateDocuments'])->name('company.update.documents');
+        Route::post('/parametrage/banque', [CompanyController::class, 'storeBankAccount'])->name('company.bank.store');
+        Route::put('/parametrage/banque/{account}', [CompanyController::class, 'updateBankAccount'])->name('company.bank.update');
+        Route::delete('/parametrage/banque/{account}', [CompanyController::class, 'destroyBankAccount'])->name('company.bank.destroy');
+
+        // ── Paramètres généraux ──────────────────────────────────────────────
+        Route::prefix('parametres')->name('settings.')->group(function () {
+            // Exercices fiscaux
+            Route::get('exercices',                                 [\App\Http\Controllers\FiscalYearController::class, 'index'])->name('fiscal-years.index');
+            Route::post('exercices',                                [\App\Http\Controllers\FiscalYearController::class, 'store'])->name('fiscal-years.store');
+            Route::put('exercices/{fiscalYear}',                    [\App\Http\Controllers\FiscalYearController::class, 'update'])->name('fiscal-years.update');
+            Route::post('exercices/{fiscalYear}/set-current',       [\App\Http\Controllers\FiscalYearController::class, 'setCurrent'])->name('fiscal-years.set-current');
+            Route::post('exercices/{fiscalYear}/close',             [\App\Http\Controllers\FiscalYearController::class, 'close'])->name('fiscal-years.close');
+            Route::post('exercices/{fiscalYear}/archive',           [\App\Http\Controllers\FiscalYearController::class, 'archive'])->name('fiscal-years.archive');
+            Route::post('exercices/{fiscalYear}/report-a-nouveau',  [\App\Http\Controllers\FiscalYearController::class, 'reportANouveau'])->name('fiscal-years.report-a-nouveau');
+
+            // Devises
+            Route::get('devises',                                   [\App\Http\Controllers\CurrencyController::class, 'index'])->name('currencies.index');
+            Route::post('devises',                                  [\App\Http\Controllers\CurrencyController::class, 'store'])->name('currencies.store');
+            Route::put('devises/{currency}',                        [\App\Http\Controllers\CurrencyController::class, 'update'])->name('currencies.update');
+            Route::post('devises/{currency}/set-default',           [\App\Http\Controllers\CurrencyController::class, 'setDefault'])->name('currencies.set-default');
+            Route::delete('devises/{currency}',                     [\App\Http\Controllers\CurrencyController::class, 'destroy'])->name('currencies.destroy');
+
+            // Taux TVA
+            Route::get('taux-tva',                                  [\App\Http\Controllers\TaxRateController::class, 'index'])->name('tax-rates.index');
+            Route::post('taux-tva',                                 [\App\Http\Controllers\TaxRateController::class, 'store'])->name('tax-rates.store');
+            Route::put('taux-tva/{taxRate}',                        [\App\Http\Controllers\TaxRateController::class, 'update'])->name('tax-rates.update');
+            Route::post('taux-tva/{taxRate}/set-default',           [\App\Http\Controllers\TaxRateController::class, 'setDefault'])->name('tax-rates.set-default');
+            Route::delete('taux-tva/{taxRate}',                     [\App\Http\Controllers\TaxRateController::class, 'destroy'])->name('tax-rates.destroy');
+
+            // Conditions de paiement
+            Route::get('conditions-paiement',                       [\App\Http\Controllers\PaymentTermController::class, 'index'])->name('payment-terms.index');
+            Route::post('conditions-paiement',                      [\App\Http\Controllers\PaymentTermController::class, 'store'])->name('payment-terms.store');
+            Route::put('conditions-paiement/{paymentTerm}',         [\App\Http\Controllers\PaymentTermController::class, 'update'])->name('payment-terms.update');
+            Route::delete('conditions-paiement/{paymentTerm}',      [\App\Http\Controllers\PaymentTermController::class, 'destroy'])->name('payment-terms.destroy');
+
+            // Numérotation automatique
+            Route::get('numerotation',                              [\App\Http\Controllers\DocumentSequenceController::class, 'index'])->name('sequences.index');
+            Route::get('numerotation/{sequence}/modifier',          [\App\Http\Controllers\DocumentSequenceController::class, 'edit'])->name('sequences.edit');
+            Route::put('numerotation/{sequence}',                   [\App\Http\Controllers\DocumentSequenceController::class, 'update'])->name('sequences.update');
+            Route::post('numerotation/{sequence}/reset',            [\App\Http\Controllers\DocumentSequenceController::class, 'reset'])->name('sequences.reset');
+            Route::post('numerotation/{sequence}/set-counter',      [\App\Http\Controllers\DocumentSequenceController::class, 'setCounter'])->name('sequences.set-counter');
+            Route::post('numerotation/{sequence}/mode',             [\App\Http\Controllers\DocumentSequenceController::class, 'setMode'])->name('sequences.set-mode');
+            Route::post('numerotation/{sequence}/lock',             [\App\Http\Controllers\DocumentSequenceController::class, 'toggleLock'])->name('sequences.toggle-lock');
+            Route::get('numerotation/{sequence}/historique',        [\App\Http\Controllers\DocumentSequenceController::class, 'audit'])->name('sequences.audit');
+            Route::get('numerotation/preview',                      [\App\Http\Controllers\DocumentSequenceController::class, 'preview'])->name('sequences.preview');
+        });
+    });
+
+    // ── Audit trail (audit.view) ────────────────────────────────────────────────
+    Route::middleware('permission:audit.view')->group(function () {
+        Route::get('audit', [AuditController::class, 'index'])->name('audit.index');
+    });
+
+    // ── Products (products.view minimum) ────────────────────────────────────────
+    Route::middleware('permission:products.view')->group(function () {
+        Route::resource('products', ProductController::class);
+        Route::resource('brands', \App\Http\Controllers\BrandController::class)->except(['show']);
+        // 'show' exclu — la méthode n'est pas implémentée (gestion via index + edit suffit pour les familles).
+        Route::resource('product-families', \App\Http\Controllers\ProductFamilyController::class)
+            ->except(['show'])
+            ->parameters(['product-families' => 'family']);
+        Route::resource('units', \App\Http\Controllers\UnitController::class)->except(['show']);
+        Route::resource('promotions', \App\Http\Controllers\ProductPromotionController::class)->except(['show']);
+        Route::post('product-price-tiers', [\App\Http\Controllers\ProductPriceTierController::class, 'store'])->name('product-price-tiers.store');
+        Route::delete('product-price-tiers/{tier}', [\App\Http\Controllers\ProductPriceTierController::class, 'destroy'])->name('product-price-tiers.destroy');
+
+        // Quick-create AJAX endpoints (retournent JSON)
+        Route::post('quick/brands',   [\App\Http\Controllers\BrandController::class, 'quickStore'])->name('quick.brands.store');
+        Route::post('quick/families', [\App\Http\Controllers\ProductFamilyController::class, 'quickStore'])->name('quick.families.store');
+        Route::post('quick/units',    [\App\Http\Controllers\UnitController::class, 'quickStore'])->name('quick.units.store');
+
+        // ── Rapports & BI ────────────────────────────────────────────────────────
+        Route::prefix('reports')->name('reports.')->group(function () {
+            Route::get('/',                      [\App\Http\Controllers\ReportController::class, 'index'])->name('index');
+            Route::get('/ca',                    [\App\Http\Controllers\ReportController::class, 'ca'])->name('ca');
+            Route::get('/ca/pdf',                [\App\Http\Controllers\ReportController::class, 'caPdf'])->name('ca-pdf');
+            Route::get('/margins',               [\App\Http\Controllers\ReportController::class, 'margins'])->name('margins');
+            Route::get('/margins/pdf',           [\App\Http\Controllers\ReportController::class, 'marginsPdf'])->name('margins-pdf');
+            Route::get('/sales-performance',     [\App\Http\Controllers\ReportController::class, 'salesPerformance'])->name('sales-performance');
+            Route::get('/sales-performance/pdf', [\App\Http\Controllers\ReportController::class, 'salesPerformancePdf'])->name('sales-performance-pdf');
+            Route::get('/achats',                [\App\Http\Controllers\ReportController::class, 'achats'])->name('achats');
+            Route::get('/aging-receivables',     [\App\Http\Controllers\ReportController::class, 'agingReceivables'])->name('aging-receivables');
+        });
+    });
+
+    // ── Gestion (Clients + Fournisseurs) ────────────────────────────────────────
+    Route::prefix('gestion')->group(function () {
+
+        // Clients
+        Route::middleware('permission:clients.view')->group(function () {
+            // Rapports clients — avant la resource pour éviter le conflit {client}
+            Route::get('clients/releve',              [\App\Http\Controllers\ClientReportController::class, 'releve'])->name('clients.releve');
+            Route::get('clients/releve/export-excel', [\App\Http\Controllers\ClientReportController::class, 'releveExportExcel'])->name('clients.releve.export-excel');
+            Route::get('clients/releve/export-pdf',   [\App\Http\Controllers\ClientReportController::class, 'releveExportPdf'])->name('clients.releve.export-pdf');
+
+            Route::get('clients/balance-agee',              [\App\Http\Controllers\ClientReportController::class, 'balanceAgee'])->name('clients.balance-agee');
+            Route::get('clients/balance-agee/export-excel', [\App\Http\Controllers\ClientReportController::class, 'balanceAgeeExportExcel'])->name('clients.balance-agee.export-excel');
+            Route::get('clients/balance-agee/export-pdf',   [\App\Http\Controllers\ClientReportController::class, 'balanceAgeeExportPdf'])->name('clients.balance-agee.export-pdf');
+
+            Route::get('clients/grand-livre',              [\App\Http\Controllers\ClientReportController::class, 'grandLivreClient'])->name('clients.grand-livre');
+            Route::get('clients/grand-livre/export-excel', [\App\Http\Controllers\ClientReportController::class, 'grandLivreExportExcel'])->name('clients.grand-livre.export-excel');
+            Route::get('clients/grand-livre/export-pdf',   [\App\Http\Controllers\ClientReportController::class, 'grandLivreExportPdf'])->name('clients.grand-livre.export-pdf');
+
+            Route::resource('clients', ClientController::class);
+            Route::post('clients/{client}/interactions', [ClientController::class, 'storeInteraction'])->name('clients.interactions.store');
+            Route::get('relances', [\App\Http\Controllers\ClientRelanceController::class, 'index'])->name('relances.index');
+            Route::post('relances/send', [\App\Http\Controllers\ClientRelanceController::class, 'send'])->name('relances.send');
+        });
+
+        // Fournisseurs — Rapports
+        Route::middleware('permission:suppliers.view')->group(function () {
+            Route::get('fournisseurs/releve',               [\App\Http\Controllers\SupplierReportController::class, 'releve'])->name('suppliers.releve');
+            Route::get('fournisseurs/releve/export-excel',  [\App\Http\Controllers\SupplierReportController::class, 'releveExportExcel'])->name('suppliers.releve.export-excel');
+            Route::get('fournisseurs/releve/export-pdf',    [\App\Http\Controllers\SupplierReportController::class, 'releveExportPdf'])->name('suppliers.releve.export-pdf');
+
+            Route::get('fournisseurs/balance',              [\App\Http\Controllers\SupplierReportController::class, 'balance'])->name('suppliers.balance');
+            Route::get('fournisseurs/balance/export-excel', [\App\Http\Controllers\SupplierReportController::class, 'balanceExportExcel'])->name('suppliers.balance.export-excel');
+            Route::get('fournisseurs/balance/export-pdf',   [\App\Http\Controllers\SupplierReportController::class, 'balanceExportPdf'])->name('suppliers.balance.export-pdf');
+
+            Route::get('fournisseurs/balance-agee',               [\App\Http\Controllers\SupplierReportController::class, 'balanceAgee'])->name('suppliers.balance-agee');
+            Route::get('fournisseurs/balance-agee/export-excel',  [\App\Http\Controllers\SupplierReportController::class, 'balanceAgeeExportExcel'])->name('suppliers.balance-agee.export-excel');
+            Route::get('fournisseurs/balance-agee/export-pdf',    [\App\Http\Controllers\SupplierReportController::class, 'balanceAgeeExportPdf'])->name('suppliers.balance-agee.export-pdf');
+
+            Route::get('fournisseurs/factures-impayees',               [\App\Http\Controllers\SupplierReportController::class, 'facturesImpayees'])->name('suppliers.factures-impayees');
+            Route::get('fournisseurs/factures-impayees/export-excel',  [\App\Http\Controllers\SupplierReportController::class, 'facturesImpayeesExportExcel'])->name('suppliers.factures-impayees.export-excel');
+            Route::get('fournisseurs/factures-impayees/export-pdf',    [\App\Http\Controllers\SupplierReportController::class, 'facturesImpayeesExportPdf'])->name('suppliers.factures-impayees.export-pdf');
+
+            Route::get('fournisseurs/journal-achats',               [\App\Http\Controllers\SupplierReportController::class, 'journalAchats'])->name('suppliers.journal-achats');
+            Route::get('fournisseurs/journal-achats/export-excel',  [\App\Http\Controllers\SupplierReportController::class, 'journalAchatsExportExcel'])->name('suppliers.journal-achats.export-excel');
+            Route::get('fournisseurs/journal-achats/export-pdf',    [\App\Http\Controllers\SupplierReportController::class, 'journalAchatsExportPdf'])->name('suppliers.journal-achats.export-pdf');
+
+            Route::get('fournisseurs/grand-livre',               [\App\Http\Controllers\SupplierReportController::class, 'grandLivre'])->name('suppliers.grand-livre');
+            Route::get('fournisseurs/grand-livre/export-excel',  [\App\Http\Controllers\SupplierReportController::class, 'grandLivreExportExcel'])->name('suppliers.grand-livre.export-excel');
+            Route::get('fournisseurs/grand-livre/export-pdf',    [\App\Http\Controllers\SupplierReportController::class, 'grandLivreExportPdf'])->name('suppliers.grand-livre.export-pdf');
+        });
+
+        // Fournisseurs
+        Route::middleware('permission:suppliers.view')->group(function () {
+            Route::resource('fournisseurs', SupplierController::class)
+                ->parameters(['fournisseurs' => 'supplier'])
+                ->names([
+                    'index'   => 'suppliers.index',
+                    'create'  => 'suppliers.create',
+                    'store'   => 'suppliers.store',
+                    'show'    => 'suppliers.show',
+                    'edit'    => 'suppliers.edit',
+                    'update'  => 'suppliers.update',
+                    'destroy' => 'suppliers.destroy',
+                ]);
+        });
+
+    });
+
+    // ── Ventes / Module 5 ───────────────────────────────────────────────────────
+    Route::prefix('ventes')->name('ventes.')->group(function () {
+
+        Route::middleware('permission:quotes.view')->group(function () {
+            Route::get('devis/export', [\App\Http\Controllers\Sales\QuoteController::class, 'export'])->name('devis.export');
+            Route::resource('devis', \App\Http\Controllers\Sales\QuoteController::class)
+                ->parameters(['devis' => 'devis']);
+            Route::get('devis/{devis}/pdf',  [\App\Http\Controllers\Sales\QuoteController::class, 'pdf'])->name('devis.pdf');
+        });
+        Route::middleware('permission:quotes.validate')->group(function () {
+            Route::post('devis/{devis}/convert', [\App\Http\Controllers\Sales\QuoteController::class, 'convert'])->name('devis.convert');
+            Route::post('devis/{devis}/send',    [\App\Http\Controllers\Sales\QuoteController::class, 'send'])->name('devis.send');
+            Route::post('devis/{devis}/accept',  [\App\Http\Controllers\Sales\QuoteController::class, 'accept'])->name('devis.accept');
+            Route::post('devis/{devis}/refuse',  [\App\Http\Controllers\Sales\QuoteController::class, 'refuse'])->name('devis.refuse');
+            Route::post('devis/{devis}/cancel',  [\App\Http\Controllers\Sales\QuoteController::class, 'cancel'])->name('devis.cancel');
+        });
+
+        Route::middleware('permission:orders.view')->group(function () {
+            Route::resource('commandes', \App\Http\Controllers\Sales\OrderController::class);
+        });
+        Route::middleware('permission:orders.validate')->group(function () {
+            Route::post('commandes/{commande}/invoice',       [\App\Http\Controllers\Sales\OrderController::class, 'createInvoice'])->name('commandes.invoice');
+            Route::post('commandes/{commande}/delivery-note', [\App\Http\Controllers\Sales\OrderController::class, 'createDeliveryNote'])->name('commandes.delivery-note');
+            Route::post('commandes/{commande}/confirm',       [\App\Http\Controllers\Sales\OrderController::class, 'confirm'])->name('commandes.confirm');
+            Route::post('commandes/{commande}/cancel',        [\App\Http\Controllers\Sales\OrderController::class, 'cancel'])->name('commandes.cancel');
+        });
+
+        Route::middleware('permission:deliveries.view')->group(function () {
+            Route::resource('bons-livraison', \App\Http\Controllers\Sales\DeliveryNoteController::class)
+                ->parameters(['bons-livraison' => 'bonsLivraison'])
+                ->only(['index', 'show']);
+            Route::get('bons-livraison/{bonsLivraison}/pdf', [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'pdf'])->name('bons-livraison.pdf');
+        });
+        Route::middleware('permission:deliveries.validate')->group(function () {
+            Route::get('bons-livraison/{bonsLivraison}/edit',     [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'edit'])->name('bons-livraison.edit');
+            Route::put('bons-livraison/{bonsLivraison}',          [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'update'])->name('bons-livraison.update');
+            Route::post('bons-livraison/{bonsLivraison}/validate', [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'validateNote'])->name('bons-livraison.validate');
+            Route::post('bons-livraison/{bonsLivraison}/invoice',  [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'createInvoice'])->name('bons-livraison.invoice');
+            Route::post('bons-livraison/{bonsLivraison}/cancel',   [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'cancel'])->name('bons-livraison.cancel');
+        });
+
+        Route::middleware('permission:invoices.view')->group(function () {
+            Route::get('factures/export-pdf', [\App\Http\Controllers\Sales\InvoiceController::class, 'exportPdf'])->name('factures.export-pdf');
+            Route::resource('factures', \App\Http\Controllers\Sales\InvoiceController::class);
+            Route::get('factures/{facture}/pdf', [\App\Http\Controllers\Sales\InvoiceController::class, 'pdf'])->name('factures.pdf');
+        });
+        Route::middleware('permission:invoices.validate')->group(function () {
+            Route::post('factures/{facture}/validate', [\App\Http\Controllers\Sales\InvoiceController::class, 'validateInvoice'])->name('factures.validate');
+            // [BUG-FIX] Exposition de l'annulation : contre-passation comptable automatique
+            Route::post('factures/{facture}/cancel',   [\App\Http\Controllers\Sales\InvoiceController::class, 'cancelInvoice'])->name('factures.cancel');
+            // [MED-1] Conversion proforma → standard (génère compta + stock)
+            Route::post('factures/{facture}/convert-proforma', [\App\Http\Controllers\Sales\InvoiceController::class, 'convertProforma'])->name('factures.convert-proforma');
+        });
+        Route::middleware('permission:invoices.send')->group(function () {
+            Route::post('factures/{facture}/send-email', [\App\Http\Controllers\Sales\InvoiceController::class, 'sendEmail'])->name('factures.send-email');
+        });
+
+        Route::middleware('permission:credit_notes.view')->group(function () {
+            Route::resource('avoirs', \App\Http\Controllers\Sales\CreditNoteController::class)
+                ->parameters(['avoirs' => 'avoir'])
+                ->only(['index', 'create', 'store', 'show', 'destroy']);
+            Route::get('avoirs/{avoir}/pdf', [\App\Http\Controllers\Sales\CreditNoteController::class, 'pdf'])->name('avoirs.pdf');
+        });
+        Route::middleware('permission:credit_notes.create')->group(function () {
+            Route::post('avoirs/{avoir}/validate', [\App\Http\Controllers\Sales\CreditNoteController::class, 'validateNote'])->name('avoirs.validate');
+            Route::post('avoirs/{avoir}/apply', [\App\Http\Controllers\Sales\CreditNoteController::class, 'applyToInvoice'])->name('avoirs.apply');
+        });
+    });
+
+    // ── Achats / Module 6 ───────────────────────────────────────────────────────
+    Route::prefix('achats')->name('achats.')->group(function () {
+
+        Route::middleware('permission:purchase_orders.view')->group(function () {
+            // [ACHATS-PRO] Dashboard + insights — placés AVANT le resource pour ne pas
+            // que /commandes/{commande} matche /dashboard, /matching, /suppliers...
+            Route::get('/',                  [\App\Http\Controllers\Purchases\PurchaseDashboardController::class, 'dashboard'])->name('dashboard');
+            Route::get('matching',           [\App\Http\Controllers\Purchases\PurchaseDashboardController::class, 'matching'])->name('dashboard.matching');
+            Route::get('evaluation',         [\App\Http\Controllers\Purchases\PurchaseDashboardController::class, 'suppliersScorecards'])->name('dashboard.suppliers');
+        });
+        Route::middleware('permission:purchase_orders.create')->group(function () {
+            Route::get('restock-po',         [\App\Http\Controllers\Purchases\PurchaseDashboardController::class, 'restockToPo'])->name('dashboard.restock-po');
+            Route::post('restock-po',        [\App\Http\Controllers\Purchases\PurchaseDashboardController::class, 'restockToPo'])->name('dashboard.restock-po.post');
+        });
+
+        // [ACHATS-PRO-SCHEDULE] Cadenciers de paiement
+        Route::middleware('permission:supplier_invoices.view')->group(function () {
+            Route::get('echeances', [\App\Http\Controllers\Purchases\PaymentScheduleController::class, 'upcoming'])->name('schedules.upcoming');
+        });
+        Route::middleware('permission:supplier_invoices.create')->group(function () {
+            Route::post('factures-fournisseurs/{facturesFournisseur}/schedules',        [\App\Http\Controllers\Purchases\PaymentScheduleController::class, 'store'])->name('schedules.store');
+            Route::post('factures-fournisseurs/{facturesFournisseur}/schedules-custom', [\App\Http\Controllers\Purchases\PaymentScheduleController::class, 'storeCustom'])->name('schedules.store-custom');
+            Route::delete('schedules/{schedule}',                                       [\App\Http\Controllers\Purchases\PaymentScheduleController::class, 'destroy'])->name('schedules.destroy');
+        });
+
+        // [ACHATS-PRO-APPROVAL] Workflow validation PO par seuil
+        Route::middleware('permission:purchase_orders.view')->group(function () {
+            Route::get('approbations',           [\App\Http\Controllers\Purchases\PoApprovalController::class, 'pending'])->name('approval.pending');
+            Route::post('approbations/{commande}/submit',  [\App\Http\Controllers\Purchases\PoApprovalController::class, 'submit'])->name('approval.submit');
+            Route::post('approbations/{commande}/approve', [\App\Http\Controllers\Purchases\PoApprovalController::class, 'approve'])->name('approval.approve');
+            Route::post('approbations/{commande}/reject',  [\App\Http\Controllers\Purchases\PoApprovalController::class, 'reject'])->name('approval.reject');
+        });
+        Route::middleware('permission:settings.manage')->group(function () {
+            Route::get('approbations/seuils',                       [\App\Http\Controllers\Purchases\PoApprovalController::class, 'thresholdsIndex'])->name('approval.thresholds.index');
+            Route::post('approbations/seuils',                      [\App\Http\Controllers\Purchases\PoApprovalController::class, 'thresholdsStore'])->name('approval.thresholds.store');
+            Route::delete('approbations/seuils/{threshold}',        [\App\Http\Controllers\Purchases\PoApprovalController::class, 'thresholdsDestroy'])->name('approval.thresholds.destroy');
+        });
+
+        // [ACHATS-PRO-RFQ] Demandes de devis (Request For Quotation)
+        Route::middleware('permission:purchase_orders.view')->group(function () {
+            Route::get('rfq',                          [\App\Http\Controllers\Purchases\RfqController::class, 'index'])->name('rfq.index');
+            Route::get('rfq/{rfq}',                    [\App\Http\Controllers\Purchases\RfqController::class, 'show'])->whereNumber('rfq')->name('rfq.show');
+            Route::get('rfq/{rfq}/compare',            [\App\Http\Controllers\Purchases\RfqController::class, 'compare'])->whereNumber('rfq')->name('rfq.compare');
+        });
+        Route::middleware('permission:purchase_orders.create')->group(function () {
+            Route::get('rfq/create',                   [\App\Http\Controllers\Purchases\RfqController::class, 'create'])->name('rfq.create');
+            Route::post('rfq',                         [\App\Http\Controllers\Purchases\RfqController::class, 'store'])->name('rfq.store');
+            Route::delete('rfq/{rfq}',                 [\App\Http\Controllers\Purchases\RfqController::class, 'destroy'])->whereNumber('rfq')->name('rfq.destroy');
+            Route::post('rfq/{rfq}/send',              [\App\Http\Controllers\Purchases\RfqController::class, 'send'])->whereNumber('rfq')->name('rfq.send');
+            Route::post('rfq/{rfq}/record-quote',      [\App\Http\Controllers\Purchases\RfqController::class, 'recordQuote'])->whereNumber('rfq')->name('rfq.record-quote');
+            Route::post('rfq/{rfq}/award/{quote}',     [\App\Http\Controllers\Purchases\RfqController::class, 'award'])->whereNumber('rfq')->whereNumber('quote')->name('rfq.award');
+            Route::post('rfq/{rfq}/cancel',            [\App\Http\Controllers\Purchases\RfqController::class, 'cancel'])->whereNumber('rfq')->name('rfq.cancel');
+        });
+
+        Route::middleware('permission:purchase_orders.view')->group(function () {
+            Route::resource('commandes', \App\Http\Controllers\Purchases\PurchaseOrderController::class);
+            Route::get('commandes/{commande}/pdf', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'pdf'])->name('commandes.pdf');
+        });
+        Route::middleware('permission:purchase_orders.create')->group(function () {
+            Route::post('commandes/{commande}/confirm', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'confirm'])->name('commandes.confirm');
+        });
+        Route::middleware('permission:receptions.create')->group(function () {
+            Route::post('commandes/{commande}/reception', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'createReception'])->name('commandes.reception');
+        });
+
+        Route::middleware('permission:receptions.view')->group(function () {
+            Route::get('receptions', [\App\Http\Controllers\Purchases\ReceptionController::class, 'index'])->name('receptions.index');
+            Route::get('receptions/{reception}', [\App\Http\Controllers\Purchases\ReceptionController::class, 'show'])->name('receptions.show');
+        });
+        Route::middleware('permission:receptions.create')->group(function () {
+            Route::post('receptions/{reception}/validate', [\App\Http\Controllers\Purchases\ReceptionController::class, 'validateReception'])->name('receptions.validate');
+        });
+        Route::middleware('permission:supplier_invoices.create')->group(function () {
+            Route::post('commandes/{commande}/facture', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'createSupplierInvoice'])->name('commandes.facture');
+        });
+
+        Route::middleware('permission:supplier_invoices.view')->group(function () {
+            Route::resource('factures-fournisseurs', \App\Http\Controllers\Purchases\SupplierInvoiceController::class)
+                ->parameters(['factures-fournisseurs' => 'facturesFournisseur']);
+        });
+        // [FIX-CRITIQUE] validate and payment require create permission, not just view
+        Route::middleware('permission:supplier_invoices.create')->group(function () {
+            Route::post('factures-fournisseurs/{facturesFournisseur}/validate', [\App\Http\Controllers\Purchases\SupplierInvoiceController::class, 'validateInvoice'])->name('factures-fournisseurs.validate');
+            Route::post('factures-fournisseurs/{facturesFournisseur}/payment', [\App\Http\Controllers\Purchases\SupplierInvoiceController::class, 'recordPayment'])->name('factures-fournisseurs.payment');
+        });
+
+        Route::middleware('permission:supplier_returns.view')->group(function () {
+            Route::resource('retours-fournisseurs', \App\Http\Controllers\Purchases\SupplierReturnController::class)
+                ->parameters(['retours-fournisseurs' => 'retoursFournisseurs'])
+                ->only(['index', 'create', 'store', 'show', 'destroy']);
+        });
+        Route::middleware('permission:supplier_returns.validate')->group(function () {
+            Route::post('retours-fournisseurs/{retoursFournisseurs}/validate', [\App\Http\Controllers\Purchases\SupplierReturnController::class, 'validateReturn'])->name('retours-fournisseurs.validate');
+        });
+
+        Route::middleware('permission:purchase_requests.view')->group(function () {
+            Route::resource('demandes-achat', \App\Http\Controllers\Purchases\PurchaseRequestController::class)
+                ->parameters(['demandes-achat' => 'demandesAchat'])
+                ->only(['index', 'create', 'store', 'show', 'destroy']);
+        });
+        Route::middleware('permission:purchase_requests.submit')->group(function () {
+            Route::post('demandes-achat/{demandesAchat}/submit', [\App\Http\Controllers\Purchases\PurchaseRequestController::class, 'submit'])->name('demandes-achat.submit');
+        });
+        Route::middleware('permission:purchase_requests.approve')->group(function () {
+            Route::post('demandes-achat/{demandesAchat}/approve',  [\App\Http\Controllers\Purchases\PurchaseRequestController::class, 'approve'])->name('demandes-achat.approve');
+            Route::post('demandes-achat/{demandesAchat}/reject',   [\App\Http\Controllers\Purchases\PurchaseRequestController::class, 'reject'])->name('demandes-achat.reject');
+            Route::post('demandes-achat/{demandesAchat}/convert',  [\App\Http\Controllers\Purchases\PurchaseRequestController::class, 'convert'])->name('demandes-achat.convert');
+        });
+    });
+
+    // ── Stocks / Module 7 ───────────────────────────────────────────────────────
+    Route::prefix('stocks')->name('stocks.')->group(function () {
+
+        Route::middleware('permission:stocks.view')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Stock\StockController::class, 'index'])->name('index');
+            // [STOCK-PRO] Tableau de bord stock + insights avancés
+            Route::get('dashboard',          [\App\Http\Controllers\Stock\StockDashboardController::class, 'dashboard'])->name('dashboard');
+            Route::get('alertes-reappro',    [\App\Http\Controllers\Stock\StockDashboardController::class, 'restock'])->name('dashboard.restock');
+            Route::get('dormants',           [\App\Http\Controllers\Stock\StockDashboardController::class, 'dormant'])->name('dashboard.dormant');
+            Route::get('peremption',         [\App\Http\Controllers\Stock\StockDashboardController::class, 'expiry'])->name('dashboard.expiry');
+            Route::get('abc',                [\App\Http\Controllers\Stock\StockDashboardController::class, 'abc'])->name('dashboard.abc');
+
+            // [STOCK-PRO] Transferts inter-dépôts (lecture).
+            // {transfer} is constrained to digits so the literal /create route in the
+            // adjust block isn't shadowed by show.
+            Route::get('transferts',                       [\App\Http\Controllers\Stock\StockTransferController::class, 'index'])->name('transfers.index');
+            Route::get('transferts/{transfer}',            [\App\Http\Controllers\Stock\StockTransferController::class, 'show'])
+                ->whereNumber('transfer')
+                ->name('transfers.show');
+            Route::get('export', [\App\Http\Controllers\Stock\StockController::class, 'export'])->name('export');
+            Route::get('export-pdf', [\App\Http\Controllers\Stock\StockController::class, 'exportPdf'])->name('export-pdf');
+            Route::get('mouvements', [\App\Http\Controllers\Stock\StockController::class, 'movements'])->name('movements');
+            Route::get('mouvements-pdf', [\App\Http\Controllers\Stock\StockController::class, 'movementsPdf'])->name('movements-pdf');
+            Route::get('lots', [\App\Http\Controllers\Stock\StockController::class, 'lots'])->name('lots');
+            Route::get('valorisation', [\App\Http\Controllers\Stock\StockController::class, 'valuation'])->name('valuation');
+            Route::get('produit/{product}', [\App\Http\Controllers\Stock\StockController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('permission:stocks.adjust')->group(function () {
+            Route::get('mouvement/nouveau', [\App\Http\Controllers\Stock\StockController::class, 'create'])->name('movement.create');
+            Route::post('mouvement', [\App\Http\Controllers\Stock\StockController::class, 'storeMovement'])->name('movement.store');
+
+            // [STOCK-PRO] Transferts inter-dépôts (écriture). Literal /create avant toute capture {transfer}.
+            Route::get('transferts/create',                [\App\Http\Controllers\Stock\StockTransferController::class, 'create'])->name('transfers.create');
+            Route::post('transferts',                      [\App\Http\Controllers\Stock\StockTransferController::class, 'store'])->name('transfers.store');
+            Route::get('transferts/{transfer}/edit',       [\App\Http\Controllers\Stock\StockTransferController::class, 'edit'])->whereNumber('transfer')->name('transfers.edit');
+            Route::put('transferts/{transfer}',            [\App\Http\Controllers\Stock\StockTransferController::class, 'update'])->whereNumber('transfer')->name('transfers.update');
+            Route::delete('transferts/{transfer}',         [\App\Http\Controllers\Stock\StockTransferController::class, 'destroy'])->whereNumber('transfer')->name('transfers.destroy');
+            Route::post('transferts/{transfer}/ship',      [\App\Http\Controllers\Stock\StockTransferController::class, 'ship'])->whereNumber('transfer')->name('transfers.ship');
+            Route::post('transferts/{transfer}/receive',   [\App\Http\Controllers\Stock\StockTransferController::class, 'receive'])->whereNumber('transfer')->name('transfers.receive');
+            Route::post('transferts/{transfer}/cancel',    [\App\Http\Controllers\Stock\StockTransferController::class, 'cancel'])->whereNumber('transfer')->name('transfers.cancel');
+            Route::resource('warehouses', \App\Http\Controllers\Stock\WarehouseController::class);
+            // Emplacements (locations within a warehouse)
+            Route::get('warehouses/{warehouse}/locations/create',                   [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'create'])->name('warehouses.locations.create');
+            Route::post('warehouses/{warehouse}/locations',                         [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'store'])->name('warehouses.locations.store');
+            Route::get('warehouses/{warehouse}/locations/{location}/edit',          [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'edit'])->name('warehouses.locations.edit');
+            Route::put('warehouses/{warehouse}/locations/{location}',               [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'update'])->name('warehouses.locations.update');
+            Route::delete('warehouses/{warehouse}/locations/{location}',            [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'destroy'])->name('warehouses.locations.destroy');
+        });
+        Route::middleware('permission:stocks.view')->group(function () {
+            Route::get('warehouses/{warehouse}/locations',                          [\App\Http\Controllers\Stock\WarehouseLocationController::class, 'index'])->name('warehouses.locations.index');
+        });
+
+        Route::middleware('permission:inventory.view')->group(function () {
+            Route::resource('inventaires', \App\Http\Controllers\Stock\InventoryController::class)
+                ->only(['index', 'create', 'store', 'show'])
+                ->parameters(['inventaires' => 'inventorySession']);
+            Route::post('inventaires/{inventorySession}/count', [\App\Http\Controllers\Stock\InventoryController::class, 'saveCount'])
+                ->name('inventaires.count');
+            Route::get('inventaires/{inventorySession}/export-excel', [\App\Http\Controllers\Stock\InventoryController::class, 'exportExcel'])
+                ->name('inventaires.export-excel');
+            Route::get('inventaires/{inventorySession}/export-pdf', [\App\Http\Controllers\Stock\InventoryController::class, 'exportPdf'])
+                ->name('inventaires.export-pdf');
+        });
+        Route::middleware('permission:inventory.validate')->group(function () {
+            Route::post('inventaires/{inventorySession}/validate', [\App\Http\Controllers\Stock\InventoryController::class, 'validateInventory'])
+                ->name('inventaires.validate');
+        });
+    });
+
+    // ── Comptabilité / Module 9 ─────────────────────────────────────────────
+    Route::prefix('comptabilite')->name('comptabilite.')->group(function () {
+
+        Route::middleware('permission:accounting.view')->group(function () {
+            // Plan comptable — extra routes must come BEFORE the resource to avoid {account} conflict
+            Route::get('plan-comptable/export',   [\App\Http\Controllers\Accounting\ChartOfAccountsController::class, 'export'])  ->name('plan-comptable.export');
+            Route::get('plan-comptable/export-pdf', [\App\Http\Controllers\Accounting\ChartOfAccountsController::class, 'exportPdf'])->name('plan-comptable.export-pdf');
+            Route::post('plan-comptable/import',  [\App\Http\Controllers\Accounting\ChartOfAccountsController::class, 'import'])  ->name('plan-comptable.import');
+            Route::get('plan-comptable/template', [\App\Http\Controllers\Accounting\ChartOfAccountsController::class, 'template'])->name('plan-comptable.template');
+
+            Route::resource('plan-comptable', \App\Http\Controllers\Accounting\ChartOfAccountsController::class)
+                ->parameters(['plan-comptable' => 'account'])
+                ->only(['index', 'create', 'store', 'edit', 'update']);
+
+            // Journaux export (must be before resource to avoid matching {journalEntry})
+            Route::get('journaux/export', [\App\Http\Controllers\Accounting\LedgerController::class, 'journauxExport'])->name('journaux.export');
+            Route::get('journaux/export-pdf', [\App\Http\Controllers\Accounting\JournalEntryController::class, 'exportPdf'])->name('journaux.export-pdf');
+
+            // [COMPTA-PRO-01] Tableau de bord comptable — page d'accueil module
+            Route::get('/', [\App\Http\Controllers\Accounting\DashboardController::class, 'index'])->name('dashboard');
+
+            // [COMPTA-PRO-02] Export FEC (Fichier des Écritures Comptables)
+            Route::get('fec',        [\App\Http\Controllers\Accounting\FecExportController::class, 'index'])->name('fec.index');
+            Route::get('fec/export', [\App\Http\Controllers\Accounting\FecExportController::class, 'export'])->name('fec.export');
+
+            // [COMPTA-PRO-03] Soldes Intermédiaires de Gestion (SIG)
+            Route::get('sig', [\App\Http\Controllers\Accounting\SigController::class, 'index'])->name('sig');
+
+            // [COMPTA-PRO-05] Verrouillage des périodes mensuelles
+            Route::get('periodes',                   [\App\Http\Controllers\Accounting\PeriodLockController::class, 'index'])->name('periods.index');
+            Route::post('periodes/lock',             [\App\Http\Controllers\Accounting\PeriodLockController::class, 'lock'])->name('periods.lock');
+            Route::delete('periodes/{lock}',         [\App\Http\Controllers\Accounting\PeriodLockController::class, 'unlock'])->name('periods.unlock');
+
+            // Journal des écritures
+            // [COMPTA-FIX-02] Added edit/update so drafts can be modified without recreating them.
+            Route::resource('journaux', \App\Http\Controllers\Accounting\JournalEntryController::class)
+                ->parameters(['journaux' => 'journalEntry'])
+                ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
+
+            // Grand livre & balance
+            Route::get('grand-livre',        [\App\Http\Controllers\Accounting\LedgerController::class, 'grandLivre'])->name('grand-livre');
+            Route::get('grand-livre/export', [\App\Http\Controllers\Accounting\LedgerController::class, 'grandLivreExport'])->name('grand-livre.export');
+            Route::get('grand-livre/pdf',    [\App\Http\Controllers\Accounting\LedgerController::class, 'grandLivrePdf'])->name('grand-livre.pdf');
+            Route::get('balance',            [\App\Http\Controllers\Accounting\LedgerController::class, 'balance'])->name('balance');
+            Route::get('balance/export',     [\App\Http\Controllers\Accounting\LedgerController::class, 'balanceExport'])->name('balance.export');
+            Route::get('balance/pdf',        [\App\Http\Controllers\Accounting\LedgerController::class, 'balancePdf'])->name('balance.pdf');
+
+            Route::get('brouillard',          [\App\Http\Controllers\Accounting\LedgerController::class, 'brouillard'])->name('brouillard');
+            Route::get('livre-journal',       [\App\Http\Controllers\Accounting\LedgerController::class, 'livreJournal'])->name('livre-journal');
+            Route::get('balance-auxiliaire',  [\App\Http\Controllers\Accounting\LedgerController::class, 'balanceAuxiliaire'])->name('balance-auxiliaire');
+            Route::get('situation-comptable', [\App\Http\Controllers\Accounting\FinancialReportController::class, 'situationComptable'])->name('situation-comptable');
+        });
+
+        Route::middleware('permission:accounting.validate')->group(function () {
+            Route::post('journaux/{journalEntry}/validate', [\App\Http\Controllers\Accounting\JournalEntryController::class, 'validateEntry'])->name('journaux.validate');
+            // [PRIO-1] Contre-passation : interdit la suppression d'une écriture validée
+            Route::post('journaux/{journalEntry}/reverse',  [\App\Http\Controllers\Accounting\JournalEntryController::class, 'reverse'])->name('journaux.reverse');
+        });
+
+        // ── Rapprochement bancaire ──────────────────────────────────────────
+        // IMPORTANT: literal routes (create, lines/*) MUST come before {rapprochement} wildcard
+        Route::middleware('permission:accounting.write')->group(function () {
+            Route::get('rapprochement/create',   [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'create'])->name('rapprochement.create');
+            Route::post('rapprochement',         [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'store'])->name('rapprochement.store');
+            Route::post('rapprochement/lines/{line}/match',   [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'matchLine'])->name('rapprochement.match');
+            Route::post('rapprochement/lines/{line}/unmatch', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'unmatchLine'])->name('rapprochement.unmatch');
+            // [PRIO-5] Import CSV + matching automatique
+            Route::post('rapprochement/{rapprochement}/import-csv', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'importCsv'])->name('rapprochement.import-csv');
+            Route::post('rapprochement/{rapprochement}/auto-match', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'autoMatch'])->name('rapprochement.auto-match');
+        });
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('rapprochement',                [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'index'])->name('rapprochement.index');
+            Route::get('rapprochement/{rapprochement}',[\App\Http\Controllers\Accounting\BankReconciliationController::class, 'show'])->name('rapprochement.show');
+        });
+        Route::middleware('permission:accounting.validate')->group(function () {
+            Route::post('rapprochement/{rapprochement}/validate', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'validateReconciliation'])->name('rapprochement.validate');
+        });
+
+        // ── TVA & Déclarations fiscales ────────────────────────────────────
+        // IMPORTANT: tva/create and tva-calculate MUST come before {tva} wildcard
+        Route::middleware('permission:accounting.write')->group(function () {
+            Route::get('tva/create',   [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'create'])->name('tva.create');
+            Route::post('tva',         [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'store'])->name('tva.store');
+        });
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('tva',           [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'index'])->name('tva.index');
+            Route::get('tva-calculate', [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'calculate'])->name('tva.calculate');
+            Route::get('tva/{tva}',     [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'show'])->name('tva.show');
+        });
+        Route::middleware('permission:accounting.validate')->group(function () {
+            Route::post('tva/{tva}/submit',    [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'submit'])->name('tva.submit');
+            Route::post('tva/{tva}/mark-paid', [\App\Http\Controllers\Accounting\VatDeclarationController::class, 'markPaid'])->name('tva.markPaid');
+        });
+
+        // ── Lettrage ───────────────────────────────────────────────────────
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('lettrage', [\App\Http\Controllers\Accounting\LettrageController::class, 'index'])->name('lettrage.index');
+        });
+        Route::middleware('permission:accounting.write')->group(function () {
+            Route::post('lettrage/apply',      [\App\Http\Controllers\Accounting\LettrageController::class, 'apply'])->name('lettrage.apply');
+            Route::post('lettrage/auto-apply', [\App\Http\Controllers\Accounting\LettrageController::class, 'autoApply'])->name('lettrage.auto-apply');
+            Route::post('lettrage/remove',     [\App\Http\Controllers\Accounting\LettrageController::class, 'remove'])->name('lettrage.remove');
+        });
+
+        // ── Rapports financiers ────────────────────────────────────────────
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('bilan',                  [\App\Http\Controllers\Accounting\FinancialReportController::class, 'bilan'])->name('bilan');
+            Route::get('bilan/pdf',              [\App\Http\Controllers\Accounting\FinancialReportController::class, 'bilanPdf'])->name('bilan.pdf');
+            Route::get('compte-de-resultat',     [\App\Http\Controllers\Accounting\FinancialReportController::class, 'compteDeResultat'])->name('compte-de-resultat');
+            Route::get('compte-de-resultat/pdf', [\App\Http\Controllers\Accounting\FinancialReportController::class, 'compteDeResultatPdf'])->name('compte-de-resultat.pdf');
+        });
+    });
+
+    // ── Trésorerie / Module 8 ───────────────────────────────────────────────────
+    Route::prefix('tresorerie')->name('tresorerie.')->group(function () {
+
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('encaissements/factures',   [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'getInvoices'])->name('encaissements.invoices');
+            Route::get('encaissements/export-pdf', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'exportPdf'])->name('encaissements.export-pdf');
+            Route::resource('encaissements', \App\Http\Controllers\Treasury\ClientPaymentController::class)
+                ->only(['index', 'create', 'store', 'show'])
+                ->parameters(['encaissements' => 'encaissement']);
+
+            Route::get('decaissements/factures', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'getInvoices'])->name('decaissements.invoices');
+            // [TRESO] Annulation décaissement : contre-passation compta + restauration facture
+            Route::post('decaissements/{decaissement}/cancel', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'cancel'])->name('decaissements.cancel');
+            Route::resource('decaissements', \App\Http\Controllers\Treasury\SupplierPaymentController::class)
+                ->only(['index', 'create', 'store', 'show'])
+                ->parameters(['decaissements' => 'decaissement']);
+        });
+
+        // Routes manage en PREMIER pour éviter que {caisse} intercepte /create
+        Route::middleware('permission:cash_accounts.manage')->group(function () {
+            Route::get('caisses/create',            [\App\Http\Controllers\Treasury\CashAccountController::class, 'create'])->name('caisses.create');
+            Route::post('caisses',                  [\App\Http\Controllers\Treasury\CashAccountController::class, 'store'])->name('caisses.store');
+            Route::get('caisses/{caisse}/edit',     [\App\Http\Controllers\Treasury\CashAccountController::class, 'edit'])->name('caisses.edit');
+            Route::put('caisses/{caisse}',          [\App\Http\Controllers\Treasury\CashAccountController::class, 'update'])->name('caisses.update');
+        });
+
+        Route::middleware('permission:cash_accounts.view')->group(function () {
+            Route::resource('caisses', \App\Http\Controllers\Treasury\CashAccountController::class)
+                ->only(['index', 'show'])
+                ->parameters(['caisses' => 'caisse']);
+        });
+
+        // ── Prévisions de trésorerie ────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('previsions/create',         [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'create'])->name('previsions.create');
+            Route::post('previsions',               [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'store'])->name('previsions.store');
+            Route::post('previsions/{prevision}/validate', [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'validateForecast'])->name('previsions.validate');
+            Route::post('previsions/{prevision}/sync-actuals', [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'syncActuals'])->name('previsions.sync-actuals');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('previsions',                [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'index'])->name('previsions.index');
+            Route::get('previsions/{prevision}',    [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'show'])->name('previsions.show');
+        });
+
+        // ── Remises en banque ───────────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('remises/create',            [\App\Http\Controllers\Treasury\BankDepositController::class, 'create'])->name('remises.create');
+            Route::post('remises',                  [\App\Http\Controllers\Treasury\BankDepositController::class, 'store'])->name('remises.store');
+        });
+        Route::middleware('permission:treasury.validate')->group(function () {
+            Route::post('remises/{remise}/validate', [\App\Http\Controllers\Treasury\BankDepositController::class, 'validateDeposit'])->name('remises.validate');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('remises',                   [\App\Http\Controllers\Treasury\BankDepositController::class, 'index'])->name('remises.index');
+            Route::get('remises/{remise}',          [\App\Http\Controllers\Treasury\BankDepositController::class, 'show'])->name('remises.show');
+        });
+
+        // ── Effets de commerce ──────────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('effets/create',             [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'create'])->name('effets.create');
+            Route::post('effets',                   [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'store'])->name('effets.store');
+            Route::post('effets/{effet}/accept',    [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'accept'])->name('effets.accept');
+            Route::post('effets/{effet}/encaisse',  [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'markEncaisse'])->name('effets.encaisse');
+            Route::post('effets/{effet}/reject',    [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'reject'])->name('effets.reject');
+            Route::post('effets/{effet}/protest',   [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'protest'])->name('effets.protest');
+            Route::post('effets/{effet}/cancel',    [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'cancel'])->name('effets.cancel');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('effets',                    [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'index'])->name('effets.index');
+            Route::get('effets/{effet}',            [\App\Http\Controllers\Treasury\CommercialEffectController::class, 'show'])->name('effets.show');
+        });
+    });
+});
+
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('notifications')->name('notifications.')->group(function () {
+    Route::get('/',               [\App\Http\Controllers\NotificationController::class, 'index'])->name('index');
+    Route::get('/recent',         [\App\Http\Controllers\NotificationController::class, 'recent'])->name('recent');
+    Route::post('/mark-all-read', [\App\Http\Controllers\NotificationController::class, 'markAllRead'])->name('mark-all-read');
+    Route::get('/{id}/read',      [\App\Http\Controllers\NotificationController::class, 'markRead'])->name('read');
+    Route::delete('/{id}',        [\App\Http\Controllers\NotificationController::class, 'destroy'])->name('destroy');
+});
+
+// ── Pièces jointes ────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('attachments')->name('attachments.')->group(function () {
+    Route::get('/',                 [\App\Http\Controllers\AttachmentController::class, 'index'])->name('index');
+    Route::post('/',                [\App\Http\Controllers\AttachmentController::class, 'store'])->name('store');
+    Route::get('/{attachment}/dl',  [\App\Http\Controllers\AttachmentController::class, 'download'])->name('download');
+    Route::delete('/{attachment}',  [\App\Http\Controllers\AttachmentController::class, 'destroy'])->name('destroy');
+});
+
+// ── Import ────────────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified', 'permission:settings.manage|products.create|clients.create'])->group(function () {
+    Route::get('/import',                [\App\Http\Controllers\ImportController::class, 'index'])->name('import.index');
+    Route::get('/import/template/{type}',[\App\Http\Controllers\ImportController::class, 'template'])->name('import.template');
+    Route::post('/import',               [\App\Http\Controllers\ImportController::class, 'import'])->name('import.process');
+});
+
+// ── Exports ───────────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('exports')->name('exports.')->group(function () {
+    Route::get('/factures',           [\App\Http\Controllers\ExportController::class, 'invoices'])->name('invoices');
+    Route::get('/produits',           [\App\Http\Controllers\ExportController::class, 'products'])->name('products');
+    Route::get('/produits-pdf',       [\App\Http\Controllers\ExportController::class, 'productsPdf'])->name('products-pdf');
+    Route::get('/mouvements-stock',   [\App\Http\Controllers\ExportController::class, 'stockMovements'])->name('stock-movements');
+    Route::get('/clients',            [\App\Http\Controllers\ExportController::class, 'clients'])->name('clients');
+    Route::get('/clients-pdf',        [\App\Http\Controllers\ExportController::class, 'clientsPdf'])->name('clients-pdf');
+    Route::get('/fournisseurs',       [\App\Http\Controllers\ExportController::class, 'suppliers'])->name('suppliers');
+    Route::get('/fournisseurs-pdf',   [\App\Http\Controllers\ExportController::class, 'suppliersPdf'])->name('suppliers-pdf');
+});
+
+// ── Recherche globale ─────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->get('/search', [\App\Http\Controllers\SearchController::class, 'search'])->name('search');
+
+require __DIR__.'/auth.php';

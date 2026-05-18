@@ -1,0 +1,239 @@
+<?php
+
+namespace App\Services;
+
+use App\Events\CreditNoteValidated;
+use App\Models\Company;
+use App\Models\CreditNote;
+use App\Models\Invoice;
+use App\Models\Warehouse;
+use App\Repositories\CreditNoteRepository;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class CreditNoteService
+{
+    public function __construct(
+        public readonly CreditNoteRepository $repository,
+        private readonly DocumentSequenceService $sequenceService,
+        private readonly StockService $stockService,
+        private readonly AccountingService $accountingService,
+    ) {}
+
+    // -------------------------------------------------------------------------
+    // Create from invoice (pre-fills lines from invoice items)
+    // -------------------------------------------------------------------------
+    public function createFromInvoice(Invoice $invoice, array $data): CreditNote
+    {
+        return DB::transaction(function () use ($invoice, $data) {
+            $company = Company::firstOrFail();
+            $items   = $data['items'] ?? [];
+            unset($data['items']);
+
+            [$subtotal, $taxTotal] = $this->calculateTotals($items);
+            $total = $subtotal + $taxTotal;
+
+            $creditNote = CreditNote::create([
+                'company_id'       => $company->id,
+                'client_id'        => $invoice->client_id,
+                'invoice_id'       => $invoice->id,
+                'number'           => $this->sequenceService->nextNumber($company, 'avoir'),
+                'status'           => 'brouillon',
+                'issued_at'        => $data['issued_at'] ?? now()->toDateString(),
+                'reason'           => $data['reason'] ?? null,
+                'currency_code'    => $invoice->currency_code,
+                'subtotal_ht'      => $subtotal,
+                'total_tax'        => $taxTotal,
+                'total_ttc'        => $total,
+                'remaining_credit' => $total,
+                'notes'            => $data['notes'] ?? null,
+                'created_by'       => Auth::id(),
+            ]);
+
+            $this->syncItems($creditNote, $items);
+
+            return $creditNote;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Validate
+    // -------------------------------------------------------------------------
+    public function validate(CreditNote $creditNote): CreditNote
+    {
+        return DB::transaction(function () use ($creditNote) {
+            // [FIX-IDEM-03] Lock to prevent concurrent double-validation.
+            $creditNote = CreditNote::lockForUpdate()->findOrFail($creditNote->id);
+
+            if ($creditNote->status !== 'brouillon') {
+                throw new \RuntimeException('Seuls les avoirs en brouillon peuvent être validés.');
+            }
+
+            $creditNote->load('items.product');
+
+            // Return physical goods to stock via retour_client (inbound)
+            // Use the warehouse from the original delivery note if available,
+            // otherwise fall back to the default warehouse.
+            $warehouseId = $this->resolveReturnWarehouse($creditNote);
+
+            if ($warehouseId) {
+                foreach ($creditNote->items as $item) {
+                    if (!$item->product_id || !($item->product?->is_stockable ?? true) || $item->quantity <= 0) {
+                        continue;
+                    }
+
+                    $this->stockService->recordMovement([
+                        'product_id'     => $item->product_id,
+                        'warehouse_id'   => $warehouseId,
+                        'type'           => 'retour_client',
+                        'quantity'       => (float) $item->quantity,
+                        'unit_cost'      => (float) $item->unit_price,
+                        'occurred_at'    => now(),
+                        'reference_type' => 'credit_note',
+                        'reference_id'   => $creditNote->id,
+                        'notes'          => 'Avoir ' . $creditNote->number,
+                    ]);
+                }
+            }
+
+            $creditNote->update([
+                'status'       => 'valide',
+                'validated_by' => Auth::id(),
+                'validated_at' => now(),
+            ]);
+
+            $fresh = $creditNote->fresh(['client', 'company']);
+
+            // Post to GL synchronously — must be in the same transaction
+            $this->accountingService->postCreditNote($fresh);
+            // [COMPTA-STOCK] Retour en stock automatique
+            $this->accountingService->postCreditNoteStockMovement($fresh);
+
+            // Fire event — queued listeners handle secondary effects after commit
+            event(new CreditNoteValidated($fresh));
+
+            return $fresh;
+        });
+    }
+
+    private function resolveReturnWarehouse(CreditNote $creditNote): ?int
+    {
+        // Try to get warehouse from the invoice's most recent delivery note
+        if ($creditNote->invoice_id) {
+            $warehouseId = \App\Models\DeliveryNote::where('order_id', function ($q) use ($creditNote) {
+                $q->select('order_id')
+                  ->from('invoices')
+                  ->where('id', $creditNote->invoice_id)
+                  ->whereNotNull('order_id');
+            })->where('status', 'valide')
+              ->orderByDesc('validated_at')
+              ->value('warehouse_id');
+
+            if ($warehouseId) {
+                return $warehouseId;
+            }
+        }
+
+        return Warehouse::where('is_default', true)->value('id')
+            ?? Warehouse::value('id');
+    }
+
+    // -------------------------------------------------------------------------
+    // Apply credit note to its linked invoice
+    // -------------------------------------------------------------------------
+    public function applyToInvoice(CreditNote $creditNote): CreditNote
+    {
+        if ($creditNote->status !== 'valide') {
+            throw new \RuntimeException("L'avoir doit être validé avant d'être appliqué.");
+        }
+        if (!$creditNote->invoice_id) {
+            throw new \RuntimeException("Cet avoir n'est pas lié à une facture.");
+        }
+        if ($creditNote->remaining_credit <= 0) {
+            throw new \RuntimeException('Le solde de cet avoir est déjà épuisé.');
+        }
+
+        return DB::transaction(function () use ($creditNote) {
+            // [ARCH-C2] Lock both rows to prevent concurrent modifications.
+            $creditNote = CreditNote::lockForUpdate()->findOrFail($creditNote->id);
+            $invoice    = Invoice::lockForUpdate()->findOrFail($creditNote->invoice_id);
+            $apply      = min($creditNote->remaining_credit, $invoice->remaining_amount);
+
+            // Reduce invoice remaining
+            $invoice->paid_amount      += $apply;
+            $invoice->remaining_amount -= $apply;
+            if ($invoice->remaining_amount <= 0) {
+                $invoice->status = 'payee';
+            } elseif ($invoice->paid_amount > 0) {
+                $invoice->status = 'partiellement_payee';
+            }
+            $invoice->save();
+
+            // Reduce credit note remaining
+            $creditNote->applied_amount   += $apply;
+            $creditNote->remaining_credit -= $apply;
+            $creditNote->status            = $creditNote->remaining_credit <= 0 ? 'applique' : 'valide';
+            $creditNote->save();
+
+            // Recalculate client balance now that a receivable has been reduced
+            $invoice->client?->recalculateBalance();
+
+            return $creditNote->fresh();
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Delete (brouillon only)
+    // -------------------------------------------------------------------------
+    public function delete(CreditNote $creditNote): bool
+    {
+        if ($creditNote->status !== 'brouillon') {
+            throw new \RuntimeException('Seuls les avoirs en brouillon peuvent être supprimés.');
+        }
+        return (bool) $creditNote->delete();
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+    private function syncItems(CreditNote $creditNote, array $items): void
+    {
+        $creditNote->items()->delete();
+        foreach ($items as $i => $item) {
+            $qty     = (float) ($item['quantity']   ?? 1);
+            $price   = (float) ($item['unit_price'] ?? 0);
+            $tax     = (float) ($item['tax_rate_value'] ?? 0);
+            $ht      = (int) round($qty * $price);
+            $lineTax = (int) round($ht * ($tax / 100));
+
+            $creditNote->items()->create([
+                'product_id'     => $item['product_id']     ?? null,
+                'description'    => $item['description']    ?? '',
+                'unit_id'        => $item['unit_id']        ?? null,
+                'quantity'       => $qty,
+                'unit_price'     => (int) $price,
+                'tax_rate_id'    => $item['tax_rate_id']    ?? null,
+                'tax_rate_value' => $tax,
+                'line_total_ht'  => $ht,
+                'line_tax'       => $lineTax,
+                'line_total_ttc' => $ht + $lineTax,
+                'sort_order'     => $i,
+            ]);
+        }
+    }
+
+    private function calculateTotals(array $items): array
+    {
+        $subtotal = 0;
+        $taxTotal = 0;
+        foreach ($items as $item) {
+            $qty     = (float) ($item['quantity']       ?? 1);
+            $price   = (float) ($item['unit_price']     ?? 0);
+            $tax     = (float) ($item['tax_rate_value'] ?? 0);
+            $ht      = (int) round($qty * $price);
+            $subtotal += $ht;
+            $taxTotal += (int) round($ht * ($tax / 100));
+        }
+        return [$subtotal, $taxTotal];
+    }
+}

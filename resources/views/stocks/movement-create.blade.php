@@ -1,0 +1,250 @@
+@extends('layouts.erp')
+@section('title', 'Nouveau mouvement de stock')
+
+@section('breadcrumb')
+    <a href="{{ route('dashboard') }}" class="hover:text-gray-700">Accueil</a>
+    <span class="mx-1">/</span>
+    <a href="{{ route('stocks.index') }}" class="hover:text-gray-700">Stocks</a>
+    <span class="mx-1">/</span>
+    <a href="{{ route('stocks.movements') }}" class="hover:text-gray-700">Mouvements</a>
+    <span class="mx-1">/</span>
+    <span class="text-gray-900 font-medium">Nouveau</span>
+@endsection
+
+@section('content')
+<div class="max-w-2xl mx-auto space-y-6"
+     x-data="{
+         movType: '{{ old('movement_type', request()->query('type', '')) }}',
+         hasLot: false, hasSerial: false, hasExpiry: false, isKit: false,
+         products: {!! $products->mapWithKeys(fn($p) => [$p->id => ['lot' => $p->has_lot_number, 'serial' => $p->has_serial_number, 'expiry' => $p->has_expiry_date, 'kit' => $p->type === 'compose']])->toJson() !!},
+         onProductChange(id) {
+             const p = this.products[id];
+             if (p) { this.hasLot = p.lot; this.hasSerial = p.serial; this.hasExpiry = p.expiry; this.isKit = p.kit; }
+             else { this.hasLot = false; this.hasSerial = false; this.hasExpiry = false; this.isKit = false; }
+         }
+     }">
+
+    {{-- Header --}}
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">Nouveau mouvement de stock</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Enregistrer un mouvement manuel de stock</p>
+    </div>
+
+    {{-- Form --}}
+    <form action="{{ route('stocks.movement.store') }}" method="POST"
+          class="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        @csrf
+
+        {{-- Product --}}
+        <div>
+            <label for="product_id" class="block text-sm font-medium text-gray-700 mb-1">
+                Article <span class="text-red-500">*</span>
+            </label>
+            <select id="product_id" name="product_id" required
+                    @change="onProductChange($event.target.value)"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('product_id') border-red-500 @enderror">
+                <option value="">— Sélectionner un article —</option>
+                @foreach($products as $product)
+                    <option value="{{ $product->id }}"
+                            data-price="{{ $product->purchase_price }}"
+                            {{ old('product_id') == $product->id ? 'selected' : '' }}>
+                        {{ $product->reference ? '[' . $product->reference . '] ' : '' }}{{ $product->name }}
+                        @if($product->type === 'compose') (Kit) @endif
+                    </option>
+                @endforeach
+            </select>
+            @error('product_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            <p class="mt-1 text-xs text-orange-600" x-show="isKit">
+                Cet article est un kit — les composants seront automatiquement consommés lors d'une sortie.
+            </p>
+        </div>
+
+        {{-- Warehouse source --}}
+        <div>
+            <label for="warehouse_id" class="block text-sm font-medium text-gray-700 mb-1">
+                Entrepôt <span x-show="movType === 'transfert'" class="text-gray-400 font-normal">(source)</span>
+                <span class="text-red-500">*</span>
+            </label>
+            <select id="warehouse_id" name="warehouse_id" required
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('warehouse_id') border-red-500 @enderror">
+                <option value="">— Sélectionner un entrepôt —</option>
+                @foreach($warehouses as $wh)
+                    <option value="{{ $wh->id }}" {{ old('warehouse_id') == $wh->id ? 'selected' : '' }}>
+                        {{ $wh->name }}{{ $wh->code ? ' (' . $wh->code . ')' : '' }}
+                    </option>
+                @endforeach
+            </select>
+            @error('warehouse_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        {{-- Movement type --}}
+        <div>
+            <label for="movement_type" class="block text-sm font-medium text-gray-700 mb-1">
+                Type de mouvement <span class="text-red-500">*</span>
+            </label>
+            <select id="movement_type" name="movement_type" required
+                    x-model="movType"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('movement_type') border-red-500 @enderror">
+                <option value="">— Sélectionner —</option>
+                @foreach($movementTypes as $value => $label)
+                    <option value="{{ $value }}" {{ old('movement_type') === $value ? 'selected' : '' }}>
+                        {{ $label }}
+                    </option>
+                @endforeach
+            </select>
+            @error('movement_type')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        {{-- Destination warehouse (transfert only) --}}
+        <div x-show="movType === 'transfert'" x-cloak>
+            <label for="dest_warehouse_id" class="block text-sm font-medium text-gray-700 mb-1">
+                Entrepôt de destination <span class="text-red-500">*</span>
+            </label>
+            <select id="dest_warehouse_id" name="dest_warehouse_id"
+                    :required="movType === 'transfert'"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('dest_warehouse_id') border-red-500 @enderror">
+                <option value="">— Entrepôt destination —</option>
+                @foreach($warehouses as $wh)
+                    <option value="{{ $wh->id }}" {{ old('dest_warehouse_id') == $wh->id ? 'selected' : '' }}>
+                        {{ $wh->name }}{{ $wh->code ? ' (' . $wh->code . ')' : '' }}
+                    </option>
+                @endforeach
+            </select>
+            @error('dest_warehouse_id')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        {{-- Quantity & Unit cost --}}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="quantity" class="block text-sm font-medium text-gray-700 mb-1">
+                    Quantité <span class="text-red-500">*</span>
+                </label>
+                <input type="number" id="quantity" name="quantity"
+                       value="{{ old('quantity') }}"
+                       :min="movType === 'ajustement' ? null : '0.0001'"
+                       step="0.01" required
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('quantity') border-red-500 @enderror"
+                       placeholder="0.00">
+                <p class="mt-1 text-xs text-gray-500" x-show="movType === 'ajustement'">
+                    Positive pour ajouter, négative pour retirer.
+                </p>
+                @error('quantity')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="unit_cost" class="block text-sm font-medium text-gray-700 mb-1">
+                    Coût unitaire (FCFA)
+                </label>
+                <input type="number" id="unit_cost" name="unit_cost"
+                       value="{{ old('unit_cost') }}"
+                       min="0" step="1"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('unit_cost') border-red-500 @enderror"
+                       placeholder="0">
+                <p class="mt-1 text-xs text-gray-400">Laissez vide pour conserver le CMP.</p>
+                @error('unit_cost')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        {{-- Lot / Série / Péremption --}}
+        <div class="border border-gray-200 rounded-lg p-4 space-y-4 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wider">Traçabilité (optionnel)</p>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label for="lot_number" class="block text-sm font-medium text-gray-700 mb-1">
+                        N° de lot
+                        <span x-show="hasLot" class="text-teal-600 text-xs">(recommandé)</span>
+                    </label>
+                    <input type="text" id="lot_number" name="lot_number"
+                           value="{{ old('lot_number') }}" maxlength="50"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 @error('lot_number') border-red-500 @enderror"
+                           placeholder="LOT-001">
+                    @error('lot_number')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="serial_number" class="block text-sm font-medium text-gray-700 mb-1">
+                        N° de série
+                        <span x-show="hasSerial" class="text-teal-600 text-xs">(recommandé)</span>
+                    </label>
+                    <input type="text" id="serial_number" name="serial_number"
+                           value="{{ old('serial_number') }}" maxlength="50"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 @error('serial_number') border-red-500 @enderror"
+                           placeholder="SN-XXXXX">
+                    @error('serial_number')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label for="expiry_date" class="block text-sm font-medium text-gray-700 mb-1">
+                        Date de péremption
+                        <span x-show="hasExpiry" class="text-teal-600 text-xs">(recommandé)</span>
+                    </label>
+                    <input type="date" id="expiry_date" name="expiry_date"
+                           value="{{ old('expiry_date') }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 @error('expiry_date') border-red-500 @enderror">
+                    @error('expiry_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+            </div>
+        </div>
+
+        {{-- Date & Reference --}}
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label for="movement_date" class="block text-sm font-medium text-gray-700 mb-1">
+                    Date du mouvement <span class="text-red-500">*</span>
+                </label>
+                <input type="date" id="movement_date" name="movement_date"
+                       value="{{ old('movement_date', now()->format('Y-m-d')) }}"
+                       required
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('movement_date') border-red-500 @enderror">
+                @error('movement_date')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="reference" class="block text-sm font-medium text-gray-700 mb-1">
+                    Référence / N° document
+                </label>
+                <input type="text" id="reference" name="reference"
+                       value="{{ old('reference') }}"
+                       maxlength="100"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('reference') border-red-500 @enderror"
+                       placeholder="BL-001, BC-123...">
+                @error('reference')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        {{-- Notes --}}
+        <div>
+            <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea id="notes" name="notes" rows="2"
+                      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('notes') border-red-500 @enderror"
+                      placeholder="Motif, informations complémentaires...">{{ old('notes') }}</textarea>
+            @error('notes')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        {{-- Actions --}}
+        <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+            <a href="{{ route('stocks.movements') }}"
+               class="text-sm text-gray-600 hover:text-gray-900 hover:underline">
+                Annuler
+            </a>
+            <button type="submit"
+                    class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors">
+                Enregistrer le mouvement
+            </button>
+        </div>
+    </form>
+
+</div>
+@endsection
+
+@push('scripts')
+<script>
+// Auto-fill unit_cost from selected product's purchase_price
+document.getElementById('product_id').addEventListener('change', function () {
+    const selected  = this.options[this.selectedIndex];
+    const price     = selected.dataset.price;
+    const costInput = document.getElementById('unit_cost');
+    if (price && (!costInput.value || costInput.value === '0')) {
+        costInput.value = price;
+    }
+});
+</script>
+@endpush

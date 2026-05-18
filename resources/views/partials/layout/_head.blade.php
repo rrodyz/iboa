@@ -1,0 +1,50 @@
+{{--
+    Layout — bloc <head> complet.
+    Inclus depuis layouts/erp.blade.php.
+
+    Charge :
+      - Meta (viewport, CSRF, turbo-prefetch off)
+      - Favicon SVG inline (data URI — pas de 404 selon sous-chemin)
+      - Polices Bunny (figtree)
+      - Vite (app.css + app.js)
+      - DataTables CDN (CSS + JS)
+      - @stack('styles') et @stack('head_scripts') pour extensions par vue
+--}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{{-- Désactive le prefetch automatique de Turbo 8 sur hover (source de NetworkError
+     quand le serveur répond lentement). Turbo vérifie cette meta à chaque tentative. --}}
+<meta name="turbo-prefetch" content="false">
+<title>@yield('title', 'Dashboard') — {{ config('app.name') }}</title>
+{{-- Favicon en SVG inline (data URI) — évite tout 404 quel que soit le sous-chemin --}}
+<link rel="icon" href="data:image/svg+xml,&lt;svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22&gt;&lt;rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%234f46e5%22/&gt;&lt;text x=%2250%22 y=%2270%22 font-size=%2270%22 font-family=%22Arial%22 font-weight=%22700%22 fill=%22white%22 text-anchor=%22middle%22&gt;A&lt;/text&gt;&lt;/svg&gt;">
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet"/>
+@vite(['resources/css/app.css', 'resources/js/app.js'])
+
+{{-- DataTables --}}
+<link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.tailwindcss.min.css">
+{{-- buttons.tailwindcss.min.css n'existe pas sur le CDN v3.0.2 — le style est géré en bas de ce fichier --}}
+
+@stack('styles')
+
+{{-- Scripts chargés une seule fois dans <head> par les vues qui en ont besoin --}}
+@stack('head_scripts')
+
+{{-- Utilitaires globaux statiques (data-turbo-eval="false" = chargé une seule fois) --}}
+<script data-turbo-eval="false">
+    window.fcfa = (n) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n) + ' FCFA';
+</script>
+
+{{-- jQuery + DataTables : chargés une seule fois grâce à data-turbo-eval="false" --}}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" data-turbo-eval="false"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js" data-turbo-eval="false"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.tailwindcss.min.js" data-turbo-eval="false"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/dataTables.buttons.min.js" data-turbo-eval="false"></script>
+{{-- buttons.tailwindcss.min.js n'existe pas sur le CDN v3.0.2 — le rendu est géré dans initDataTables (app.js) --}}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" data-turbo-eval="false"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js" data-turbo-eval="false"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js" data-turbo-eval="false"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.html5.min.js" data-turbo-eval="false"></script>
+<script src="https://cdn.datatables.net/buttons/3.0.2/js/buttons.print.min.js" data-turbo-eval="false"></script>

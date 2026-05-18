@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A3 ERP — Guide de présentation et d'utilisation</title>
+<style>
+  :root {
+    --primary: #6C3BD4;
+    --primary-dark: #4f28a8;
+    --accent: #22c55e;
+    --accent2: #3b82f6;
+    --dark: #1e1b4b;
+    --gray: #64748b;
+    --light: #f8fafc;
+    --border: #e2e8f0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: #1e293b;
+    background: #fff;
+    line-height: 1.6;
+  }
+
+  /* ── COVER PAGE ── */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1e1b4b 0%, #4f28a8 50%, #6C3BD4 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -100px;
+    width: 500px; height: 500px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -120px; left: -80px;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.05);
+  }
+  .cover-logo {
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 20px;
+    padding: 20px 36px;
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 2px;
+    margin-bottom: 40px;
+    backdrop-filter: blur(10px);
+  }
+  .cover h1 {
+    font-size: 3.2rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 20px;
+    max-width: 800px;
+  }
+  .cover .subtitle {
+    font-size: 1.3rem;
+    color: rgba(255,255,255,0.8);
+    max-width: 600px;
+    margin-bottom: 50px;
+  }
+  .cover-badges {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 60px;
+  }
+  .badge {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50px;
+    padding: 8px 20px;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
+    backdrop-filter: blur(4px);
+  }
+  .cover-footer {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.85rem;
+  }
+
+  /* ── TOC ── */
+  .toc {
+    padding: 60px 80px;
+    page-break-after: always;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .toc h2 {
+    font-size: 2rem;
+    color: var(--primary);
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid var(--primary);
+  }
+  .toc-intro { color: var(--gray); margin-bottom: 36px; font-size: 0.95rem; }
+  .toc-group { margin-bottom: 28px; }
+  .toc-group-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--gray);
+    margin-bottom: 10px;
+  }
+  .toc-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px dashed #e2e8f0;
+    text-decoration: none;
+    color: #334155;
+    transition: color 0.2s;
+  }
+  .toc-item:hover { color: var(--primary); }
+  .toc-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-right: 14px;
+    flex-shrink: 0;
+  }
+  .toc-item-name { flex: 1; font-weight: 500; }
+  .toc-dots { flex: 1; border-bottom: 1px dotted #cbd5e1; margin: 0 12px; }
+
+  /* ── SECTION ── */
+  .section {
+    padding: 70px 80px;
+    page-break-before: always;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 36px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid var(--border);
+  }
+  .section-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+  .section-meta { flex: 1; }
+  .section-number {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--gray);
+    margin-bottom: 4px;
+  }
+  .section h2 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--dark);
+  }
+  .section-desc {
+    font-size: 1.05rem;
+    color: #475569;
+    margin-bottom: 28px;
+    line-height: 1.7;
+  }
+
+  /* ── SCREENSHOT ── */
+  .screenshot-wrapper {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 20px 40px -8px rgba(0,0,0,0.15);
+    border: 1px solid var(--border);
+    margin-bottom: 36px;
+  }
+  .screenshot-bar {
+    background: #f1f5f9;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot-r { background: #ef4444; }
+  .dot-y { background: #f59e0b; }
+  .dot-g { background: #22c55e; }
+  .screenshot-url {
+    flex: 1;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    color: var(--gray);
+    font-family: monospace;
+  }
+  .screenshot-wrapper img {
+    width: 100%;
+    display: block;
+  }
+
+  /* ── GUIDE ── */
+  .guide {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    border-left: 4px solid var(--primary);
+  }
+  .guide h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .guide ol, .guide ul {
+    padding-left: 20px;
+    color: #334155;
+  }
+  .guide li { margin-bottom: 8px; font-size: 0.95rem; line-height: 1.6; }
+  .guide li strong { color: #1e293b; }
+
+  /* ── FEATURES GRID ── */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .feature-card {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .feature-card .icon { font-size: 1.4rem; margin-bottom: 8px; }
+  .feature-card h4 { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+  .feature-card p { font-size: 0.82rem; color: var(--gray); line-height: 1.5; }
+
+  /* ── TIP ── */
+  .tip {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 0.88rem;
+    color: #1d4ed8;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .tip-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── DIVIDER ── */
+  .page-divider {
+    text-align: center;
+    padding: 30px;
+    color: #cbd5e1;
+    font-size: 1.5rem;
+  }
+
+  @media print {
+    .cover { min-height: 100vh; }
+    .section { page-break-before: always; }
+    .toc { page-break-after: always; }
+    a { text-decoration: none; color: inherit; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     COVER PAGE
+═══════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">A3 ERP</div>
+  <h1>Solution ERP Intégrée pour votre Entreprise</h1>
+  <p class="subtitle">Guide de présentation complet avec capture d'écran de chaque fonctionnalité et guide d'utilisation à destination des clients</p>
+  <div class="cover-badges">
+    <span class="badge">📊 Ventes & Facturation</span>
+    <span class="badge">🛒 Achats & Fournisseurs</span>
+    <span class="badge">📦 Gestion des Stocks</span>
+    <span class="badge">💰 Trésorerie</span>
+    <span class="badge">📒 Comptabilité SYSCOHADA</span>
+    <span class="badge">📈 Analytique & Rapports</span>
+  </div>
+  <div class="cover-footer">
+    Document confidentiel · A3 ERP · Tous droits réservés · Mai 2026
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     TABLE OF CONTENTS
+═══════════════════════════════════════ -->
+<div class="toc">
+  <h2>Table des matières</h2>
+  <p class="toc-intro">Ce guide présente toutes les fonctionnalités de l'ERP A3, accompagnées de captures d'écran réelles et d'instructions pas à pas pour une prise en main rapide.</p>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Vue d'ensemble</div>
+    <a href="#dashboard" class="toc-item"><span class="toc-num">1</span><span class="toc-item-name">Tableau de bord</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Ventes</div>
+    <a href="#devis" class="toc-item"><span class="toc-num">2</span><span class="toc-item-name">Devis</span><span class="toc-dots"></span></a>
+    <a href="#commandes" class="toc-item"><span class="toc-num">3</span><span class="toc-item-name">Commandes clients</span><span class="toc-dots"></span></a>
+    <a href="#bons-livraison" class="toc-item"><span class="toc-num">4</span><span class="toc-item-name">Bons de livraison</span><span class="toc-dots"></span></a>
+    <a href="#factures" class="toc-item"><span class="toc-num">5</span><span class="toc-item-name">Factures clients</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Achats</div>
+    <a href="#cmd-fournisseurs" class="toc-item"><span class="toc-num">6</span><span class="toc-item-name">Commandes fournisseurs</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Gestion</div>
+    <a href="#clients" class="toc-item"><span class="toc-num">7</span><span class="toc-item-name">Gestion des clients</span><span class="toc-dots"></span></a>
+    <a href="#fournisseurs" class="toc-item"><span class="toc-num">8</span><span class="toc-item-name">Gestion des fournisseurs</span><span class="toc-dots"></span></a>
+    <a href="#articles" class="toc-item"><span class="toc-num">9</span><span class="toc-item-name">Articles & Catalogue</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Stocks</div>
+    <a href="#stocks" class="toc-item"><span class="toc-num">10</span><span class="toc-item-name">Niveaux de stock</span><span class="toc-dots"></span></a>
+    <a href="#mouvements" class="toc-item"><span class="toc-num">11</span><span class="toc-item-name">Mouvements de stock</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Trésorerie</div>
+    <a href="#encaissements" class="toc-item"><span class="toc-num">12</span><span class="toc-item-name">Encaissements clients</span><span class="toc-dots"></span></a>
+    <a href="#decaissements" class="toc-item"><span class="toc-num">13</span><span class="toc-item-name">Décaissements fournisseurs</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Module Comptabilité</div>
+    <a href="#plan-comptable" class="toc-item"><span class="toc-num">14</span><span class="toc-item-name">Plan comptable SYSCOHADA</span><span class="toc-dots"></span></a>
+    <a href="#journaux" class="toc-item"><span class="toc-num">15</span><span class="toc-item-name">Journal comptable</span><span class="toc-dots"></span></a>
+    <a href="#grand-livre" class="toc-item"><span class="toc-num">16</span><span class="toc-item-name">Grand livre</span><span class="toc-dots"></span></a>
+    <a href="#balance" class="toc-item"><span class="toc-num">17</span><span class="toc-item-name">Balance générale</span><span class="toc-dots"></span></a>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-group-title">Analytique & Administration</div>
+    <a href="#rapports" class="toc-item"><span class="toc-num">18</span><span class="toc-item-name">Rapports & Analyse BI</span><span class="toc-dots"></span></a>
+    <a href="#parametrage" class="toc-item"><span class="toc-num">19</span><span class="toc-item-name">Paramétrage société</span><span class="toc-dots"></span></a>
+    <a href="#utilisateurs" class="toc-item"><span class="toc-num">20</span><span class="toc-item-name">Gestion des utilisateurs</span><span class="toc-dots"></span></a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     1. TABLEAU DE BORD
+═══════════════════════════════════════ -->
+<div class="section" id="dashboard">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ede9fe;">🏠</div>
+    <div class="section-meta">
+      <div class="section-number">Module 01</div>
+      <h2>Tableau de bord</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le tableau de bord est la page d'accueil de l'ERP A3. Il offre une vue synthétique et en temps réel de l'activité de votre entreprise : chiffre d'affaires, encaissements, trésorerie, alertes de stock et indicateurs clés de performance.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/dashboard — Tableau de bord</span></div>
+    <img src="screenshots/01_dashboard.jpg" alt="Tableau de bord A3 ERP">
+  </div>
+  <div class="features">
+    <div class="feature-card"><div class="icon">📊</div><h4>CA en temps réel</h4><p>Chiffre d'affaires du jour, du mois et annuel avec évolution graphique.</p></div>
+    <div class="feature-card"><div class="icon">💵</div><h4>Trésorerie</h4><p>Soldes en direct de la caisse et des comptes bancaires.</p></div>
+    <div class="feature-card"><div class="icon">🔔</div><h4>Alertes</h4><p>Notifications de retards de paiement et ruptures de stock.</p></div>
+    <div class="feature-card"><div class="icon">⚡</div><h4>Accès rapides</h4><p>Créer une facture, un devis ou un nouveau client en un clic.</p></div>
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Connectez-vous avec votre e-mail et mot de passe sur la page de connexion.</li>
+      <li>Le tableau de bord s'affiche automatiquement après connexion.</li>
+      <li>Consultez les <strong>KPIs</strong> (CA aujourd'hui, ce mois, encaissements, trésorerie) dans les cartes du haut.</li>
+      <li>Utilisez le graphique <strong>Chiffre d'affaires</strong> pour voir l'évolution sur 7, 30 jours ou 6 mois.</li>
+      <li>Vérifiez la zone <strong>Alertes</strong> (droite) pour les retards ou ruptures de stock.</li>
+      <li>Cliquez sur <strong>+ Nouvelle facture</strong>, <strong>Devis</strong> ou <strong>Nouveau client</strong> pour créer rapidement.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     2. DEVIS
+═══════════════════════════════════════ -->
+<div class="section" id="devis">
+  <div class="section-header">
+    <div class="section-icon" style="background:#dbeafe;">📋</div>
+    <div class="section-meta">
+      <div class="section-number">Module 02 · Ventes</div>
+      <h2>Devis</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Devis permet de créer et gérer des propositions commerciales professionnelles pour vos clients. Un devis peut être converti en commande puis en facture en quelques clics, assurant une fluidité totale dans le cycle de vente.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/ventes/devis — Liste des devis</span></div>
+    <img src="screenshots/02_devis.jpg" alt="Liste des devis">
+  </div>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/ventes/devis/1 — Détail d'un devis</span></div>
+    <img src="screenshots/03_devis_detail.jpg" alt="Détail devis">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Naviguez vers <strong>Ventes → Devis</strong> dans le menu latéral.</li>
+      <li>Cliquez sur <strong>+ Nouveau devis</strong> (bouton violet en haut à droite).</li>
+      <li>Sélectionnez le <strong>client</strong> dans la liste déroulante (ou créez-en un nouveau).</li>
+      <li>Ajoutez les <strong>lignes d'articles</strong> : choisissez l'article, la quantité et vérifiez le prix.</li>
+      <li>Renseignez les <strong>conditions de paiement</strong> et la date de validité.</li>
+      <li>Cliquez <strong>Enregistrer</strong> pour sauvegarder en brouillon ou <strong>Envoyer</strong> pour l'envoyer au client.</li>
+      <li>Depuis le détail du devis, utilisez <strong>Convertir en commande</strong> dès acceptation par le client.</li>
+    </ol>
+  </div>
+  <div class="tip"><span class="tip-icon">💡</span> <span>Vous pouvez exporter chaque devis en <strong>PDF</strong> pour l'envoyer par e-mail au client via le bouton dédié dans le détail du devis.</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     3. COMMANDES
+═══════════════════════════════════════ -->
+<div class="section" id="commandes">
+  <div class="section-header">
+    <div class="section-icon" style="background:#dcfce7;">🛍️</div>
+    <div class="section-meta">
+      <div class="section-number">Module 03 · Ventes</div>
+      <h2>Commandes clients</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Commandes clients centralise toutes les commandes reçues de vos clients. Chaque commande peut être générée depuis un devis accepté ou créée manuellement. Le suivi du statut (brouillon → confirmé → livré) est intégré.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/ventes/commandes — Commandes clients</span></div>
+    <img src="screenshots/04_commandes.jpg" alt="Commandes clients">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Ventes → Commandes</strong>.</li>
+      <li>Les commandes issues d'un devis sont automatiquement créées lors de la conversion.</li>
+      <li>Pour créer manuellement : cliquez <strong>+ Nouvelle commande</strong>, choisissez le client et ajoutez les articles.</li>
+      <li>Confirmez la commande en cliquant sur <strong>Confirmer</strong> pour bloquer le stock.</li>
+      <li>Depuis une commande, créez le <strong>Bon de livraison</strong> ou la <strong>Facture</strong> directement.</li>
+      <li>Utilisez les filtres (statut, date, client) pour retrouver rapidement une commande.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     4. BONS DE LIVRAISON
+═══════════════════════════════════════ -->
+<div class="section" id="bons-livraison">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fef9c3;">🚚</div>
+    <div class="section-meta">
+      <div class="section-number">Module 04 · Ventes</div>
+      <h2>Bons de livraison</h2>
+    </div>
+  </div>
+  <p class="section-desc">Les bons de livraison (BL) documentent chaque expédition de marchandises vers vos clients. Ils déclenchent automatiquement la sortie de stock correspondante et servent de base pour la facturation.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/ventes/bons-livraison — Bons de livraison</span></div>
+    <img src="screenshots/05_bons_livraison.jpg" alt="Bons de livraison">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Ventes → Bons de livraison</strong>.</li>
+      <li>Créez un BL depuis une commande confirmée (bouton <strong>Créer BL</strong>) ou manuellement via <strong>+ Nouveau BL</strong>.</li>
+      <li>Sélectionnez l'<strong>entrepôt source</strong> et vérifiez les quantités à expédier.</li>
+      <li>Validez le BL : le stock est automatiquement <strong>décrémenté</strong>.</li>
+      <li>Imprimez ou exportez le BL en <strong>PDF</strong> pour accompagner la livraison.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     5. FACTURES
+═══════════════════════════════════════ -->
+<div class="section" id="factures">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fee2e2;">🧾</div>
+    <div class="section-meta">
+      <div class="section-number">Module 05 · Ventes</div>
+      <h2>Factures clients</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module de facturation permet de créer, gérer et suivre toutes vos factures clients. Les factures sont générées automatiquement depuis les commandes ou BL, ou créées manuellement. Le suivi du statut de paiement (brouillon → validée → payée) est intégré.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/ventes/factures — Factures clients</span></div>
+    <img src="screenshots/06_factures.jpg" alt="Factures clients">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Allez dans <strong>Ventes → Factures</strong> ou cliquez <strong>+ Facture</strong> en haut de l'écran.</li>
+      <li>Choisissez le client, ajoutez les lignes d'articles avec les prix et la TVA applicable.</li>
+      <li>Cliquez <strong>Valider</strong> pour finaliser la facture et générer l'écriture comptable automatique.</li>
+      <li>Exportez en <strong>PDF</strong> pour envoi au client.</li>
+      <li>Enregistrez le paiement via le module <strong>Trésorerie → Encaissements</strong>.</li>
+      <li>Utilisez les filtres pour retrouver les factures impayées, en retard ou par client.</li>
+    </ol>
+  </div>
+  <div class="tip"><span class="tip-icon">💡</span><span>La validation d'une facture génère <strong>automatiquement les écritures comptables</strong> dans le journal des ventes (SYSCOHADA).</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     6. COMMANDES FOURNISSEURS
+═══════════════════════════════════════ -->
+<div class="section" id="cmd-fournisseurs">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fce7f3;">🛒</div>
+    <div class="section-meta">
+      <div class="section-number">Module 06 · Achats</div>
+      <h2>Commandes fournisseurs</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Achats gère les commandes passées auprès de vos fournisseurs. Il couvre le cycle complet : création de la commande → réception des marchandises → facturation fournisseur, avec mise à jour automatique du stock à la réception.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/achats/commandes — Commandes fournisseurs</span></div>
+    <img src="screenshots/07_cmd_fournisseurs.jpg" alt="Commandes fournisseurs">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Naviguez vers <strong>Achats → Commandes fournisseurs</strong>.</li>
+      <li>Cliquez <strong>+ Nouvelle commande</strong>, sélectionnez le fournisseur et l'entrepôt de destination.</li>
+      <li>Ajoutez les lignes d'articles commandés avec les quantités et prix d'achat.</li>
+      <li>Envoyez la commande au fournisseur et passez le statut à <strong>Envoyée</strong>.</li>
+      <li>À réception, cliquez <strong>Réceptionner</strong> : le stock est automatiquement <strong>incrémenté</strong>.</li>
+      <li>Créez la <strong>facture fournisseur</strong> depuis la réception pour enregistrer la dette.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     7. CLIENTS
+═══════════════════════════════════════ -->
+<div class="section" id="clients">
+  <div class="section-header">
+    <div class="section-icon" style="background:#dbeafe;">👥</div>
+    <div class="section-meta">
+      <div class="section-number">Module 07 · Gestion</div>
+      <h2>Gestion des clients</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le répertoire clients centralise toutes les informations de vos clients : coordonnées, contacts, adresses, historique des commandes et factures, balance âgée et relevé de compte. Chaque fiche client offre une vision à 360° de la relation commerciale.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/gestion/clients — Clients</span></div>
+    <img src="screenshots/08_clients.jpg" alt="Gestion des clients">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Allez dans <strong>Gestion → Clients</strong>.</li>
+      <li>Cliquez <strong>+ Nouveau client</strong> pour créer une fiche client.</li>
+      <li>Renseignez : raison sociale, type (particulier/entreprise), téléphone, e-mail, adresse.</li>
+      <li>Définissez la <strong>limite de crédit</strong>, les <strong>jours de paiement</strong> et la remise par défaut.</li>
+      <li>Ajoutez des <strong>contacts multiples</strong> et des <strong>adresses de livraison</strong> si nécessaire.</li>
+      <li>Depuis la fiche client, accédez aux onglets <strong>Factures</strong>, <strong>Commandes</strong>, <strong>Paiements</strong> pour l'historique complet.</li>
+      <li>Exportez la liste en <strong>Excel ou PDF</strong> pour vos reportings.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     8. FOURNISSEURS
+═══════════════════════════════════════ -->
+<div class="section" id="fournisseurs">
+  <div class="section-header">
+    <div class="section-icon" style="background:#f0fdf4;">🏭</div>
+    <div class="section-meta">
+      <div class="section-number">Module 08 · Gestion</div>
+      <h2>Gestion des fournisseurs</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module fournisseurs regroupe toutes les informations relatives à vos partenaires d'achat. Gérez les contacts, les conditions d'achat et consultez l'historique des commandes et des paiements par fournisseur.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/gestion/fournisseurs — Fournisseurs</span></div>
+    <img src="screenshots/09_fournisseurs.jpg" alt="Gestion des fournisseurs">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Allez dans <strong>Gestion → Fournisseurs</strong>.</li>
+      <li>Cliquez <strong>+ Nouveau fournisseur</strong> pour créer une fiche.</li>
+      <li>Renseignez : raison sociale, type (entreprise/particulier), contacts, adresses.</li>
+      <li>Précisez les conditions commerciales : délai de paiement, devise, remise habituelle.</li>
+      <li>Consultez l'historique des achats depuis la fiche du fournisseur.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     9. ARTICLES
+═══════════════════════════════════════ -->
+<div class="section" id="articles">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fef3c7;">📦</div>
+    <div class="section-meta">
+      <div class="section-number">Module 09 · Gestion</div>
+      <h2>Articles & Catalogue</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le catalogue articles recense tous les produits et services que vous vendez ou achetez. Chaque article dispose d'une fiche complète : prix d'achat et de vente, TVA applicable, unité de mesure, stock disponible, seuils d'alerte et tarifs spéciaux.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/products — Articles</span></div>
+    <img src="screenshots/10_articles.jpg" alt="Catalogue articles">
+  </div>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/products/1 — Fiche article</span></div>
+    <img src="screenshots/11_article_detail.jpg" alt="Fiche article détaillée">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Gestion → Articles</strong>.</li>
+      <li>Cliquez <strong>+ Nouvel article</strong> pour créer un article.</li>
+      <li>Renseignez : désignation, référence, famille, type (simple/composé/service).</li>
+      <li>Définissez le <strong>prix d'achat</strong>, le <strong>prix de vente HT</strong> et la <strong>TVA</strong>.</li>
+      <li>Paramétrez les seuils : stock minimum, maximum et seuil de réapprovisionnement.</li>
+      <li>Ajoutez des <strong>tarifs spéciaux</strong> par client ou famille de clients.</li>
+      <li>Importez en masse via le bouton <strong>Importer</strong> (fichier Excel).</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     10. STOCKS
+═══════════════════════════════════════ -->
+<div class="section" id="stocks">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ecfdf5;">🏪</div>
+    <div class="section-meta">
+      <div class="section-number">Module 10 · Stocks</div>
+      <h2>Niveaux de stock</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Stocks offre une visibilité en temps réel sur les niveaux de stock de chaque article par entrepôt. Il indique le stock disponible, le stock réservé (commandes en cours), le stock physique et le statut par rapport aux seuils d'alerte.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/stocks — Niveaux de stock</span></div>
+    <img src="screenshots/12_stocks.jpg" alt="Niveaux de stock">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Naviguez vers <strong>Stocks → Niveaux de stock</strong>.</li>
+      <li>Filtrez par <strong>entrepôt</strong> pour voir le stock d'un dépôt spécifique.</li>
+      <li>Cochez <strong>Stock bas uniquement</strong> pour identifier les articles sous le seuil d'alerte.</li>
+      <li>Cliquez <strong>+ Nouveau mouvement</strong> pour enregistrer une entrée ou sortie manuelle.</li>
+      <li>Exportez le rapport de stock en <strong>Excel ou PDF</strong> pour l'inventaire.</li>
+      <li>Accédez aux inventaires, lots & traçabilité et entrepôts via les liens rapides.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     11. MOUVEMENTS DE STOCK
+═══════════════════════════════════════ -->
+<div class="section" id="mouvements">
+  <div class="section-header">
+    <div class="section-icon" style="background:#f0fdf4;">↕️</div>
+    <div class="section-meta">
+      <div class="section-number">Module 11 · Stocks</div>
+      <h2>Mouvements de stock</h2>
+    </div>
+  </div>
+  <p class="section-desc">L'historique des mouvements de stock trace toutes les entrées et sorties de marchandises : réceptions de commandes fournisseurs, livraisons clients, ajustements manuels, transferts entre entrepôts. Chaque mouvement est daté, référencé et attribué à un utilisateur.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/stocks/mouvements — Mouvements de stock</span></div>
+    <img src="screenshots/13_mouvements.jpg" alt="Mouvements de stock">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Allez dans <strong>Stocks → Mouvements</strong>.</li>
+      <li>Filtrez par <strong>produit</strong>, <strong>entrepôt</strong>, <strong>type</strong> (entrée/sortie) et <strong>période</strong>.</li>
+      <li>Pour un mouvement manuel : cliquez <strong>+ Nouveau mouvement</strong>, choisissez le type, l'article, la quantité et l'entrepôt.</li>
+      <li>Chaque mouvement affiche le <strong>coût unitaire</strong> (valorisation au CMP).</li>
+      <li>Exportez l'historique en Excel pour vos audits et inventaires.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     12. ENCAISSEMENTS
+═══════════════════════════════════════ -->
+<div class="section" id="encaissements">
+  <div class="section-header">
+    <div class="section-icon" style="background:#dcfce7;">💰</div>
+    <div class="section-meta">
+      <div class="section-number">Module 12 · Trésorerie</div>
+      <h2>Encaissements clients</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Encaissements centralise tous les paiements reçus de vos clients. Chaque encaissement est imputé sur une ou plusieurs factures, met à jour le solde client et génère automatiquement l'écriture comptable correspondante.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/tresorerie/encaissements — Encaissements</span></div>
+    <img src="screenshots/14_encaissements.jpg" alt="Encaissements clients">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Trésorerie → Encaissements</strong>.</li>
+      <li>Cliquez <strong>+ Nouveau paiement</strong> pour enregistrer un encaissement.</li>
+      <li>Sélectionnez le <strong>client</strong>, la <strong>date</strong>, le <strong>montant</strong> et le <strong>mode de paiement</strong> (espèces, virement, chèque…).</li>
+      <li>Cochez les <strong>factures à imputer</strong> dans la liste des factures ouvertes.</li>
+      <li>Validez : la facture est marquée <strong>payée</strong> et l'écriture comptable est générée.</li>
+    </ol>
+  </div>
+  <div class="tip"><span class="tip-icon">💡</span><span>La validation d'un encaissement génère automatiquement les <strong>écritures comptables</strong> dans le journal de caisse ou banque (SYSCOHADA).</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     13. DÉCAISSEMENTS
+═══════════════════════════════════════ -->
+<div class="section" id="decaissements">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fef2f2;">💸</div>
+    <div class="section-meta">
+      <div class="section-number">Module 13 · Trésorerie</div>
+      <h2>Décaissements fournisseurs</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Décaissements enregistre tous les paiements effectués à vos fournisseurs. Chaque décaissement est imputé sur les factures fournisseurs correspondantes et met à jour la trésorerie en temps réel.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/tresorerie/decaissements — Décaissements</span></div>
+    <img src="screenshots/15_decaissements.jpg" alt="Décaissements fournisseurs">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Trésorerie → Décaissements</strong>.</li>
+      <li>Cliquez <strong>+ Nouveau paiement</strong> pour enregistrer un règlement fournisseur.</li>
+      <li>Sélectionnez le <strong>fournisseur</strong>, le <strong>montant</strong>, la <strong>date</strong> et le <strong>mode de paiement</strong>.</li>
+      <li>Cochez les <strong>factures fournisseurs</strong> à solder.</li>
+      <li>Validez pour mettre à jour le solde fournisseur et générer l'écriture comptable.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     14. PLAN COMPTABLE
+═══════════════════════════════════════ -->
+<div class="section" id="plan-comptable">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ede9fe;">📒</div>
+    <div class="section-meta">
+      <div class="section-number">Module 14 · Comptabilité</div>
+      <h2>Plan comptable SYSCOHADA</h2>
+    </div>
+  </div>
+  <p class="section-desc">L'ERP A3 intègre le plan comptable SYSCOHADA révisé (136 comptes préchargés), conforme aux normes comptables en vigueur en Afrique de l'Ouest et Centrale. Vous pouvez personnaliser le plan en ajoutant ou modifiant des comptes selon vos besoins.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/comptabilite/plan-comptable — Plan comptable</span></div>
+    <img src="screenshots/16_plan_comptable.jpg" alt="Plan comptable SYSCOHADA">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Comptabilité → Plan comptable</strong>.</li>
+      <li>Naviguez dans les <strong>classes</strong> (1 à 9) via le filtre déroulant.</li>
+      <li>Cliquez sur le code d'un compte pour le <strong>modifier</strong> (libellé, type, saisissable).</li>
+      <li>Ajoutez un nouveau compte via <strong>+ Nouveau compte</strong> en précisant le code, le libellé et la classe.</li>
+      <li>Exportez le plan comptable complet en <strong>PDF ou Excel</strong>.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     15. JOURNAUX
+═══════════════════════════════════════ -->
+<div class="section" id="journaux">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ede9fe;">📝</div>
+    <div class="section-meta">
+      <div class="section-number">Module 15 · Comptabilité</div>
+      <h2>Journal comptable</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le journal comptable liste toutes les écritures comptables générées automatiquement (ventes, encaissements, achats, décaissements) ou saisies manuellement. Chaque écriture est validée et datée, garantissant la traçabilité complète.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/comptabilite/journaux — Journal comptable</span></div>
+    <img src="screenshots/17_journaux.jpg" alt="Journal comptable">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Comptabilité → Journaux</strong>.</li>
+      <li>Filtrez par <strong>type de journal</strong> (ventes VE, caisse CA, achats AC, banque BQ…).</li>
+      <li>Consultez le détail d'une écriture en cliquant sur son numéro.</li>
+      <li>Pour une saisie manuelle : cliquez <strong>+ Nouvelle écriture</strong>, complétez les lignes débit/crédit.</li>
+      <li>Exportez le journal en <strong>PDF ou Excel</strong> pour les déclarations fiscales.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     16. GRAND LIVRE
+═══════════════════════════════════════ -->
+<div class="section" id="grand-livre">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ede9fe;">📗</div>
+    <div class="section-meta">
+      <div class="section-number">Module 16 · Comptabilité</div>
+      <h2>Grand livre</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le grand livre présente le détail de tous les mouvements par compte comptable. Pour chaque compte, vous visualisez les lignes de débit et crédit avec la pièce associée, et le solde cumulé au fil du temps. L'équilibre débit/crédit est vérifié en temps réel.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/comptabilite/grand-livre — Grand livre</span></div>
+    <img src="screenshots/18_grand_livre.jpg" alt="Grand livre comptable">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Comptabilité → Grand livre</strong>.</li>
+      <li>Filtrez par <strong>classe de comptes</strong>, <strong>compte spécifique</strong> ou <strong>période</strong>.</li>
+      <li>Cliquez <strong>Afficher</strong> pour actualiser l'affichage.</li>
+      <li>Vérifiez que le total indique <strong>Équilibré</strong> (Total Débit = Total Crédit).</li>
+      <li>Exportez en <strong>Excel ou PDF</strong> pour vos audits comptables.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     17. BALANCE
+═══════════════════════════════════════ -->
+<div class="section" id="balance">
+  <div class="section-header">
+    <div class="section-icon" style="background:#ede9fe;">⚖️</div>
+    <div class="section-meta">
+      <div class="section-number">Module 17 · Comptabilité</div>
+      <h2>Balance générale SYSCOHADA</h2>
+    </div>
+  </div>
+  <p class="section-desc">La balance générale est un état de synthèse comptable qui présente pour chaque compte les soldes d'ouverture, les mouvements de la période et les soldes finaux (débiteur/créditeur). C'est un document clé pour vérifier l'exactitude de votre comptabilité et préparer les états financiers.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/comptabilite/balance — Balance générale</span></div>
+    <img src="screenshots/19_balance.jpg" alt="Balance générale SYSCOHADA">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Comptabilité → Balance générale</strong>.</li>
+      <li>Sélectionnez une <strong>classe de comptes</strong> ou laissez "Toutes les classes".</li>
+      <li>Définissez une <strong>période</strong> (date début / date fin) pour filtrer par exercice.</li>
+      <li>Cliquez <strong>Afficher</strong> pour générer la balance.</li>
+      <li>Vérifiez la mention <strong>Équilibré</strong> (Mvts Débit = Mvts Crédit).</li>
+      <li>Exportez en <strong>PDF ou Excel</strong> pour remise à l'expert-comptable ou administration fiscale.</li>
+    </ol>
+  </div>
+  <div class="tip"><span class="tip-icon">💡</span><span>La balance SYSCOHADA est utilisée pour préparer le <strong>Bilan, le Compte de résultat et le Tableau de flux de trésorerie</strong> annuels.</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     18. RAPPORTS & BI
+═══════════════════════════════════════ -->
+<div class="section" id="rapports">
+  <div class="section-header">
+    <div class="section-icon" style="background:#fdf4ff;">📈</div>
+    <div class="section-meta">
+      <div class="section-number">Module 18 · Analytique</div>
+      <h2>Rapports & Analyse BI</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Analytique propose 5 rapports métier prêts à l'emploi pour piloter votre activité : analyse du chiffre d'affaires, des marges, des performances commerciales, des achats fournisseurs et l'âge des créances. Tous les rapports sont exportables en Excel.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/reports — Rapports & Analyse BI</span></div>
+    <img src="screenshots/20_rapports.jpg" alt="Rapports et Analyse BI">
+  </div>
+  <div class="features">
+    <div class="feature-card"><div class="icon">📊</div><h4>Chiffre d'affaires</h4><p>Évolution du CA par période, par client avec tendances.</p></div>
+    <div class="feature-card"><div class="icon">💹</div><h4>Analyse des marges</h4><p>Marge brute par produit, taux de marge, coût vs prix de vente.</p></div>
+    <div class="feature-card"><div class="icon">👤</div><h4>Performance commerciale</h4><p>CA par commercial, nombre de clients, panier moyen.</p></div>
+    <div class="feature-card"><div class="icon">🛒</div><h4>Achats fournisseurs</h4><p>Analyse des factures fournisseurs par période et par fournisseur.</p></div>
+    <div class="feature-card"><div class="icon">⏰</div><h4>Âge des créances</h4><p>Ancienneté des factures impayées par client (buckets 1-30j, 31-60j…).</p></div>
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Analytique → Rapports &amp; BI</strong>.</li>
+      <li>Cliquez sur la carte du rapport souhaité (ex: <strong>Chiffre d'affaires</strong>).</li>
+      <li>Définissez la <strong>période d'analyse</strong> et les filtres (client, produit, commercial…).</li>
+      <li>Consultez les graphiques et tableaux interactifs.</li>
+      <li>Exportez en <strong>Excel</strong> pour des analyses complémentaires.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     19. PARAMÉTRAGE
+═══════════════════════════════════════ -->
+<div class="section" id="parametrage">
+  <div class="section-header">
+    <div class="section-icon" style="background:#f1f5f9;">⚙️</div>
+    <div class="section-meta">
+      <div class="section-number">Module 19 · Administration</div>
+      <h2>Paramétrage de la société</h2>
+    </div>
+  </div>
+  <p class="section-desc">Le module Paramétrage permet de configurer toutes les informations de votre entreprise : identité légale, coordonnées, logo, numéro RCCM, NIF, comptes bancaires, ainsi que les paramètres comptables (exercice fiscal, devises, taux de TVA, numérotation des documents).</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/parametrage — Paramétrage société</span></div>
+    <img src="screenshots/21_parametrage.jpg" alt="Paramétrage société">
+  </div>
+  <div class="features">
+    <div class="feature-card"><div class="icon">🏢</div><h4>Informations générales</h4><p>Raison sociale, adresse, téléphone, e-mail, logo.</p></div>
+    <div class="feature-card"><div class="icon">⚖️</div><h4>Légal & Fiscal</h4><p>RCCM, NIF, régime fiscal, exercice comptable.</p></div>
+    <div class="feature-card"><div class="icon">📄</div><h4>Documents</h4><p>Pied de page, mentions légales sur devis et factures.</p></div>
+    <div class="feature-card"><div class="icon">🏦</div><h4>Comptes bancaires</h4><p>Coordonnées bancaires pour impression sur les documents.</p></div>
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Paramètres → Société</strong>.</li>
+      <li>Onglet <strong>Général</strong> : renseignez raison sociale, nom commercial, téléphone, e-mail, adresse.</li>
+      <li>Onglet <strong>Légal &amp; Fiscal</strong> : saisissez le RCCM, NIF, forme juridique et exercice fiscal.</li>
+      <li>Onglet <strong>Documents</strong> : personnalisez les mentions qui apparaissent sur vos devis et factures.</li>
+      <li>Onglet <strong>Banque</strong> : ajoutez vos comptes bancaires (ils s'affichent sur les factures).</li>
+      <li>Cliquez <strong>Enregistrer</strong> pour sauvegarder chaque onglet.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     20. UTILISATEURS
+═══════════════════════════════════════ -->
+<div class="section" id="utilisateurs">
+  <div class="section-header">
+    <div class="section-icon" style="background:#f0f9ff;">👤</div>
+    <div class="section-meta">
+      <div class="section-number">Module 20 · Administration</div>
+      <h2>Gestion des utilisateurs</h2>
+    </div>
+  </div>
+  <p class="section-desc">L'ERP A3 intègre un système de gestion des accès par rôles et permissions. Vous pouvez créer autant d'utilisateurs que nécessaire, leur attribuer des rôles (Super Admin, Manager, Commercial, Comptable…) et contrôler finement les accès à chaque module.</p>
+  <div class="screenshot-wrapper">
+    <div class="screenshot-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="screenshot-url">http://erp/users — Utilisateurs</span></div>
+    <img src="screenshots/22_utilisateurs.jpg" alt="Gestion des utilisateurs">
+  </div>
+  <div class="guide">
+    <h3>📖 Guide d'utilisation</h3>
+    <ol>
+      <li>Accédez à <strong>Paramètres → Utilisateurs</strong>.</li>
+      <li>Cliquez <strong>+ Nouvel utilisateur</strong> pour créer un compte.</li>
+      <li>Renseignez le <strong>nom</strong>, l'<strong>e-mail</strong> et définissez un <strong>mot de passe provisoire</strong>.</li>
+      <li>Attribuez un <strong>rôle</strong> qui détermine les droits d'accès (ex: Commercial = accès ventes uniquement).</li>
+      <li>Activez ou désactivez un utilisateur à tout moment sans supprimer son historique.</li>
+      <li>Consultez le <strong>Journal d'activité</strong> pour tracer les actions de chaque utilisateur.</li>
+    </ol>
+  </div>
+  <div class="tip"><span class="tip-icon">🔐</span><span>Limitez les accès au strict nécessaire pour chaque utilisateur : principe du <strong>moindre privilège</strong> pour la sécurité de vos données.</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     CONCLUSION
+═══════════════════════════════════════ -->
+<div style="background:linear-gradient(135deg,#1e1b4b,#6C3BD4);padding:80px;text-align:center;page-break-before:always;">
+  <div style="max-width:700px;margin:0 auto;">
+    <div style="font-size:3rem;margin-bottom:20px;">🚀</div>
+    <h2 style="color:#fff;font-size:2.2rem;margin-bottom:16px;">Prêt à démarrer avec A3 ERP ?</h2>
+    <p style="color:rgba(255,255,255,0.8);font-size:1.1rem;margin-bottom:40px;line-height:1.7;">Notre équipe vous accompagne dans la mise en place, la formation de vos équipes et la personnalisation de l'ERP selon les besoins spécifiques de votre activité.</p>
+    <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:40px;">
+      <div style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:12px;padding:20px 28px;">
+        <div style="color:#fff;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Formation</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:0.95rem;">Sessions de prise en main pour vos équipes</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:12px;padding:20px 28px;">
+        <div style="color:#fff;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Support</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:0.95rem;">Assistance technique dédiée</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:12px;padding:20px 28px;">
+        <div style="color:#fff;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Personnalisation</div>
+        <div style="color:rgba(255,255,255,0.9);font-size:0.95rem;">Adaptation à votre secteur d'activité</div>
+      </div>
+    </div>
+    <p style="color:rgba(255,255,255,0.5);font-size:0.85rem;">A3 ERP · Document de présentation · Mai 2026</p>
+  </div>
+</div>
+
+</body>
+</html>

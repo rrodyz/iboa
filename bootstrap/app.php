@@ -1,0 +1,63 @@
+<?php
+
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [
+            \App\Http\Middleware\TrackLastLogin::class,
+            \App\Http\Middleware\SecurityHeaders::class,
+        ]);
+        $middleware->alias([
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        ]);
+
+        // Champs où l'espace est significatif (séparateurs typographiques, codes…)
+        // → ne pas appliquer le trim automatique.
+        $middleware->trimStrings(except: [
+            'thousands_separator',
+            'decimal_separator',
+            'year_separator',
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions): void {
+
+        // En production : masquer les détails des erreurs non-HTTP
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Ressource introuvable.'], 404);
+            }
+            return response()->view('errors.404', [], 404);
+        });
+
+        $exceptions->render(function (HttpException $e, Request $request) {
+            $code = $e->getStatusCode();
+            $view = "errors.{$code}";
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage() ?: 'Erreur HTTP.'], $code);
+            }
+            if (view()->exists($view)) {
+                return response()->view($view, [], $code);
+            }
+        });
+
+        // Log minimal en production pour les exceptions non gérées
+        $exceptions->reportable(function (\Throwable $e): bool {
+            // Laisser Laravel logger l'erreur normalement
+            return true;
+        });
+
+    })->create();
