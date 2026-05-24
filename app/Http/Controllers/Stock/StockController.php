@@ -284,6 +284,67 @@ class StockController extends Controller
     }
 
     /**
+     * [STOCK-PRO] Batch seuils min / max / réappro editor.
+     */
+    public function seuils(Request $request): View
+    {
+        $this->authorize('create', \App\Models\StockMovement::class);
+
+        $search     = $request->input('search');
+        $familyId   = $request->input('family_id');
+        $alertOnly  = $request->boolean('alert_only');
+
+        $query = Product::active()->where('is_stockable', true)
+            ->with(['family', 'unit', 'stocks'])
+            ->orderBy('name');
+
+        if ($search) {
+            $query->where(fn($q) => $q->where('name', 'like', '%'.$search.'%')
+                ->orWhere('reference', 'like', '%'.$search.'%'));
+        }
+        if ($familyId) {
+            $query->where('family_id', $familyId);
+        }
+        if ($alertOnly) {
+            $query->where(function ($q) {
+                $q->whereRaw('stock_min > 0')
+                  ->whereHas('stocks', fn($s) =>
+                      $s->whereRaw('(quantity - reserved_quantity) <= (SELECT stock_min FROM products WHERE id = product_stocks.product_id)')
+                  );
+            });
+        }
+
+        $products = $query->paginate(50)->withQueryString();
+        $families = \App\Models\ProductFamily::whereNull('parent_id')->orderBy('name')->get(['id', 'name']);
+
+        return view('stocks.seuils', compact('products', 'families', 'search', 'familyId', 'alertOnly'));
+    }
+
+    /**
+     * [STOCK-PRO] Save batch seuils update.
+     */
+    public function seuilsUpdate(Request $request): RedirectResponse
+    {
+        $this->authorize('create', \App\Models\StockMovement::class);
+
+        $data = $request->input('seuils', []);
+
+        foreach ($data as $productId => $values) {
+            $product = Product::find((int) $productId);
+            if (! $product) {
+                continue;
+            }
+            $product->update([
+                'stock_min'    => isset($values['stock_min'])    && $values['stock_min']    !== '' ? (float) $values['stock_min']    : null,
+                'stock_max'    => isset($values['stock_max'])    && $values['stock_max']    !== '' ? (float) $values['stock_max']    : null,
+                'reorder_point'=> isset($values['reorder_point'])&& $values['reorder_point']!== '' ? (float) $values['reorder_point']: null,
+            ]);
+        }
+
+        return back()->with('success', count($data) . ' article(s) mis à jour.');
+    }
+
+    /**
      * Store a new manual stock movement.
      */
     public function storeMovement(StoreMovementRequest $request): RedirectResponse

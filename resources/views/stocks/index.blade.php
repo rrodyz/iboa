@@ -195,6 +195,16 @@
             </svg>
             Entrepôts
         </a>
+        @can('stocks.adjust')
+        <span class="text-gray-300">|</span>
+        <a href="{{ route('stocks.seuils') }}"
+           class="text-orange-600 hover:text-orange-800 hover:underline flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+            </svg>
+            Seuils min/max
+        </a>
+        @endcan
     </div>
 
     {{-- Table --}}
@@ -209,7 +219,7 @@
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Stock dispo</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Réservé</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Physique</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider hidden xl:table-cell">Seuil alerte</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider hidden xl:table-cell">Min / Max</th>
                         <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
                     </tr>
                 </thead>
@@ -258,7 +268,14 @@
                                 {{ number_format((float) $stock->quantity, 2, ',', ' ') }}
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums text-gray-500 hidden xl:table-cell">
-                                {{ $threshold > 0 ? number_format($threshold, 2, ',', ' ') : '—' }}
+                                @php $maxQty = (float) ($stock->product?->stock_max ?? 0); @endphp
+                                <span class="{{ $threshold > 0 && $available <= $threshold && $available > 0 ? 'text-orange-600 font-medium' : '' }}">
+                                    {{ $threshold > 0 ? number_format($threshold, 0, ',', ' ') : '—' }}
+                                </span>
+                                @if($maxQty > 0)
+                                <span class="text-gray-300 mx-0.5">/</span>
+                                <span class="text-gray-400">{{ number_format($maxQty, 0, ',', ' ') }}</span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">

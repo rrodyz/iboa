@@ -265,10 +265,14 @@ request()->routeIs('achats.*')                                                  
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
-                            auth()->user()->can('stocks.view')     ? [route('stocks.index'),              'Niveaux de stock',  'stocks.index']                          : null,
-                            auth()->user()->can('stocks.view')     ? [route('stocks.movements'),          'Mouvements',        'stocks.movements,stocks.movement*']      : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.dashboard'),          'Tableau de bord',   'stocks.dashboard']                       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.index'),              'Niveaux de stock',  'stocks.index']                           : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.movements'),          'Mouvements',        'stocks.movements,stocks.movement*']       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.transfers.index'),    'Transferts',        'stocks.transfers*']                       : null,
                             auth()->user()->can('stocks.view')     ? [route('stocks.valuation'),          'Valorisation',      'stocks.valuation']                       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.dashboard.restock'),  'Alertes réappro',   'stocks.dashboard.restock']               : null,
                             auth()->user()->can('inventory.view')  ? [route('stocks.inventaires.index'),  'Inventaires',       'stocks.inventaires*']                    : null,
+                            auth()->user()->can('stocks.adjust')   ? [route('stocks.seuils'),             'Seuils min / max',  'stocks.seuils']                          : null,
                             auth()->user()->can('stocks.view')     ? [route('stocks.lots'),               'Lots & Traçabilité','stocks.lots']                            : null,
                             auth()->user()->can('stocks.adjust')   ? [route('stocks.warehouses.index'),   'Entrepôts',         'stocks.warehouses*']                     : null,
                         ]) as [$href, $label, $match])

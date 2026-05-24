@@ -34,7 +34,7 @@
                 @endif
             </div>
         </div>
-        <div class="flex gap-2 self-start">
+        <div class="flex gap-2 self-start flex-wrap">
             <a href="{{ route('products.show', $product) }}"
                class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,12 +43,33 @@
                 Fiche produit
             </a>
             @can('stocks.adjust')
-            <a href="{{ route('stocks.movement.create', ['product_id' => $product->id]) }}"
-               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+            <a href="{{ route('stocks.seuils', ['search' => $product->reference]) }}"
+               class="border border-orange-300 text-orange-700 hover:bg-orange-50 text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                </svg>
+                Seuils
+            </a>
+            <a href="{{ route('stocks.movement.create', ['product_id' => $product->id, 'type' => 'entree']) }}"
+               class="border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
-                Mouvement
+                Entrée
+            </a>
+            <a href="{{ route('stocks.movement.create', ['product_id' => $product->id, 'type' => 'sortie']) }}"
+               class="border border-red-400 text-red-700 hover:bg-red-50 text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                </svg>
+                Sortie
+            </a>
+            <a href="{{ route('stocks.movement.create', ['product_id' => $product->id, 'type' => 'ajustement']) }}"
+               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Ajustement
             </a>
             @endcan
         </div>
@@ -73,11 +94,20 @@
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Seuil d'alerte</p>
-            <p class="text-2xl font-bold text-gray-900 tabular-nums">
-                {{ $product->stock_min ? number_format($product->stock_min, 2, ',', ' ') : '—' }}
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Seuils de stock</p>
+            <div class="flex items-baseline gap-2 mt-1">
+                <span class="text-base font-bold tabular-nums {{ $totalAvailable > 0 && $product->stock_min && $totalAvailable <= $product->stock_min ? 'text-orange-600' : 'text-gray-900' }}">
+                    Min : {{ $product->stock_min ? number_format($product->stock_min, 0, ',', ' ') : '—' }}
+                </span>
+                <span class="text-xs text-gray-400">/</span>
+                <span class="text-base font-bold tabular-nums text-gray-700">
+                    Max : {{ $product->stock_max ? number_format($product->stock_max, 0, ',', ' ') : '—' }}
+                </span>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">
+                Réappro : {{ $product->reorder_point ? number_format($product->reorder_point, 0, ',', ' ') : '—' }}
+                · Méthode : {{ strtoupper($product->valuation_method ?? 'cmp') }}
             </p>
-            <p class="text-xs text-gray-400 mt-0.5">Méthode : {{ strtoupper($product->valuation_method ?? 'cmp') }}</p>
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 p-5">

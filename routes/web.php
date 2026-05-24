@@ -442,6 +442,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:stocks.adjust')->group(function () {
             Route::get('mouvement/nouveau', [\App\Http\Controllers\Stock\StockController::class, 'create'])->name('movement.create');
             Route::post('mouvement', [\App\Http\Controllers\Stock\StockController::class, 'storeMovement'])->name('movement.store');
+            // Seuils min/max editor (batch)
+            Route::get('seuils',  [\App\Http\Controllers\Stock\StockController::class, 'seuils'])->name('seuils');
+            Route::post('seuils', [\App\Http\Controllers\Stock\StockController::class, 'seuilsUpdate'])->name('seuils.update');
 
             // [STOCK-PRO] Transferts inter-dépôts (écriture). Literal /create avant toute capture {transfer}.
             Route::get('transferts/create',                [\App\Http\Controllers\Stock\StockTransferController::class, 'create'])->name('transfers.create');

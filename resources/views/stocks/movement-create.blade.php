@@ -26,8 +26,36 @@
 
     {{-- Header --}}
     <div>
-        <h1 class="text-2xl font-bold text-gray-900">Nouveau mouvement de stock</h1>
-        <p class="text-sm text-gray-500 mt-0.5">Enregistrer un mouvement manuel de stock</p>
+        <div class="flex items-center gap-3 mb-1">
+            <h1 class="text-2xl font-bold text-gray-900"
+                x-text="{
+                    'entree':      'Entrée en stock',
+                    'sortie':      'Sortie de stock',
+                    'transfert':   'Transfert inter-dépôts',
+                    'ajustement':  'Ajustement de stock',
+                    'retour_client':     'Retour client',
+                    'retour_fournisseur':'Retour fournisseur',
+                }[movType] || 'Nouveau mouvement de stock'">
+                Nouveau mouvement de stock
+            </h1>
+        </div>
+        <p class="text-sm text-gray-500">Enregistrer un mouvement manuel de stock</p>
+        {{-- Type quick-select chips --}}
+        <div class="flex flex-wrap gap-2 mt-3">
+            @foreach([
+                ['entree',     'Entrée',      'bg-emerald-100 text-emerald-700 border-emerald-300', 'bg-emerald-600 text-white border-emerald-600'],
+                ['sortie',     'Sortie',      'bg-red-100 text-red-700 border-red-300',             'bg-red-600 text-white border-red-600'],
+                ['transfert',  'Transfert',   'bg-blue-100 text-blue-700 border-blue-300',          'bg-blue-600 text-white border-blue-600'],
+                ['ajustement', 'Ajustement',  'bg-orange-100 text-orange-700 border-orange-300',    'bg-orange-500 text-white border-orange-500'],
+            ] as [$val, $lbl, $inactive, $active])
+            <button type="button"
+                    @click="movType = '{{ $val }}'; $el.closest('form') && ($el.closest('[x-data]').querySelector('#movement_type').value = '{{ $val }}')"
+                    :class="movType === '{{ $val }}' ? '{{ $active }}' : '{{ $inactive }}'"
+                    class="border rounded-full px-3 py-1 text-xs font-medium transition-colors">
+                {{ $lbl }}
+            </button>
+            @endforeach
+        </div>
     </div>
 
     {{-- Form --}}
@@ -210,10 +238,31 @@
             </div>
         </div>
 
+        {{-- Reason code for ajustement --}}
+        <div x-show="movType === 'ajustement'" x-cloak>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Motif de l'ajustement</label>
+            <div class="flex flex-wrap gap-2">
+                @foreach([
+                    'Inventaire physique',
+                    'Correction saisie',
+                    'Casse / détérioration',
+                    'Vol / perte',
+                    'Don / destruction',
+                    'Démarrage système',
+                ] as $reason)
+                <button type="button"
+                        @click="$refs.notesField.value = '{{ $reason }}'"
+                        class="border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs px-2.5 py-1 rounded-full transition-colors">
+                    {{ $reason }}
+                </button>
+                @endforeach
+            </div>
+        </div>
+
         {{-- Notes --}}
         <div>
             <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea id="notes" name="notes" rows="2"
+            <textarea id="notes" name="notes" rows="2" x-ref="notesField"
                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500 @error('notes') border-red-500 @enderror"
                       placeholder="Motif, informations complémentaires...">{{ old('notes') }}</textarea>
             @error('notes')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
