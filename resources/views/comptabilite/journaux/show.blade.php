@@ -223,5 +223,8 @@
         <x-attachments.manager model="JournalEntry" :id="$entry->id" />
     </div>
 
+
+    <x-audit.timeline :model="\App\Models\JournalEntry::class" :id="$entry->id" />
+
 </div>
 @endsection

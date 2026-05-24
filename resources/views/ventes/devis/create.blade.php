@@ -18,6 +18,7 @@
 
     <form method="POST" action="{{ route('ventes.devis.store') }}">
         @csrf
+        <x-form-guard />
         @include('ventes.devis._form')
     </form>
 </div>

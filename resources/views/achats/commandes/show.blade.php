@@ -103,6 +103,21 @@
                 @endcan
                 @endif
 
+                {{-- Dupliquer en brouillon (toujours disponible) --}}
+                @can('purchase_orders.create')
+                <form action="{{ route('achats.commandes.duplicate', $purchaseOrder) }}" method="POST"
+                      onsubmit="return confirm('Dupliquer ce bon de commande en brouillon ?')">
+                    @csrf
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 px-3 py-2 bg-slate-600 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Dupliquer
+                    </button>
+                </form>
+                @endcan
+
                 {{-- Modifier (brouillon seulement) --}}
                 @if($purchaseOrder->status === 'brouillon')
                 <a href="{{ route('achats.commandes.edit', $purchaseOrder) }}"
@@ -360,6 +375,42 @@
     <div class="bg-white rounded-xl border border-gray-200 p-5">
         <x-attachments.manager model="PurchaseOrder" :id="$purchaseOrder->id" />
     </div>
+
+
+    {{-- [LIAISONS] RFQ source · Réceptions · Factures FF --}}
+    @php
+        $relatedLinks = [];
+        // RFQ source (cherchée via FK sur rfqs)
+        $sourceRfq = \App\Models\Rfq::where('purchase_order_id', $purchaseOrder->id)->first();
+        if ($sourceRfq) {
+            $relatedLinks[] = [
+                'icon' => '📋', 'label' => 'RFQ source ' . $sourceRfq->number,
+                'href' => route('achats.rfq.show', $sourceRfq),
+                'subtitle' => $sourceRfq->title,
+                'badge' => $sourceRfq->statusLabel(), 'badgeColor' => $sourceRfq->statusColor(),
+            ];
+        }
+        $receptions = \App\Models\Reception::where('purchase_order_id', $purchaseOrder->id)->whereNull('deleted_at')->get();
+        foreach ($receptions as $r) {
+            $relatedLinks[] = [
+                'icon' => '📦', 'label' => 'Réception ' . $r->number,
+                'href' => route('achats.receptions.show', $r),
+                'badge' => ucfirst((string) $r->status), 'badgeColor' => $r->status === 'validee' ? 'emerald' : 'amber',
+            ];
+        }
+        $supplierInvoices = \App\Models\SupplierInvoice::where('purchase_order_id', $purchaseOrder->id)->whereNull('deleted_at')->get();
+        foreach ($supplierInvoices as $si) {
+            $relatedLinks[] = [
+                'icon' => '🧾', 'label' => 'Facture FF ' . $si->number,
+                'href' => route('achats.factures-fournisseurs.show', $si),
+                'subtitle' => number_format($si->total_ttc, 0, ',', ' ') . ' FCFA · ' . ($si->supplier_invoice_number ?? '—'),
+                'badge' => ucfirst((string) $si->status), 'badgeColor' => $si->status === 'payee' ? 'emerald' : 'orange',
+            ];
+        }
+    @endphp
+    <x-document.related :links="$relatedLinks" />
+
+    <x-audit.timeline :model="\App\Models\PurchaseOrder::class" :id="$purchaseOrder->id" />
 
 </div>
 @endsection

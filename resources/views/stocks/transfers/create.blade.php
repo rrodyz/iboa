@@ -89,7 +89,7 @@
                                     </select>
                                 </td>
                                 <td class="py-2 pr-2">
-                                    <input type="number" :name="`items[${i}][quantity]`" required min="0.0001" step="0.0001" x-model="item.quantity" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right">
+                                    <input type="number" :name="`items[${i}][quantity]`" required min="1" step="1" inputmode="numeric" x-model="item.quantity" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right">
                                 </td>
                                 <td class="py-2 pr-2">
                                     <input type="text" :name="`items[${i}][lot_number]`" maxlength="100" x-model="item.lot" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">

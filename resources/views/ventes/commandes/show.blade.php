@@ -404,5 +404,8 @@
     @endif
 
 
+
+    <x-audit.timeline :model="\App\Models\Order::class" :id="$order->id" />
+
 </div>
 @endsection

@@ -136,7 +136,7 @@
                                         <input type="number" :name="`items[${index}][quantity]`"
                                                x-model="line.quantity"
                                                @input="calcLine(index)"
-                                               min="0.001" step="0.001"
+                                               min="1" step="1" inputmode="numeric"
                                                class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                                     </td>
                                     <td class="py-2 pr-2">
@@ -150,7 +150,7 @@
                                         <input type="number" :name="`items[${index}][discount_percent]`"
                                                x-model="line.discount"
                                                @input="calcLine(index)"
-                                               min="0" max="100" step="0.01"
+                                               min="0" max="100" step="1" inputmode="numeric"
                                                class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
                                         <input type="hidden" :name="`items[${index}][tax_rate_value]`" value="0">
                                     </td>

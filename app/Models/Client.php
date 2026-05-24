@@ -19,6 +19,10 @@ class Client extends Model
 
     protected $table = 'clients';
 
+    // Types
+    const TYPE_ENTREPRISE  = 'entreprise';
+    const TYPE_PARTICULIER = 'particulier';
+
     protected $fillable = [
         'code',
         'type',
@@ -39,6 +43,7 @@ class Client extends Model
         'tax_division',
         'category',
         'assigned_to',
+        'tax_rate_id',
         'credit_limit',
         'payment_days',
         'payment_terms',
@@ -84,6 +89,11 @@ class Client extends Model
         return $this->belongsTo(User::class, 'assigned_to');
     }
 
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
+
     public function quotes(): HasMany
     {
         return $this->hasMany(Quote::class);
@@ -118,6 +128,11 @@ class Client extends Model
         return $query->where('is_active', true);
     }
 
+    public function scopeClients(Builder $query): Builder
+    {
+        return $query->whereIn('type', [self::TYPE_ENTREPRISE, self::TYPE_PARTICULIER]);
+    }
+
     // -------------------------------------------------------------------------
     // Methods
     // -------------------------------------------------------------------------
@@ -125,6 +140,27 @@ class Client extends Model
     public function displayName(): string
     {
         return $this->trade_name ?? $this->name;
+    }
+
+    /** Vérifier si l'encours dépasse le plafond de crédit. */
+    public function isOverCreditLimit(): bool
+    {
+        if (!$this->credit_limit || $this->credit_limit <= 0) return false;
+        return $this->balance > $this->credit_limit;
+    }
+
+    /** Montant disponible avant d'atteindre le plafond. */
+    public function getAvailableCreditAttribute(): int
+    {
+        if (!$this->credit_limit || $this->credit_limit <= 0) return PHP_INT_MAX;
+        return max(0, (int)$this->credit_limit - (int)$this->balance);
+    }
+
+    /** Taux d'utilisation du crédit en %. */
+    public function getCreditUsagePercentAttribute(): float
+    {
+        if (!$this->credit_limit || $this->credit_limit <= 0) return 0;
+        return round(($this->balance / $this->credit_limit) * 100, 1);
     }
 
     /**

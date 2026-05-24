@@ -103,6 +103,18 @@ class QuoteController extends Controller
         }
     }
 
+    /**
+     * [VENTES-PRO] Duplique un devis (équivalent Odoo Duplicate).
+     */
+    public function duplicate(Quote $devis)
+    {
+        $this->authorize('create', Quote::class);
+        $new = $this->service->duplicate($devis);
+        return redirect()
+            ->route('ventes.devis.edit', $new)
+            ->with('success', "Devis dupliqué : {$new->number}. Modifiez puis enregistrez.");
+    }
+
     /** POST ventes/devis/{quote}/send — mark as sent to client. */
     public function send(Quote $devis)
     {

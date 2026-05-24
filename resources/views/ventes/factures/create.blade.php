@@ -27,6 +27,7 @@
 
 <form method="POST" action="{{ route('ventes.factures.store') }}">
     @csrf
+    <x-form-guard />
     @include('ventes.factures._form')
 </form>
 @endsection

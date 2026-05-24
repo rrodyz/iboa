@@ -35,9 +35,18 @@ class PurchaseDashboardController extends Controller
             'qty_count'    => $matching['qty_count'],
             'amount_count' => $matching['amount_count'],
         ];
-        $topSuppliers = $this->insights->supplierScorecards(12)->take(5);
+        $topScorecards = $this->insights->supplierScorecards(12)->take(5);
 
-        return view('achats.dashboard', compact('kpis', 'dueSoon', 'matchingPreview', 'topSuppliers'));
+        // [ACHATS-PRO] Nouveaux indicateurs niveau Odoo/Sage
+        $pipeline       = $this->insights->purchaseOrdersPipeline();
+        $topSuppliers   = $this->insights->topSuppliers(5);
+        $topProducts    = $this->insights->topPurchasedProducts(5);
+        $monthly        = $this->insights->monthlyPurchaseEvolution(12);
+
+        return view('achats.dashboard', compact(
+            'kpis', 'dueSoon', 'matchingPreview', 'topScorecards',
+            'pipeline', 'topSuppliers', 'topProducts', 'monthly'
+        ));
     }
 
     public function matching(Request $request): View

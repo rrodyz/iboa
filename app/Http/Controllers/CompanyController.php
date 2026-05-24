@@ -26,7 +26,15 @@ class CompanyController extends Controller
     public function updateGeneral(UpdateGeneralRequest $request): RedirectResponse
     {
         $company = $this->service->getOrCreate();
-        $this->service->updateGeneral($company, $request->except('logo'), $request->file('logo'));
+        try {
+            $this->service->updateGeneral($company, $request->except('logo'), $request->file('logo'));
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error',
+                "Erreur lors de la mise à jour : " . $e->getMessage()
+            );
+        }
         return back()->with('success', 'Informations générales mises à jour.');
     }
 

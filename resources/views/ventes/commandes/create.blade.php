@@ -27,6 +27,7 @@
 
 <form method="POST" action="{{ route('ventes.commandes.store') }}">
     @csrf
+    <x-form-guard />
     @include('ventes.commandes._form')
 </form>
 @endsection

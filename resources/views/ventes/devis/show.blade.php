@@ -80,6 +80,19 @@
                     PDF
                 </a>
 
+                {{-- [VENTES-PRO] Bouton Dupliquer (clone du devis en nouveau brouillon) --}}
+                @can('quotes.create')
+                <form action="{{ route('ventes.devis.duplicate', $quote) }}" method="POST" class="inline">
+                    @csrf
+                    <button type="submit" class="{{ $btnOutline }}" title="Créer un nouveau devis identique en brouillon">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        Dupliquer
+                    </button>
+                </form>
+                @endcan
+
                 {{-- ───────────────────── BROUILLON ───────────────────── --}}
                 @if($quote->status === 'brouillon')
                     {{-- Secondaire : Modifier --}}
@@ -376,6 +389,10 @@
         </div>
     </div>
 
+
+
+    {{-- [TRACE] Historique d'activité --}}
+    <x-audit.timeline :model="\App\Models\Quote::class" :id="$quote->id" />
 
 </div>
 @endsection

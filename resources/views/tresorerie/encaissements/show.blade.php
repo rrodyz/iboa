@@ -38,6 +38,16 @@
             </p>
         </div>
         <div class="flex items-center gap-3">
+            {{-- Reçu PDF --}}
+            <a href="{{ route('tresorerie.encaissements.recu', $payment) }}"
+               target="_blank"
+               class="inline-flex items-center gap-2 border border-green-300 text-green-700 hover:bg-green-50 text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+               title="Télécharger le reçu PDF">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                Reçu PDF
+            </a>
             <div class="text-right">
                 <p class="text-xs text-gray-500">Montant reçu</p>
                 <p class="text-2xl font-bold text-green-700 tabular-nums">
@@ -210,6 +220,113 @@
         </div>
     </div>
 
+    {{-- ── Imputation a posteriori (lettrage) ───────────────────────────────── --}}
+    @if($payment->unallocated_amount > 0 && $payment->status !== 'annule')
+    @php
+        $unpaidInvoices = \App\Models\Invoice::where('client_id', $payment->client_id)
+            ->whereIn('status', ['emise','envoyee','partiellement_payee','en_retard'])
+            ->where('remaining_amount', '>', 0)
+            ->orderBy('due_at')
+            ->get(['id','number','issued_at','due_at','total_ttc','remaining_amount','status']);
+    @endphp
+    @if($unpaidInvoices->count())
+    <div class="bg-white rounded-xl border border-orange-200 overflow-hidden"
+         x-data="{ open: true }">
+        <div class="px-4 py-3 bg-orange-50 border-b border-orange-200 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+                <h2 class="text-sm font-bold text-orange-700">Imputer sur une facture</h2>
+                <span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                    {{ number_format($payment->unallocated_amount, 0, ',', ' ') }} FCFA disponibles
+                </span>
+            </div>
+            <button @click="open = !open" class="text-orange-400 hover:text-orange-600">
+                <svg class="w-4 h-4 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+        </div>
+        <div x-show="open" x-collapse>
+            <form action="{{ route('tresorerie.encaissements.imputer', $payment) }}" method="POST"
+                  class="p-4 space-y-4" x-data="imputerForm({{ $payment->unallocated_amount }})">
+                @csrf
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                                <th class="pb-2 text-left">Facture</th>
+                                <th class="pb-2 text-center hidden md:table-cell">Échéance</th>
+                                <th class="pb-2 text-right">Reste dû</th>
+                                <th class="pb-2 text-center w-8">Choisir</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach($unpaidInvoices as $inv)
+                            <tr class="hover:bg-gray-50 cursor-pointer"
+                                @click="selectInvoice({{ $inv->id }}, {{ (int)$inv->remaining_amount }})">
+                                <td class="py-2.5 pr-4">
+                                    <span class="font-mono font-semibold text-indigo-600">{{ $inv->number }}</span>
+                                    @php
+                                        $statusColors = ['emise'=>'gray','envoyee'=>'blue','partiellement_payee'=>'amber','en_retard'=>'red'];
+                                        $statusLabels = ['emise'=>'Émise','envoyee'=>'Envoyée','partiellement_payee'=>'Partielle','en_retard'=>'En retard'];
+                                        $sc = $statusColors[$inv->status] ?? 'gray';
+                                    @endphp
+                                    <span class="ml-1.5 text-xs bg-{{ $sc }}-100 text-{{ $sc }}-700 px-1.5 py-0.5 rounded-full">
+                                        {{ $statusLabels[$inv->status] ?? $inv->status }}
+                                    </span>
+                                </td>
+                                <td class="py-2.5 pr-4 text-center text-gray-500 text-xs hidden md:table-cell">
+                                    {{ $inv->due_at?->format('d/m/Y') ?? '—' }}
+                                </td>
+                                <td class="py-2.5 pr-4 text-right tabular-nums font-medium text-gray-800">
+                                    {{ number_format($inv->remaining_amount, 0, ',', ' ') }} FCFA
+                                </td>
+                                <td class="py-2.5 text-center">
+                                    <input type="radio" name="_invoice_radio" :value="{{ $inv->id }}"
+                                           :checked="selectedInvoiceId === {{ $inv->id }}"
+                                           @click.stop="selectInvoice({{ $inv->id }}, {{ (int)$inv->remaining_amount }})"
+                                           class="text-orange-500 focus:ring-orange-400">
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <input type="hidden" name="invoice_id" :value="selectedInvoiceId">
+
+                <div class="flex flex-col sm:flex-row gap-3 items-end pt-2 border-t border-gray-100">
+                    <div class="flex-1">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">
+                            Montant à imputer (FCFA) <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number" name="allocated_amount"
+                               x-model="allocAmount"
+                               :max="maxAlloc"
+                               :min="1"
+                               placeholder="Montant…"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-400 focus:border-orange-400 tabular-nums">
+                        <p class="text-[10px] text-gray-400 mt-1">
+                            Max. disponible : <span class="font-medium tabular-nums" x-text="maxAlloc.toLocaleString('fr-FR')"></span> FCFA
+                        </p>
+                    </div>
+                    <button type="submit"
+                            :disabled="!selectedInvoiceId || allocAmount <= 0"
+                            class="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Valider l'imputation
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+    @endif
+
     {{-- Back --}}
     <div>
         <a href="{{ route('tresorerie.encaissements.index') }}"
@@ -222,4 +339,24 @@
     </div>
 
 </div>
+
+@push('scripts')
+<script>
+function imputerForm(available) {
+    return {
+        selectedInvoiceId: null,
+        invoiceRemaining: 0,
+        allocAmount: '',
+        get maxAlloc() {
+            return Math.min(available, this.invoiceRemaining);
+        },
+        selectInvoice(id, remaining) {
+            this.selectedInvoiceId = id;
+            this.invoiceRemaining  = remaining;
+            this.allocAmount       = Math.min(available, remaining);
+        }
+    };
+}
+</script>
+@endpush
 @endsection

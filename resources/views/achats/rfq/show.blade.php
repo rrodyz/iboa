@@ -146,8 +146,8 @@
                                                 {{ $item->description }} <span class="text-gray-400">× {{ number_format($item->quantity, 2, ',', ' ') }}</span>
                                             </td>
                                             <td class="py-1 text-right"><input type="number" name="items[{{ $loop->index }}][unit_price]" required min="0" step="0.01" class="w-24 border border-gray-300 rounded px-2 py-1 text-right"></td>
-                                            <td class="py-1 text-right"><input type="number" name="items[{{ $loop->index }}][discount_percent]" min="0" max="100" step="0.01" value="0" class="w-20 border border-gray-300 rounded px-2 py-1 text-right"></td>
-                                            <td class="py-1 text-right"><input type="number" name="items[{{ $loop->index }}][tax_rate]" min="0" max="100" step="0.01" value="18" class="w-20 border border-gray-300 rounded px-2 py-1 text-right"></td>
+                                            <td class="py-1 text-right"><input type="number" name="items[{{ $loop->index }}][discount_percent]" min="0" max="100" step="1" inputmode="numeric" value="0" class="w-20 border border-gray-300 rounded px-2 py-1 text-right"></td>
+                                            <td class="py-1 text-right"><input type="number" name="items[{{ $loop->index }}][tax_rate]" min="0" max="100" step="1" inputmode="numeric" value="18" class="w-20 border border-gray-300 rounded px-2 py-1 text-right"></td>
                                         </tr>
                                         @endforeach
                                     </tbody>
@@ -206,5 +206,7 @@
         </table>
     </div>
     @endif
+
+    <x-audit.timeline :model="\App\Models\Rfq::class" :id="$rfq->id" />
 </div>
 @endsection

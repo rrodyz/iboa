@@ -206,5 +206,7 @@
             @endif
         </div>
     </div>
+
+    <x-audit.timeline :model="\App\Models\StockTransfer::class" :id="$transfer->id" />
 </div>
 @endsection

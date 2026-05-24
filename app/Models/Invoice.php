@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\ClientPaymentSchedule;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
@@ -17,6 +18,15 @@ class Invoice extends Model
     use HasFactory, SoftDeletes, HasCreator, HasAttachments, HasCompanyScope;
 
     protected $table = 'invoices';
+
+    // Statuts
+    const STATUS_DRAFT     = 'brouillon';
+    const STATUS_VALIDATED = 'validee';
+    const STATUS_SENT      = 'envoyee';
+    const STATUS_PARTIAL   = 'partiellement_payee';
+    const STATUS_PAID      = 'payee';
+    const STATUS_OVERDUE   = 'en_retard';
+    const STATUS_CANCELLED = 'annulee';
 
     protected $fillable = [
         'company_id',
@@ -146,6 +156,46 @@ class Invoice extends Model
     public function parentInvoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'parent_invoice_id');
+    }
+
+    public function paymentSchedules(): HasMany
+    {
+        return $this->hasMany(ClientPaymentSchedule::class)->orderBy('due_date');
+    }
+
+    public function quote(): BelongsTo
+    {
+        return $this->belongsTo(Quote::class);
+    }
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'Brouillon',
+            'validee'               => 'Validée',
+            'envoyee'               => 'Envoyée',
+            'partiellement_payee'   => 'Part. payée',
+            'payee'                 => 'Payée',
+            'en_retard'             => 'En retard',
+            'annulee'               => 'Annulée',
+            default                 => ucfirst($this->status),
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'           => 'gray',
+            'validee'             => 'blue',
+            'envoyee'             => 'indigo',
+            'partiellement_payee' => 'amber',
+            'payee'               => 'green',
+            'en_retard'           => 'red',
+            'annulee'             => 'red',
+            default               => 'gray',
+        };
     }
 
     // -------------------------------------------------------------------------

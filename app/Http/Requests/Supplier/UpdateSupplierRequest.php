@@ -17,14 +17,15 @@ class UpdateSupplierRequest extends FormRequest
 
         return [
             'name'    => 'required|string|max:150',
+            // [ANTI-DUPLICATE] Ignore l'enregistrement courant.
             'code'    => 'nullable|string|max:30|unique:suppliers,code,' . $supplierId,
             'type'    => 'nullable|in:particulier,entreprise',
-            'email'   => 'nullable|email|max:150',
+            'email'   => 'nullable|email|max:150|unique:suppliers,email,' . $supplierId,
             'phone'   => 'nullable|string|max:20',
             'phone2'  => 'nullable|string|max:20',
             'website' => 'nullable|url|max:150',
-            'ifu'     => 'nullable|string|max:50',
-            'rccm'    => 'nullable|string|max:50',
+            'ifu'     => 'nullable|string|max:50|unique:suppliers,ifu,' . $supplierId,
+            'rccm'    => 'nullable|string|max:50|unique:suppliers,rccm,' . $supplierId,
             'address' => 'nullable|string|max:255',
             'city'    => 'nullable|string|max:100',
             'country' => 'nullable|string|max:100',
@@ -59,6 +60,16 @@ class UpdateSupplierRequest extends FormRequest
             'email' => 'adresse e-mail',
             'ifu'   => 'IFU',
             'rccm'  => 'RCCM',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'code.unique'  => 'Un autre fournisseur utilise déjà ce code interne.',
+            'email.unique' => 'Un autre fournisseur est déjà enregistré avec cette adresse email.',
+            'ifu.unique'   => 'Un autre fournisseur est déjà enregistré avec ce numéro IFU.',
+            'rccm.unique'  => 'Un autre fournisseur est déjà enregistré avec ce numéro RCCM.',
         ];
     }
 }

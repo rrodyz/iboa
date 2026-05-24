@@ -6,6 +6,7 @@ use App\Exports\InvoicesExport;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Sale\StoreInvoiceRequest;
 use App\Http\Requests\Sale\UpdateInvoiceRequest;
+use App\Http\Traits\ManagesEditLock;
 use App\Jobs\SendInvoiceEmailJob;
 use App\Models\Client;
 use App\Models\Company;
@@ -18,6 +19,8 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InvoiceController extends Controller
 {
+    use ManagesEditLock;
+
     public function __construct(private InvoiceService $service) {}
 
     public function index(Request $request)
@@ -97,6 +100,10 @@ class InvoiceController extends Controller
             return back()->with('error', 'Seules les factures en brouillon peuvent être modifiées.');
         }
 
+        // [CONCURRENCE] Acquisition du verrou d'édition
+        $lock = $this->acquireLockOr($facture, 'ventes.factures.show', $facture);
+        if ($lock instanceof \Illuminate\Http\RedirectResponse) return $lock;
+
         $invoice  = $this->service->repository->findWithDetails($facture->id);
         $clients  = Client::active()
             ->with(['taxRates' => fn($q) => $q->where('type', 'retenue')])
@@ -112,7 +119,8 @@ class InvoiceController extends Controller
             ])->values(),
         ]);
 
-        return view('ventes.factures.edit', compact('invoice', 'clients', 'products', 'clientWithholding'));
+        $editLock = $lock; // déjà le verrou actif pour ce user
+        return view('ventes.factures.edit', compact('invoice', 'clients', 'products', 'clientWithholding', 'editLock'));
     }
 
     public function update(UpdateInvoiceRequest $request, Invoice $facture)
@@ -121,6 +129,7 @@ class InvoiceController extends Controller
 
         try {
             $this->service->update($facture, $request->validated());
+            $this->releaseLock($facture); // [CONCURRENCE] Libère le verrou après sauvegarde
             return redirect()
                 ->route('ventes.factures.show', $facture)
                 ->with('success', 'Facture mise à jour.');

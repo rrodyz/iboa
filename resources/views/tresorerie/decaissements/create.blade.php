@@ -19,7 +19,9 @@
         <p class="text-sm text-gray-500 mt-0.5">Enregistrement d'un paiement effectué à un fournisseur</p>
     </div>
 
-    <form method="POST" action="{{ route('tresorerie.decaissements.store') }}">
+    <form method="POST" action="{{ route('tresorerie.decaissements.store') }}"
+          x-data="{ submitting: false }"
+          @submit="submitting = true">
         @csrf
 
         <div class="space-y-5">
@@ -221,9 +223,14 @@
 
             {{-- Actions --}}
             <div class="flex gap-3">
-                <button type="submit"
-                        class="bg-red-600 hover:bg-red-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition-colors">
-                    Enregistrer le décaissement
+                <button type="submit" :disabled="submitting"
+                        :class="submitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'"
+                        class="text-white font-medium px-6 py-2.5 rounded-lg text-sm transition-colors inline-flex items-center gap-2">
+                    <svg x-show="submitting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    <span x-text="submitting ? 'Enregistrement...' : 'Enregistrer le décaissement'"></span>
                 </button>
                 <a href="{{ route('tresorerie.decaissements.index') }}"
                    class="border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium px-6 py-2.5 rounded-lg text-sm transition-colors">

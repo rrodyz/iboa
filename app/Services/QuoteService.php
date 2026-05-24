@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Traits\HasOptimisticLocking;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\Quote;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class QuoteService
 {
+    use HasOptimisticLocking;
+
     public function __construct(
         public readonly QuoteRepository $repository,
         private DocumentSequenceService $sequenceService,
@@ -61,6 +64,10 @@ class QuoteService
     public function update(Quote $quote, array $data): Quote
     {
         return DB::transaction(function () use ($quote, $data) {
+            // [CONCURRENCE] Verrou optimiste
+            $this->assertVersion($quote, $data['_lock_version'] ?? null);
+            unset($data['_lock_version'], $data['_idempotency_key']);
+
             $items = $data['items'] ?? null;
             unset($data['items']);
 
@@ -73,6 +80,60 @@ class QuoteService
 
             $this->recalculate($quote);
             return $quote->fresh();
+        });
+    }
+
+    /**
+     * [VENTES-PRO] Duplique un devis : clone avec lignes + nouveau numéro, statut brouillon.
+     * Utile pour devis récurrents ou variantes (équivalent Odoo "Duplicate").
+     */
+    public function duplicate(Quote $quote): Quote
+    {
+        return DB::transaction(function () use ($quote) {
+            $quote->load('items');
+            $company = Company::firstOrFail();
+
+            $new = Quote::create([
+                'company_id'             => $company->id,
+                'fiscal_year_id'         => $company->current_fiscal_year_id,
+                'client_id'              => $quote->client_id,
+                'number'                 => $this->sequenceService->nextNumber($company, 'devis'),
+                'reference'              => $quote->reference,
+                'status'                 => 'brouillon',
+                'issued_at'              => now()->toDateString(),
+                'expires_at'             => now()->addDays(15)->toDateString(),
+                'currency_code'          => $quote->currency_code,
+                'exchange_rate'          => $quote->exchange_rate,
+                'subtotal_ht'            => $quote->subtotal_ht,
+                'total_discount'         => $quote->total_discount,
+                'total_tax'              => $quote->total_tax,
+                'total_ttc'              => $quote->total_ttc,
+                'global_discount_percent'=> $quote->global_discount_percent,
+                'global_discount_amount' => $quote->global_discount_amount,
+                'notes'                  => $quote->notes,
+                'terms'                  => $quote->terms,
+                'footer_note'            => $quote->footer_note,
+                'created_by'             => Auth::id(),
+            ]);
+
+            foreach ($quote->items as $i => $item) {
+                $new->items()->create([
+                    'product_id'       => $item->product_id,
+                    'description'      => $item->description,
+                    'unit_id'          => $item->unit_id,
+                    'quantity'         => $item->quantity,
+                    'unit_price'       => $item->unit_price,
+                    'discount_percent' => $item->discount_percent,
+                    'tax_rate_id'      => $item->tax_rate_id,
+                    'tax_rate_value'   => $item->tax_rate_value,
+                    'line_total_ht'    => $item->line_total_ht,
+                    'line_tax'         => $item->line_tax,
+                    'line_total_ttc'   => $item->line_total_ttc,
+                    'sort_order'       => $i,
+                ]);
+            }
+
+            return $new->fresh('items');
         });
     }
 

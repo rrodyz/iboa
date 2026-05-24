@@ -35,13 +35,21 @@ class FiscalYearController extends Controller
             if ($request->boolean('is_current')) {
                 FiscalYear::where('is_current', true)->update(['is_current' => false]);
             }
-            FiscalYear::create([
+            $fy = FiscalYear::create([
                 'label'      => $data['label'],
                 'starts_at'  => $data['starts_at'],
                 'ends_at'    => $data['ends_at'],
                 'status'     => 'ouvert',
                 'is_current' => $request->boolean('is_current'),
             ]);
+
+            // [FIX-FY-SYNC] Si on marque ce FY comme courant, propage sur companies.current_fiscal_year_id.
+            // Sinon, si AUCUN FY courant n'existe et que c'est le seul → on prend celui-ci par défaut
+            // (évite que le système soit bloqué après une purge complète).
+            if ($request->boolean('is_current') || FiscalYear::where('is_current', true)->doesntExist()) {
+                if (!$fy->is_current) $fy->update(['is_current' => true]);
+                \App\Models\Company::query()->update(['current_fiscal_year_id' => $fy->id]);
+            }
         });
 
         return back()->with('success', "Exercice « {$data['label']} » créé.");
@@ -72,6 +80,10 @@ class FiscalYearController extends Controller
         DB::transaction(function () use ($fiscalYear) {
             FiscalYear::where('is_current', true)->update(['is_current' => false]);
             $fiscalYear->update(['is_current' => true]);
+
+            // [FIX-FY-SYNC] Propage sur companies.current_fiscal_year_id pour que
+            // les séquences documents et les services métier suivent ce changement.
+            \App\Models\Company::query()->update(['current_fiscal_year_id' => $fiscalYear->id]);
         });
 
         return back()->with('success', "« {$fiscalYear->label} » défini comme exercice courant.");

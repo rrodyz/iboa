@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Purchases;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reception;
+use App\Models\Supplier;
 use App\Models\Warehouse;
 use App\Services\StockService;
 use Illuminate\Http\RedirectResponse;
@@ -41,8 +42,9 @@ class ReceptionController extends Controller
 
         $receptions = $query->paginate(15)->withQueryString();
         $filters    = $request->only(['search', 'status', 'supplier_id']);
+        $suppliers  = Supplier::active()->orderBy('name')->get(['id', 'name']);
 
-        return view('achats.receptions.index', compact('receptions', 'filters'));
+        return view('achats.receptions.index', compact('receptions', 'filters', 'suppliers'));
     }
 
     /**

@@ -33,6 +33,7 @@ class ClientPayment extends Model
         'notes',
         'allocated_amount',
         'unallocated_amount',
+        'is_acompte',
         'created_by',
     ];
 
@@ -42,6 +43,7 @@ class ClientPayment extends Model
         'allocated_amount'   => 'integer',
         'unallocated_amount' => 'integer',
         'exchange_rate'      => 'decimal:6',
+        'is_acompte'         => 'boolean',
     ];
 
     // -------------------------------------------------------------------------

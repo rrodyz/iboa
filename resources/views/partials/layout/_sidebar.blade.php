@@ -53,12 +53,13 @@
         @php
         $ag = match(true) {
             request()->routeIs('ventes.*')                                                                                            => 'ventes',
-            request()->routeIs('achats.*')                                                                                            => 'achats',
+request()->routeIs('achats.*')                                                                                            => 'achats',
             request()->routeIs('clients*','suppliers*','products*','brands*','product-families*','promotions*','product-price-tiers*') => 'gestion',
             request()->routeIs('stocks.*','stocks.warehouses*')                                                                        => 'stocks',
             request()->routeIs('reports.*')                                                                                           => 'analytique',
             request()->routeIs('tresorerie.*')                                                                                        => 'tresorerie',
             request()->routeIs('comptabilite.*')                                                                                      => 'comptabilite',
+            request()->routeIs('rh.*','rh.dashboard')                                                                                  => 'rh',
             request()->routeIs('users*','roles*','audit*','company*','units*')                                                        => 'parametres',
             default => null,
         };
@@ -129,6 +130,7 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
+                            auth()->user()->can('invoices.view')     ? [route('ventes.dashboard'),           '📊 Tableau de bord','ventes.dashboard']         : null,
                             auth()->user()->can('quotes.view')       ? [route('ventes.devis.index'),         'Devis',            'ventes.devis*']            : null,
                             auth()->user()->can('orders.view')       ? [route('ventes.commandes.index'),     'Commandes',        'ventes.commandes*']         : null,
                             auth()->user()->can('deliveries.view')   ? [route('ventes.bons-livraison.index'),'Bons de livraison','ventes.bons-livraison*']    : null,
@@ -309,10 +311,17 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach([
-                            [route('reports.index'),            'Rapports & BI',          'reports.index'],
-                            [route('reports.ca'),               'Chiffre d\'affaires',    'reports.ca'],
-                            [route('reports.margins'),          'Marges',                 'reports.margins'],
-                            [route('reports.sales-performance'),'Performance commerciale','reports.sales-performance'],
+                            [route('reports.index'),              'Rapports & BI',          'reports.index'],
+                            [route('reports.ca'),                 'Chiffre d\'affaires',    'reports.ca'],
+                            [route('reports.journal-ventes'),     'Journal des ventes',     'reports.journal-ventes'],
+                            [route('reports.liste-factures'),     'Liste des factures',     'reports.liste-factures'],
+                            [route('reports.liste-devis'),        'Liste des devis',        'reports.liste-devis'],
+                            [route('reports.liste-commandes'),    'Liste des commandes',    'reports.liste-commandes'],
+                            [route('reports.impayes'),            'Impayés clients',        'reports.impayes'],
+                            [route('reports.etat-tva'),           'État de TVA',            'reports.etat-tva'],
+                            [route('reports.etat-stocks'),        'État des stocks',        'reports.etat-stocks'],
+                            [route('reports.margins'),            'Marges produits',        'reports.margins'],
+                            [route('reports.sales-performance'),  'Performance commerciale','reports.sales-performance'],
                         ] as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
@@ -353,13 +362,14 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'),'Encaissements',      'tresorerie.encaissements*'] : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'),'Décaissements',      'tresorerie.decaissements*'] : null,
-                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),      'Comptes bancaires',  'tresorerie.caisses*']       : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),   'Prévisions',         'tresorerie.previsions*']    : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.remises.index'),      'Remises en banque',  'tresorerie.remises*']       : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.effets.index'),       'Effets de commerce', 'tresorerie.effets*']        : null,
-                            auth()->user()->can('clients.view')       ? [route('relances.index'),                'Relances',           'relances*']                 : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'),   'Encaissements',      'tresorerie.encaissements*']    : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'), 'Décaissements',      'tresorerie.decaissements*']  : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-clients'),  'Échéancier clients', 'tresorerie.echeancier-clients'] : null,
+                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),       'Comptes bancaires',  'tresorerie.caisses*']        : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),    'Prévisions',         'tresorerie.previsions*']     : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.remises.index'),       'Remises en banque',  'tresorerie.remises*']        : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.effets.index'),        'Effets de commerce', 'tresorerie.effets*']         : null,
+                            auth()->user()->can('clients.view')       ? [route('relances.index'),                 'Relances',           'relances*']                  : null,
                         ]) as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
@@ -401,6 +411,7 @@
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
                             auth()->user()->can('accounting.view') ? [route('comptabilite.plan-comptable.index'), 'Plan comptable',      'comptabilite.plan-comptable*']    : null,
+                            auth()->user()->can('accounting.view') ? [route('comptabilite.journal-types.index'),   'Codes journaux',      'comptabilite.journal-types*']     : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.journaux.index'),        'Journaux',            'comptabilite.journaux*']          : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.grand-livre'),           'Grand livre',         'comptabilite.grand-livre']        : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.balance'),               'Balance générale',    'comptabilite.balance']            : null,
@@ -427,6 +438,50 @@
                 </div>
             </div>
             @endcanany
+
+            {{-- ── RH / PAIE ────────────────────────────── --}}
+            @php $gId = 'rh'; $gActive = request()->routeIs('rh.*'); @endphp
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               {{ $gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white' }}">
+                    @if($gActive)<span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-rose-300 rounded-r-full"></span>@endif
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 {{ $gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">RH / Paie</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '{{ $gId }}' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        RH / Paie <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '{{ $gId }}' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        @foreach([
+                            [route('rh.dashboard'),         'Tableau de bord',   'rh.dashboard'],
+                            [route('rh.employes.index'),    'Employés',          'rh.employes*'],
+                            [route('rh.departments.index'), 'Départements',      'rh.departments*'],
+                            [route('rh.paie.index'),        'Bulletins de paie', 'rh.paie*'],
+                            [route('rh.conges.index'),      'Congés',            'rh.conges*'],
+                            [route('rh.avances.index'),     'Avances salaire',   'rh.avances*'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-rose-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
 
             {{-- ── PARAMÈTRES ───────────────────────────── --}}
             @php $gId = 'parametres'; $gActive = request()->routeIs('users*','roles*','audit*','company*','units*','settings.*','payment-terms*','sequences*'); @endphp

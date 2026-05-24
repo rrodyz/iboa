@@ -29,6 +29,7 @@
 <form method="POST" action="{{ route('ventes.commandes.update', $order) }}">
     @csrf
     @method('PUT')
+    <x-form-guard :model="$order" />
     @include('ventes.commandes._form')
 </form>
 @endsection

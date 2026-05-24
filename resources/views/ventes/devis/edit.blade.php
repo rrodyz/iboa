@@ -27,6 +27,7 @@
     <form method="POST" action="{{ route('ventes.devis.update', $quote) }}">
         @csrf
         @method('PUT')
+        <x-form-guard :model="$quote" />
         @include('ventes.devis._form')
     </form>
 </div>

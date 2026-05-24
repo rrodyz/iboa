@@ -10,12 +10,15 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\PaymentTerm;
 use App\Repositories\InvoiceRepository;
+use App\Http\Traits\HasOptimisticLocking;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class InvoiceService
 {
+    use HasOptimisticLocking;
+
     public function __construct(
         public readonly InvoiceRepository $repository,
         private DocumentSequenceService $sequenceService,
@@ -155,7 +158,41 @@ class InvoiceService
     public function createFromDeliveryNote(DeliveryNote $dn): Invoice
     {
         return DB::transaction(function () use ($dn) {
+            // [SYNC-FIX-01] Lock the delivery note row to prevent concurrent invoicing
+            // of the same BL — and guard against duplicate-billing.
+            $dn = DeliveryNote::lockForUpdate()->findOrFail($dn->id);
             $dn->load('items', 'order');
+
+            // [SYNC-FIX-01] Guard : un BL ne peut être facturé qu'une seule fois (hors annulation).
+            $existingInvoice = Invoice::where('delivery_note_id', $dn->id)
+                ->whereNotIn('status', ['annulee'])
+                ->whereNull('deleted_at')
+                ->first();
+            if ($existingInvoice) {
+                throw new \RuntimeException(sprintf(
+                    'Le bon de livraison %s a déjà été facturé (facture %s, statut %s). '
+                    . 'Annulez la facture existante avant d\'en créer une nouvelle.',
+                    $dn->number, $existingInvoice->number, $existingInvoice->status
+                ));
+            }
+
+            // [SYNC-FIX-01] Guard supplémentaire : si une facture standard existe déjà pour
+            // l'ordre entier (sans delivery_note_id), refuser pour éviter le double-facturation.
+            if ($dn->order_id) {
+                $orderInvoice = Invoice::where('order_id', $dn->order_id)
+                    ->whereNull('delivery_note_id')
+                    ->whereNotIn('status', ['annulee'])
+                    ->whereNull('deleted_at')
+                    ->first();
+                if ($orderInvoice) {
+                    throw new \RuntimeException(sprintf(
+                        'La commande %s a déjà été facturée intégralement (facture %s). '
+                        . 'Impossible de générer une seconde facture via le BL %s.',
+                        $dn->order?->number, $orderInvoice->number, $dn->number
+                    ));
+                }
+            }
+
             $company = Company::firstOrFail();
 
             // Calculate totals from BL items using order item prices
@@ -264,6 +301,25 @@ class InvoiceService
     public function update(Invoice $invoice, array $data): Invoice
     {
         return DB::transaction(function () use ($invoice, $data) {
+            // [CONCURRENCE] Verrou optimiste : détecte les modifications concurrentes
+            $this->assertVersion($invoice, $data['_lock_version'] ?? null);
+            unset($data['_lock_version'], $data['_idempotency_key']);
+
+            // [INVOICE-LOCKED-GUARD] Verrou : une facture qui n'est plus en brouillon
+            // ne peut PAS être modifiée. Ceci couvre payée, émise, partiellement_payée,
+            // en_retard, annulée. La modification rétroactive est interdite en compta —
+            // utilisez un avoir pour annuler/corriger.
+            $invoice = Invoice::lockForUpdate()->findOrFail($invoice->id);
+
+            if ($invoice->status !== 'brouillon') {
+                throw new \RuntimeException(sprintf(
+                    "La facture %s est « %s » — la modification est interdite par la réglementation comptable. "
+                    . "Pour corriger une erreur sur une facture déjà émise, créez un avoir client et émettez une nouvelle facture.",
+                    $invoice->number,
+                    $invoice->status
+                ));
+            }
+
             $items = $data['items'] ?? null;
             unset($data['items']);
 
@@ -328,77 +384,6 @@ class InvoiceService
             event(new InvoiceValidated($fresh));
 
             return $fresh;
-        });
-    }
-
-    /**
-     * [MED-1] Conversion d'une facture proforma en facture standard.
-     *
-     * Au moment de la conversion :
-     *  - Nouveau numéro (séquence facture standard)
-     *  - Type passe à 'standard'
-     *  - Comptabilité + stock se déclenchent (postClientInvoice + postSaleStockMovement)
-     *  - L'ancienne proforma est marquée 'annulee' avec lien parent_invoice_id sur la nouvelle
-     *
-     * Cas d'usage : le client a accepté la proforma → on l'engage en facture standard.
-     */
-    public function convertProforma(Invoice $proforma): Invoice
-    {
-        if ($proforma->type !== 'proforma') {
-            throw new \RuntimeException('Cette facture n\'est pas une proforma.');
-        }
-        if (!in_array($proforma->status, ['emise', 'envoyee'])) {
-            throw new \RuntimeException('Seule une proforma émise peut être convertie.');
-        }
-
-        return DB::transaction(function () use ($proforma) {
-            $proforma = Invoice::lockForUpdate()->findOrFail($proforma->id);
-            $company  = Company::firstOrFail();
-
-            // Dupliquer la proforma en facture standard
-            $standardData = $proforma->only([
-                'company_id', 'client_id', 'fiscal_year_id', 'order_id', 'delivery_note_id',
-                'currency_code', 'exchange_rate',
-                'subtotal_ht', 'total_discount', 'total_tax', 'total_ttc',
-                'global_discount_percent', 'global_discount_amount',
-                'withholding_details', 'withholding_amount', 'net_to_pay',
-                'billing_address', 'notes', 'terms', 'footer_note', 'payment_terms',
-                'payment_term_id',
-            ]);
-            $standardData = array_merge($standardData, [
-                'number'             => $this->sequenceService->nextNumber($company, 'facture'),
-                'type'               => 'standard',
-                'status'             => 'brouillon',
-                'issued_at'          => now()->toDateString(),
-                'due_at'             => $this->defaultDueAt(now(), $proforma->payment_term_id),
-                'remaining_amount'   => $proforma->net_to_pay ?? $proforma->total_ttc,
-                'paid_amount'        => 0,
-                'created_by'         => Auth::id(),
-                'parent_invoice_id'  => $proforma->id,
-                'validated_at'       => null,
-                'validated_by'       => null,
-                'sent_at'            => null,
-            ]);
-
-            $invoice = Invoice::create($standardData);
-
-            // Dupliquer les lignes
-            foreach ($proforma->items as $item) {
-                $invoice->items()->create($item->only([
-                    'product_id', 'description', 'unit_id', 'quantity', 'unit_price',
-                    'discount_percent', 'tax_rate_id', 'tax_rate_value',
-                    'line_total_ht', 'line_tax', 'line_total_ttc', 'sort_order',
-                ]));
-            }
-
-            // Marquer la proforma comme annulée (elle n'a jamais eu d'impact réel)
-            $proforma->update([
-                'status' => 'annulee',
-                'notes'  => trim((string) $proforma->notes . "\n\n[CONVERTIE EN " . $invoice->number . " le " . now()->format('d/m/Y H:i') . "]"),
-            ]);
-
-            // Valider directement la nouvelle facture standard
-            return $this->validate($invoice);
         });
     }
 

@@ -16,6 +16,14 @@ class Quote extends Model
 
     protected $table = 'quotes';
 
+    // Statuts possibles
+    const STATUS_DRAFT     = 'brouillon';
+    const STATUS_VALIDATED = 'valide';
+    const STATUS_CONVERTED = 'converti';
+    const STATUS_EXPIRED   = 'expire';
+    const STATUS_REFUSED   = 'refuse';
+    const STATUS_CANCELLED = 'annule';
+
     protected $fillable = [
         'company_id',
         'client_id',
@@ -92,5 +100,38 @@ class Quote extends Model
     public function convertedOrder(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'converted_to_order_id');
+    }
+
+    // ── Accessors ─────────────────────────────────────────────────────────────
+
+    public function getIsExpiredAttribute(): bool
+    {
+        return $this->expires_at && $this->expires_at->isPast() && $this->status === 'valide';
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon' => 'Brouillon',
+            'valide'    => $this->is_expired ? 'Expiré' : 'Validé',
+            'converti'  => 'Converti',
+            'expire'    => 'Expiré',
+            'refuse'    => 'Refusé',
+            'annule'    => 'Annulé',
+            default     => ucfirst($this->status),
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon' => 'gray',
+            'valide'    => $this->is_expired ? 'orange' : 'blue',
+            'converti'  => 'green',
+            'expire'    => 'orange',
+            'refuse'    => 'red',
+            'annule'    => 'red',
+            default     => 'gray',
+        };
     }
 }

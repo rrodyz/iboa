@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Purchases;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\StoreSupplierReturnRequest;
+use App\Http\Requests\Purchase\UpdateSupplierReturnRequest;
+use App\Models\Company;
 use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\SupplierReturn;
 use App\Services\SupplierReturnService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -47,6 +50,43 @@ class SupplierReturnController extends Controller
         $return = $this->service->repository->findWithDetails($retoursFournisseurs->id);
 
         return view('achats.retours-fournisseurs.show', compact('return'));
+    }
+
+    public function edit(SupplierReturn $retoursFournisseurs): View|RedirectResponse
+    {
+        if (! $retoursFournisseurs->isEditable()) {
+            return back()->with('error', 'Ce retour ne peut plus être modifié.');
+        }
+
+        $return    = $this->service->repository->findWithDetails($retoursFournisseurs->id);
+        $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
+        $products  = Product::active()->orderBy('name')->get(['id', 'name', 'reference', 'purchase_price']);
+
+        return view('achats.retours-fournisseurs.edit', compact('return', 'suppliers', 'products'));
+    }
+
+    public function update(UpdateSupplierReturnRequest $request, SupplierReturn $retoursFournisseurs): RedirectResponse
+    {
+        try {
+            $this->service->update($retoursFournisseurs, $request->validated());
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('achats.retours-fournisseurs.show', $retoursFournisseurs)
+            ->with('success', 'Retour ' . $retoursFournisseurs->number . ' mis à jour.');
+    }
+
+    public function pdf(SupplierReturn $retoursFournisseurs): mixed
+    {
+        $return  = $this->service->repository->findWithDetails($retoursFournisseurs->id);
+        $company = Company::first();
+
+        $pdf = Pdf::loadView('achats.pdf.supplier-return', compact('return', 'company'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download('avoir_' . $return->number . '_' . now()->format('Ymd') . '.pdf');
     }
 
     public function destroy(SupplierReturn $retoursFournisseurs): RedirectResponse

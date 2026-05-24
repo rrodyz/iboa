@@ -18,9 +18,14 @@
         <h1 class="text-2xl font-bold text-gray-900">Modifier la commande <span class="font-mono text-amber-600">{{ $purchaseOrder->number }}</span></h1>
     </div>
 
+    {{-- [CONCURRENCE] Bandeau de verrou d'édition --}}
+    <x-edit-lock-banner :model="$purchaseOrder" model-type="PurchaseOrder" :edit-lock="$editLock ?? null" />
+
     <form method="POST" action="{{ route('achats.commandes.update', $purchaseOrder) }}">
         @csrf
         @method('PUT')
+        {{-- [CONCURRENCE] Protection anti-double-soumission + verrou optimiste --}}
+        <x-form-guard :model="$purchaseOrder" />
         @include('achats.commandes._form')
     </form>
 

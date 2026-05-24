@@ -128,5 +128,13 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\JournalEntry::observe(\App\Observers\JournalEntryObserver::class);
         \App\Models\ClientPayment::observe(\App\Observers\PaymentObserver::class);
         \App\Models\SupplierPayment::observe(\App\Observers\PaymentObserver::class);
+
+        // [TRACE] Observers étendus — traçabilité complète des entités métier critiques.
+        \App\Models\Quote::observe(\App\Observers\QuoteObserver::class);
+        \App\Models\Order::observe(\App\Observers\OrderObserver::class);
+        \App\Models\PurchaseOrder::observe(\App\Observers\PurchaseOrderObserver::class);
+        \App\Models\SupplierInvoice::observe(\App\Observers\SupplierInvoiceObserver::class);
+        \App\Models\StockTransfer::observe(\App\Observers\StockTransferObserver::class);
+        \App\Models\Rfq::observe(\App\Observers\RfqObserver::class);
     }
 }

@@ -29,6 +29,12 @@ class ClientPaymentService
 
             $data['created_by'] = Auth::id();
 
+            // [DOUBLE-PAYMENT-GUARD] Protection anti-doublon AVANT toute écriture :
+            // - refuse un encaissement strictement identique (client + montant + méthode + référence)
+            //   créé dans les 60 dernières secondes
+            // - refuse aussi si une référence saisie (n° chèque, etc.) a déjà été utilisée pour ce client
+            $this->assertNoDuplicateRecent($data);
+
             // Generate payment number
             $company = Auth::user()->company;
             if ($company) {
@@ -75,6 +81,24 @@ class ClientPaymentService
                     throw new \RuntimeException(
                         'La facture ' . $invoice->number . ' n\'appartient pas au client sélectionné.'
                     );
+                }
+
+                // [INVOICE-LOCKED-GUARD] Refus explicite d'allouer un paiement à une facture
+                // entièrement payée (status=payee) ou annulée — protection contre les doubles
+                // règlements involontaires.
+                if (in_array($invoice->status, ['payee', 'annulee'], true)) {
+                    throw new \RuntimeException(sprintf(
+                        "La facture %s est %s — aucune nouvelle allocation de paiement n'est autorisée. "
+                        . "Si vous avez reçu de l'argent en trop, créez un avoir client ou laissez le paiement non alloué (crédit).",
+                        $invoice->number, $invoice->status === 'payee' ? 'déjà entièrement payée' : 'annulée'
+                    ));
+                }
+                if ((int) $invoice->remaining_amount <= 0) {
+                    throw new \RuntimeException(sprintf(
+                        "La facture %s a un reste à payer nul — elle est techniquement soldée. "
+                        . "Imputez ce paiement sur une autre facture ou laissez-le en crédit.",
+                        $invoice->number
+                    ));
                 }
 
                 // [FIX-MAJEUR] Cap allocation to actual remaining amount
@@ -139,6 +163,110 @@ class ClientPaymentService
     }
 
     /**
+     * [DOUBLE-PAYMENT-GUARD] Lève une exception si un encaissement strictement
+     * identique a été créé dans les 60 dernières secondes (double-clic, soumission
+     * concurrente, replay réseau), OU si la référence saisie (numéro de chèque,
+     * référence virement, transaction mobile money) est déjà utilisée pour ce client.
+     *
+     * Strict = même client_id + même amount + même payment_method_id + même cash_account_id
+     */
+    private function assertNoDuplicateRecent(array $data): void
+    {
+        $clientId        = (int) ($data['client_id'] ?? 0);
+        $amount          = (int) ($data['amount']    ?? 0);
+        $paymentMethodId = $data['payment_method_id'] ?? null;
+        $cashAccountId   = $data['cash_account_id']   ?? null;
+        $reference       = trim((string) ($data['reference'] ?? ''));
+        $forceDuplicate  = (bool) ($data['force_duplicate'] ?? false);
+
+        if ($clientId <= 0 || $amount <= 0) return;   // sera bloqué par d'autres validations
+
+        // 1a. Doublon ultra-récent (60 s) sur les 4 attributs structurants — toujours bloqué
+        $exists = ClientPayment::where('client_id', $clientId)
+            ->where('amount', $amount)
+            ->where('payment_method_id', $paymentMethodId)
+            ->where('cash_account_id', $cashAccountId)
+            ->whereNull('deleted_at')
+            ->where('created_at', '>=', now()->subSeconds(60))
+            ->first();
+
+        if ($exists) {
+            throw new \RuntimeException(sprintf(
+                "Un encaissement identique vient d'être enregistré il y a quelques secondes : %s (%s FCFA). "
+                . "Si vous voulez en créer un second pour le même client/montant, attendez 1 minute ou modifiez un attribut "
+                . "(méthode, référence…).",
+                $exists->number,
+                number_format($exists->amount, 0, ',', ' ')
+            ));
+        }
+
+        // 1b. Doublon "métier" sur 24h pour MÊME CLIENT + MÊME MONTANT (toutes méthodes)
+        if (!$forceDuplicate) {
+            $sameAmountToday = ClientPayment::where('client_id', $clientId)
+                ->where('amount', $amount)
+                ->whereNull('deleted_at')
+                ->where('created_at', '>=', now()->subHours(24))
+                ->count();
+
+            if ($sameAmountToday > 0) {
+                $unpaidSum = (int) Invoice::where('client_id', $clientId)
+                    ->whereIn('status', ['emise','envoyee','partiellement_payee','en_retard'])
+                    ->whereNull('deleted_at')->sum('remaining_amount');
+
+                throw new \RuntimeException(sprintf(
+                    "⚠ Doublon probable : ce client a déjà reçu %d encaissement(s) de %s FCFA dans les 24h. "
+                    . "Total impayé actuel du client : %s FCFA. "
+                    . "Vérifiez qu'il ne s'agit pas d'une erreur de saisie. Pour confirmer ce paiement supplémentaire, "
+                    . "cochez « Forcer le paiement (doublon confirmé) » sur le formulaire.",
+                    $sameAmountToday,
+                    number_format($amount, 0, ',', ' '),
+                    number_format($unpaidSum, 0, ',', ' ')
+                ));
+            }
+        }
+
+        // 1c. [OVERPAYMENT-GUARD] Refuser un encaissement si le client a déjà reçu
+        // assez de paiements non imputés pour couvrir TOUT son passif.
+        // → empêche les saisies répétées sur un client déjà entièrement payé.
+        if (!$forceDuplicate) {
+            $unallocatedSum = (int) ClientPayment::where('client_id', $clientId)
+                ->whereNull('deleted_at')->sum('unallocated_amount');
+            $outstandingSum = (int) Invoice::where('client_id', $clientId)
+                ->whereIn('status', ['emise','envoyee','partiellement_payee','en_retard'])
+                ->whereNull('deleted_at')->sum('remaining_amount');
+
+            // Si paiements non imputés ≥ ce que doit le client → nouvelle saisie est un doublon structurel
+            if ($unallocatedSum >= $outstandingSum && $outstandingSum >= 0) {
+                throw new \RuntimeException(sprintf(
+                    "⚠ Doublon structurel : ce client a déjà %s FCFA de paiements non imputés disponibles "
+                    . "alors qu'il ne doit que %s FCFA au total. Imputez d'abord les paiements existants "
+                    . "sur ses factures avant de saisir un nouvel encaissement. "
+                    . "Si c'est un véritable nouveau règlement (avance, acompte sur futur achat), "
+                    . "cochez « Forcer le paiement ».",
+                    number_format($unallocatedSum, 0, ',', ' '),
+                    number_format($outstandingSum, 0, ',', ' ')
+                ));
+            }
+        }
+
+        // 2. Référence dupliquée sur le même client (n° chèque, transaction MM…)
+        // Ne bloque pas si pas de référence ni reference vide.
+        if ($reference !== '') {
+            $dup = ClientPayment::where('client_id', $clientId)
+                ->where('reference', $reference)
+                ->whereNull('deleted_at')
+                ->first();
+            if ($dup) {
+                throw new \RuntimeException(sprintf(
+                    "La référence « %s » est déjà utilisée pour ce client (encaissement %s). "
+                    . "Vérifiez qu'il ne s'agit pas d'un doublon — si besoin, ajoutez un suffixe à la référence.",
+                    $reference, $dup->number
+                ));
+            }
+        }
+    }
+
+    /**
      * Return unpaid (validated or partial) invoices for a given client.
      */
     public function getClientUnpaidInvoices(int $clientId): Collection
@@ -148,5 +276,61 @@ class ClientPaymentService
             ->where('remaining_amount', '>', 0)
             ->orderBy('due_at')
             ->get(['id', 'number', 'issued_at', 'due_at', 'total_ttc', 'remaining_amount', 'status']);
+    }
+
+    /**
+     * Ajoute une imputation sur une facture depuis un paiement existant (lettrage a posteriori).
+     */
+    public function addAllocation(ClientPayment $payment, int $invoiceId, int $amount): void
+    {
+        DB::transaction(function () use ($payment, $invoiceId, $amount) {
+            if ($amount <= 0) {
+                throw new \RuntimeException('Le montant à imputer doit être positif.');
+            }
+            if ($amount > (int) $payment->unallocated_amount) {
+                throw new \RuntimeException(sprintf(
+                    'Le montant à imputer (%s) dépasse le solde non imputé (%s FCFA).',
+                    number_format($amount, 0, ',', ' '),
+                    number_format($payment->unallocated_amount, 0, ',', ' ')
+                ));
+            }
+
+            $invoice = Invoice::lockForUpdate()->find($invoiceId);
+            if (!$invoice || (int) $invoice->client_id !== (int) $payment->client_id) {
+                throw new \RuntimeException('Facture introuvable ou appartenant à un autre client.');
+            }
+            if (in_array($invoice->status, ['payee', 'annulee'])) {
+                throw new \RuntimeException("La facture {$invoice->number} est déjà {$invoice->status}.");
+            }
+
+            $amount = min($amount, (int) $invoice->remaining_amount);
+            if ($amount <= 0) {
+                throw new \RuntimeException("La facture {$invoice->number} n'a plus de reste à payer.");
+            }
+
+            $payment->allocations()->create([
+                'client_payment_id' => $payment->id,
+                'invoice_id'        => $invoice->id,
+                'amount'            => $amount,
+                'allocated_at'      => now(),
+                'created_by'        => Auth::id(),
+            ]);
+
+            // Update invoice
+            $newPaid      = (int) $invoice->paid_amount + $amount;
+            $netToPay     = (int) ($invoice->net_to_pay ?? max(0, $invoice->total_ttc - ($invoice->withholding_amount ?? 0)));
+            $newRemaining = max(0, $netToPay - $newPaid);
+            $invoice->update([
+                'paid_amount'      => $newPaid,
+                'remaining_amount' => $newRemaining,
+                'status'           => $newRemaining <= 0 ? 'payee' : 'partiellement_payee',
+            ]);
+
+            // Update payment unallocated
+            $payment->update([
+                'allocated_amount'   => $payment->allocated_amount + $amount,
+                'unallocated_amount' => max(0, $payment->unallocated_amount - $amount),
+            ]);
+        });
     }
 }

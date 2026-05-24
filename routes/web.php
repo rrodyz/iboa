@@ -131,6 +131,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/sales-performance/pdf', [\App\Http\Controllers\ReportController::class, 'salesPerformancePdf'])->name('sales-performance-pdf');
             Route::get('/achats',                [\App\Http\Controllers\ReportController::class, 'achats'])->name('achats');
             Route::get('/aging-receivables',     [\App\Http\Controllers\ReportController::class, 'agingReceivables'])->name('aging-receivables');
+
+            // ── États opérationnels ─────────────────────────────────────────
+            Route::get('/journal-ventes',        [\App\Http\Controllers\EtatController::class, 'journalVentes'])->name('journal-ventes');
+            Route::get('/etat-stocks',           [\App\Http\Controllers\EtatController::class, 'etatStocks'])->name('etat-stocks');
+            Route::get('/mouvements-stock',      [\App\Http\Controllers\EtatController::class, 'mouvementsStock'])->name('mouvements-stock');
+            Route::get('/impayes',               [\App\Http\Controllers\EtatController::class, 'impayes'])->name('impayes');
+            Route::get('/etat-tva',              [\App\Http\Controllers\EtatController::class, 'etatTva'])->name('etat-tva');
+            Route::get('/liste-factures',        [\App\Http\Controllers\EtatController::class, 'listeFactures'])->name('liste-factures');
+            Route::get('/liste-devis',           [\App\Http\Controllers\EtatController::class, 'listeDevis'])->name('liste-devis');
+            Route::get('/liste-commandes',       [\App\Http\Controllers\EtatController::class, 'listeCommandes'])->name('liste-commandes');
         });
     });
 
@@ -205,11 +215,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Ventes / Module 5 ───────────────────────────────────────────────────────
     Route::prefix('ventes')->name('ventes.')->group(function () {
 
+        // [VENTES-PRO] Tableau de bord ventes (KPIs, top clients, pipeline)
+        Route::middleware('permission:invoices.view')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Sales\SalesDashboardController::class, 'index'])->name('dashboard');
+        });
+
         Route::middleware('permission:quotes.view')->group(function () {
             Route::get('devis/export', [\App\Http\Controllers\Sales\QuoteController::class, 'export'])->name('devis.export');
             Route::resource('devis', \App\Http\Controllers\Sales\QuoteController::class)
                 ->parameters(['devis' => 'devis']);
             Route::get('devis/{devis}/pdf',  [\App\Http\Controllers\Sales\QuoteController::class, 'pdf'])->name('devis.pdf');
+        });
+        Route::middleware('permission:quotes.create')->group(function () {
+            // [VENTES-PRO] Action Duplicate (équivalent Odoo)
+            Route::post('devis/{devis}/duplicate', [\App\Http\Controllers\Sales\QuoteController::class, 'duplicate'])->name('devis.duplicate');
         });
         Route::middleware('permission:quotes.validate')->group(function () {
             Route::post('devis/{devis}/convert', [\App\Http\Controllers\Sales\QuoteController::class, 'convert'])->name('devis.convert');
@@ -245,17 +264,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware('permission:invoices.view')->group(function () {
             Route::get('factures/export-pdf', [\App\Http\Controllers\Sales\InvoiceController::class, 'exportPdf'])->name('factures.export-pdf');
-            Route::resource('factures', \App\Http\Controllers\Sales\InvoiceController::class);
+            // [INVOICE-LOCK] Verrouille PUT/PATCH/DELETE quand status=payee ou annulee — renvoie 403
+            // [CONCURRENCE] Anti-double-soumission intégré via x-form-guard (idempotency middleware)
+            Route::resource('factures', \App\Http\Controllers\Sales\InvoiceController::class)
+                ->middleware('invoice.locked');
             Route::get('factures/{facture}/pdf', [\App\Http\Controllers\Sales\InvoiceController::class, 'pdf'])->name('factures.pdf');
+            // Échéancier client sur facture
+            Route::post('factures/{facture}/schedules',        [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'store'])->name('factures.schedules.store');
+            Route::post('factures/{facture}/schedules-custom', [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'storeCustom'])->name('factures.schedules.store-custom');
+            Route::delete('factures/{facture}/schedules',      [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'destroyAll'])->name('factures.schedules.destroy-all');
         });
-        Route::middleware('permission:invoices.validate')->group(function () {
+        Route::middleware(['permission:invoices.validate', 'invoice.locked'])->group(function () {
             Route::post('factures/{facture}/validate', [\App\Http\Controllers\Sales\InvoiceController::class, 'validateInvoice'])->name('factures.validate');
             // [BUG-FIX] Exposition de l'annulation : contre-passation comptable automatique
             Route::post('factures/{facture}/cancel',   [\App\Http\Controllers\Sales\InvoiceController::class, 'cancelInvoice'])->name('factures.cancel');
             // [MED-1] Conversion proforma → standard (génère compta + stock)
             Route::post('factures/{facture}/convert-proforma', [\App\Http\Controllers\Sales\InvoiceController::class, 'convertProforma'])->name('factures.convert-proforma');
         });
-        Route::middleware('permission:invoices.send')->group(function () {
+        Route::middleware(['permission:invoices.send', 'invoice.locked'])->group(function () {
             Route::post('factures/{facture}/send-email', [\App\Http\Controllers\Sales\InvoiceController::class, 'sendEmail'])->name('factures.send-email');
         });
 
@@ -331,6 +357,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
         Route::middleware('permission:purchase_orders.create')->group(function () {
             Route::post('commandes/{commande}/confirm', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'confirm'])->name('commandes.confirm');
+            Route::post('commandes/{commande}/duplicate', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'duplicate'])->name('commandes.duplicate');
         });
         Route::middleware('permission:receptions.create')->group(function () {
             Route::post('commandes/{commande}/reception', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'createReception'])->name('commandes.reception');
@@ -348,11 +375,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
 
         Route::middleware('permission:supplier_invoices.view')->group(function () {
+            // [INVOICE-LOCK] Verrouille PUT/PATCH/DELETE sur FF payee/annulee → 403
             Route::resource('factures-fournisseurs', \App\Http\Controllers\Purchases\SupplierInvoiceController::class)
-                ->parameters(['factures-fournisseurs' => 'facturesFournisseur']);
+                ->parameters(['factures-fournisseurs' => 'facturesFournisseur'])
+                ->middleware('invoice.locked');
         });
         // [FIX-CRITIQUE] validate and payment require create permission, not just view
-        Route::middleware('permission:supplier_invoices.create')->group(function () {
+        Route::middleware(['permission:supplier_invoices.create', 'invoice.locked'])->group(function () {
             Route::post('factures-fournisseurs/{facturesFournisseur}/validate', [\App\Http\Controllers\Purchases\SupplierInvoiceController::class, 'validateInvoice'])->name('factures-fournisseurs.validate');
             Route::post('factures-fournisseurs/{facturesFournisseur}/payment', [\App\Http\Controllers\Purchases\SupplierInvoiceController::class, 'recordPayment'])->name('factures-fournisseurs.payment');
         });
@@ -360,7 +389,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:supplier_returns.view')->group(function () {
             Route::resource('retours-fournisseurs', \App\Http\Controllers\Purchases\SupplierReturnController::class)
                 ->parameters(['retours-fournisseurs' => 'retoursFournisseurs'])
-                ->only(['index', 'create', 'store', 'show', 'destroy']);
+                ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
+            Route::get('retours-fournisseurs/{retoursFournisseurs}/pdf', [\App\Http\Controllers\Purchases\SupplierReturnController::class, 'pdf'])->name('retours-fournisseurs.pdf');
         });
         Route::middleware('permission:supplier_returns.validate')->group(function () {
             Route::post('retours-fournisseurs/{retoursFournisseurs}/validate', [\App\Http\Controllers\Purchases\SupplierReturnController::class, 'validateReturn'])->name('retours-fournisseurs.validate');
@@ -369,7 +399,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:purchase_requests.view')->group(function () {
             Route::resource('demandes-achat', \App\Http\Controllers\Purchases\PurchaseRequestController::class)
                 ->parameters(['demandes-achat' => 'demandesAchat'])
-                ->only(['index', 'create', 'store', 'show', 'destroy']);
+                ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
         });
         Route::middleware('permission:purchase_requests.submit')->group(function () {
             Route::post('demandes-achat/{demandesAchat}/submit', [\App\Http\Controllers\Purchases\PurchaseRequestController::class, 'submit'])->name('demandes-achat.submit');
@@ -490,6 +520,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->parameters(['journaux' => 'journalEntry'])
                 ->only(['index', 'create', 'store', 'show', 'edit', 'update', 'destroy']);
 
+            // [COMPTA-JT] CRUD des codes journaux (référentiel)
+            Route::resource('codes-journaux', \App\Http\Controllers\Accounting\JournalTypeController::class)
+                ->parameters(['codes-journaux' => 'journalType'])
+                ->names('journal-types')
+                ->except(['show']);
+
             // Grand livre & balance
             Route::get('grand-livre',        [\App\Http\Controllers\Accounting\LedgerController::class, 'grandLivre'])->name('grand-livre');
             Route::get('grand-livre/export', [\App\Http\Controllers\Accounting\LedgerController::class, 'grandLivreExport'])->name('grand-livre.export');
@@ -570,16 +606,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('encaissements/factures',   [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'getInvoices'])->name('encaissements.invoices');
             Route::get('encaissements/export-pdf', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'exportPdf'])->name('encaissements.export-pdf');
+            // Reçu PDF encaissement
+            Route::get('encaissements/{encaissement}/recu', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'recu'])->name('encaissements.recu');
+            // Imputation a posteriori (lettrage)
+            Route::post('encaissements/{encaissement}/imputer', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'imputer'])->name('encaissements.imputer');
             Route::resource('encaissements', \App\Http\Controllers\Treasury\ClientPaymentController::class)
                 ->only(['index', 'create', 'store', 'show'])
                 ->parameters(['encaissements' => 'encaissement']);
 
             Route::get('decaissements/factures', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'getInvoices'])->name('decaissements.invoices');
+            // Reçu PDF décaissement
+            Route::get('decaissements/{decaissement}/recu', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'recu'])->name('decaissements.recu');
             // [TRESO] Annulation décaissement : contre-passation compta + restauration facture
             Route::post('decaissements/{decaissement}/cancel', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'cancel'])->name('decaissements.cancel');
             Route::resource('decaissements', \App\Http\Controllers\Treasury\SupplierPaymentController::class)
                 ->only(['index', 'create', 'store', 'show'])
                 ->parameters(['decaissements' => 'decaissement']);
+
+            // ── Échéancier clients ──────────────────────────────────────────────
+            Route::get('echeancier-clients', [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'upcoming'])->name('echeancier-clients');
+            Route::delete('schedules-clients/{schedule}', [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'destroy'])->name('schedules-clients.destroy');
         });
 
         // Routes manage en PREMIER pour éviter que {caisse} intercepte /create
@@ -642,6 +688,90 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// ── [MODULE RH / PAIE] ───────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(function () {
+
+    // Employés
+    Route::prefix('employes')->name('employes.')->group(function () {
+        Route::get('/',             [\App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('index');
+        Route::get('/creer',        [\App\Http\Controllers\HR\EmployeeController::class, 'create'])->name('create');
+        Route::post('/',            [\App\Http\Controllers\HR\EmployeeController::class, 'store'])->name('store');
+        Route::get('/{employe}',    [\App\Http\Controllers\HR\EmployeeController::class, 'show'])->name('show');
+        Route::get('/{employe}/modifier', [\App\Http\Controllers\HR\EmployeeController::class, 'edit'])->name('edit');
+        Route::put('/{employe}',    [\App\Http\Controllers\HR\EmployeeController::class, 'update'])->name('update');
+        Route::delete('/{employe}', [\App\Http\Controllers\HR\EmployeeController::class, 'destroy'])->name('destroy');
+
+        // Contrats
+        Route::post('/{employe}/contrats', [\App\Http\Controllers\HR\EmployeeController::class, 'storeContract'])->name('contracts.store');
+
+        // Primes
+        Route::post('/{employe}/primes',              [\App\Http\Controllers\HR\EmployeeController::class, 'storeAllowance'])->name('allowances.store');
+        Route::delete('/{employe}/primes/{allowance}',[\App\Http\Controllers\HR\EmployeeController::class, 'destroyAllowance'])->name('allowances.destroy');
+    });
+
+    // Départements
+    Route::prefix('departements')->name('departments.')->group(function () {
+        Route::get('/',  [\App\Http\Controllers\HR\EmployeeController::class, 'departments'])->name('index');
+        Route::post('/', [\App\Http\Controllers\HR\EmployeeController::class, 'storeDepartment'])->name('store');
+    });
+
+    // Bulletins de paie
+    Route::prefix('paie')->name('paie.')->group(function () {
+        Route::get('/',              [\App\Http\Controllers\HR\PayrollRunController::class, 'index'])->name('index');
+        Route::get('/creer',         [\App\Http\Controllers\HR\PayrollRunController::class, 'create'])->name('create');
+        Route::post('/',             [\App\Http\Controllers\HR\PayrollRunController::class, 'store'])->name('store');
+
+        // Livre de paie (must be BEFORE /{run} wildcard to avoid conflict)
+        Route::get('/livre-paie',    [\App\Http\Controllers\HR\PayrollRunController::class, 'livrePaiePdf'])->name('livre-paie');
+
+        Route::get('/{run}',         [\App\Http\Controllers\HR\PayrollRunController::class, 'show'])->name('show');
+        Route::post('/{run}/calculer',   [\App\Http\Controllers\HR\PayrollRunController::class, 'calculate'])->name('calculate');
+        Route::post('/{run}/valider',    [\App\Http\Controllers\HR\PayrollRunController::class, 'approuver'])->name('validate');
+        Route::post('/{run}/payer',      [\App\Http\Controllers\HR\PayrollRunController::class, 'markPaid'])->name('mark-paid');
+
+        // Variables mensuelles (AJAX)
+        Route::get( '/{run}/variables',             [\App\Http\Controllers\HR\PayrollRunController::class, 'variables'])->name('variables');
+        Route::post('/{run}/variables',             [\App\Http\Controllers\HR\PayrollVariableController::class, 'store'])->name('variables.store');
+        Route::delete('/{run}/variables/{variable}',[\App\Http\Controllers\HR\PayrollVariableController::class, 'destroy'])->name('variables.destroy');
+
+        // PDF & Exports
+        Route::get('/{run}/bulletin/{item}/pdf', [\App\Http\Controllers\HR\PayrollRunController::class, 'bulletinPdf'])->name('bulletin-pdf');
+        Route::get('/{run}/recap-pdf',           [\App\Http\Controllers\HR\PayrollRunController::class, 'recapPdf'])->name('recap-pdf');
+        Route::get('/{run}/cnss-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssPdf'])->name('cnss-pdf');
+        Route::get('/{run}/iuts-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsPdf'])->name('iuts-pdf');
+        Route::get('/{run}/virement-csv',        [\App\Http\Controllers\HR\PayrollRunController::class, 'virementCsv'])->name('virement-csv');
+    });
+
+    // ── Dashboard RH ──────────────────────────────────────────────────────────
+    Route::get('/dashboard', [\App\Http\Controllers\HR\RhDashboardController::class, 'index'])->name('dashboard');
+
+    // ── Avances sur salaire ───────────────────────────────────────────────────
+    Route::prefix('avances')->name('avances.')->group(function () {
+        Route::get('/',                    [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'index'])->name('index');
+        Route::post('/',                   [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'store'])->name('store');
+        Route::post('/{advance}/approuver',[\App\Http\Controllers\HR\SalaryAdvanceController::class, 'approve'])->name('approve');
+        Route::post('/{advance}/annuler',  [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'cancel'])->name('cancel');
+    });
+
+    // ── Congés & Absences ─────────────────────────────────────────────────────
+    Route::prefix('conges')->name('conges.')->group(function () {
+        Route::get('/',                        [\App\Http\Controllers\HR\LeaveController::class, 'index'])->name('index');
+        Route::post('/',                       [\App\Http\Controllers\HR\LeaveController::class, 'store'])->name('store');
+        Route::post('/{leave}/approuver',      [\App\Http\Controllers\HR\LeaveController::class, 'approve'])->name('approve');
+        Route::post('/{leave}/refuser',        [\App\Http\Controllers\HR\LeaveController::class, 'refuse'])->name('refuse');
+        Route::get('/soldes',                  [\App\Http\Controllers\HR\LeaveController::class, 'balances'])->name('balances');
+        Route::get('/types',                   [\App\Http\Controllers\HR\LeaveController::class, 'indexTypes'])->name('types.index');
+        Route::post('/types',                  [\App\Http\Controllers\HR\LeaveController::class, 'storeType'])->name('types.store');
+    });
+});
+
+// ── [CONCURRENCE-MULTI-USER] Edit Locks ──────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('edit-lock')->name('edit-lock.')->group(function () {
+    Route::post('refresh',       [\App\Http\Controllers\EditLockController::class, 'refresh'])->name('refresh');
+    Route::post('release',       [\App\Http\Controllers\EditLockController::class, 'release'])->name('release');
+    Route::post('force-release', [\App\Http\Controllers\EditLockController::class, 'forceRelease'])->name('force-release');
 });
 
 // ── Notifications ─────────────────────────────────────────────────────────────

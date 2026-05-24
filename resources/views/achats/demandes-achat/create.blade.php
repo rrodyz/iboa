@@ -122,7 +122,7 @@
                                         <input type="number" :name="`items[${index}][quantity]`"
                                                x-model="line.quantity"
                                                @input="calcLine(index)"
-                                               min="0.001" step="0.001"
+                                               min="1" step="1" inputmode="numeric"
                                                class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-amber-500">
                                     </td>
                                     <td class="py-2 pr-2">

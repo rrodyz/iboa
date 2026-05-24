@@ -17,14 +17,15 @@ class UpdateClientRequest extends FormRequest
 
         return [
             'name'             => 'required|string|max:150',
+            // [ANTI-DUPLICATE] Ignore l'enregistrement courant pour l'update.
             'code'             => 'nullable|string|max:30|unique:clients,code,' . $clientId,
             'type'             => 'required|in:particulier,entreprise',
-            'email'            => 'nullable|email|max:150',
+            'email'            => 'nullable|email|max:150|unique:clients,email,' . $clientId,
             'phone'            => 'nullable|string|max:20',
             'mobile'           => 'nullable|string|max:20',
             'website'          => 'nullable|url|max:150',
-            'ifu'              => 'nullable|string|max:50',
-            'rccm'             => 'nullable|string|max:50',
+            'ifu'              => 'nullable|string|max:50|unique:clients,ifu,' . $clientId,
+            'rccm'             => 'nullable|string|max:50|unique:clients,rccm,' . $clientId,
             'tax_regime'       => 'nullable|string|max:100',
             'tax_division'     => 'nullable|string|max:150',
             'tax_rate_ids'     => 'nullable|array',
@@ -63,6 +64,18 @@ class UpdateClientRequest extends FormRequest
             'credit_limit'     => 'limite de crédit',
             'payment_days'     => 'délai de paiement',
             'default_discount' => 'remise par défaut',
+            'ifu'              => 'IFU / NIF',
+            'rccm'             => 'RCCM',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'code.unique'  => 'Un autre client utilise déjà ce code interne.',
+            'email.unique' => 'Un autre client est déjà enregistré avec cette adresse email.',
+            'ifu.unique'   => 'Un autre client est déjà enregistré avec ce numéro IFU/NIF.',
+            'rccm.unique'  => 'Un autre client est déjà enregistré avec ce numéro RCCM.',
         ];
     }
 }

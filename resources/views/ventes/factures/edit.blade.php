@@ -26,9 +26,14 @@
 </div>
 @endif
 
+{{-- [CONCURRENCE] Bandeau de verrou d'édition --}}
+<x-edit-lock-banner :model="$invoice" model-type="Invoice" :edit-lock="$editLock ?? null" />
+
 <form method="POST" action="{{ route('ventes.factures.update', $invoice) }}">
     @csrf
     @method('PUT')
+    {{-- [CONCURRENCE] Protection anti-double-soumission + verrou optimiste --}}
+    <x-form-guard :model="$invoice" />
     @include('ventes.factures._form')
 </form>
 @endsection

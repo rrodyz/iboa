@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers\Treasury;
 
+use App\Helpers\NumberHelper;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Treasury\StoreSupplierPaymentRequest;
 use App\Models\CashAccount;
+use App\Models\Company;
 use App\Models\PaymentMethod;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Repositories\SupplierPaymentRepository;
 use App\Services\SupplierPaymentService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,14 +46,54 @@ class SupplierPaymentController extends Controller
     /**
      * Show the payment creation form.
      */
-    public function create(Request $request): View
+    public function create(Request $request)
     {
         $suppliers      = Supplier::active()->orderBy('name')->get(['id', 'name']);
         $paymentMethods = PaymentMethod::where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'type', 'requires_reference', 'is_mobile_money']);
         $cashAccounts   = CashAccount::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
         $selectedSupplier = $request->query('supplier_id');
 
+        // [PENDING-PAYMENT-GUARD-UI] Bloque la création si le fournisseur a déjà
+        // des décaissements non imputés en attente.
+        if ($selectedSupplier) {
+            $pending = $this->checkPendingUnallocated((int) $selectedSupplier);
+            if ($pending) {
+                return redirect()
+                    ->route('tresorerie.decaissements.show', $pending['payment_id'])
+                    ->with('error', $pending['message']);
+            }
+        }
+
         return view('tresorerie.decaissements.create', compact('suppliers', 'paymentMethods', 'cashAccounts', 'selectedSupplier'));
+    }
+
+    private function checkPendingUnallocated(int $supplierId): ?array
+    {
+        $pending = \App\Models\SupplierPayment::where('supplier_id', $supplierId)
+            ->where('unallocated_amount', '>', 0)
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->get(['id', 'number', 'amount', 'unallocated_amount']);
+
+        if ($pending->isEmpty()) return null;
+
+        $supplier = Supplier::find($supplierId);
+        $totalPending = $pending->sum('unallocated_amount');
+        $count        = $pending->count();
+        $first        = $pending->first();
+
+        return [
+            'payment_id' => $first->id,
+            'message'    => sprintf(
+                "🔒 Création de décaissement bloquée pour %s : %d décaissement(s) non imputé(s) en attente "
+                . "totalisant %s FCFA (le plus ancien : %s). "
+                . "Imputez d'abord ce(s) décaissement(s) sur ses factures à payer avant d'en saisir un nouveau.",
+                $supplier?->name ?? 'ce fournisseur',
+                $count,
+                number_format($totalPending, 0, ',', ' '),
+                $first->number
+            ),
+        ];
     }
 
     /**
@@ -58,11 +101,31 @@ class SupplierPaymentController extends Controller
      */
     public function store(StoreSupplierPaymentRequest $request): RedirectResponse
     {
-        $payment = $this->service->create($request->validated());
+        try {
+            $payment = $this->service->create($request->validated());
+        } catch (\RuntimeException $e) {
+            // [GUARD-UX] Anti-doublon / facture verrouillée : message clair au lieu de 500.
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('tresorerie.decaissements.show', $payment)
             ->with('success', 'Décaissement enregistré avec succès.');
+    }
+
+    /**
+     * Generate and download the supplier payment receipt as PDF.
+     */
+    public function recu(SupplierPayment $decaissement): mixed
+    {
+        $payment       = $this->repository->findWithDetails($decaissement->id);
+        $company       = Company::first();
+        $amountInWords = NumberHelper::toWords((int) $payment->amount);
+
+        $pdf = Pdf::loadView('tresorerie.decaissements.pdf.receipt', compact('payment', 'company', 'amountInWords'))
+            ->setPaper([0, 0, 419.53, 595.28]); // A5 portrait
+
+        return $pdf->download('recu_dec_' . $payment->number . '_' . now()->format('Ymd') . '.pdf');
     }
 
     /**

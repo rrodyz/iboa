@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Purchases;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\StorePurchaseOrderRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseOrderRequest;
+use App\Http\Traits\ManagesEditLock;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
@@ -15,6 +16,8 @@ use Illuminate\Http\Request;
 
 class PurchaseOrderController extends Controller
 {
+    use ManagesEditLock;
+
     public function __construct(private PurchaseOrderService $service) {}
 
     public function index(Request $request)
@@ -57,17 +60,28 @@ class PurchaseOrderController extends Controller
     public function edit(PurchaseOrder $commande)
     {
         $this->authorize('update', $commande);
+
+        // [CONCURRENCE] Acquisition du verrou d'édition
+        $lock = $this->acquireLockOr($commande, 'achats.commandes.show', $commande);
+        if ($lock instanceof \Illuminate\Http\RedirectResponse) return $lock;
+
         $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
         $suppliers     = Supplier::active()->orderBy('name')->get(['id', 'name']);
         $products      = Product::active()->orderBy('name')->get(['id', 'name', 'reference', 'purchase_price']);
+        $editLock      = $lock;
 
-        return view('achats.commandes.edit', compact('purchaseOrder', 'suppliers', 'products'));
+        return view('achats.commandes.edit', compact('purchaseOrder', 'suppliers', 'products', 'editLock'));
     }
 
     public function update(UpdatePurchaseOrderRequest $request, PurchaseOrder $commande)
     {
         $this->authorize('update', $commande);
-        $this->service->update($commande, $request->validated());
+        try {
+            $this->service->update($commande, $request->validated());
+            $this->releaseLock($commande); // [CONCURRENCE] Libère le verrou
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('achats.commandes.show', $commande)
@@ -85,6 +99,18 @@ class PurchaseOrderController extends Controller
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * [ACHATS-PRO] Duplique un bon de commande en brouillon.
+     */
+    public function duplicate(PurchaseOrder $commande)
+    {
+        $this->authorize('create', PurchaseOrder::class);
+        $new = $this->service->duplicate($commande);
+        return redirect()
+            ->route('achats.commandes.show', $new)
+            ->with('success', "Bon de commande dupliqué : {$new->number}. Statut : brouillon.");
     }
 
     /**

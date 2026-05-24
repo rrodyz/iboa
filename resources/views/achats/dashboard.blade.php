@@ -72,7 +72,21 @@
         <div class="bg-white rounded-xl border border-gray-200 p-5">
             <p class="text-xs font-medium text-gray-500 uppercase">Volume mois</p>
             <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $fmt($kpis['month_volume']) }}</p>
-            <p class="text-xs text-gray-400 mt-0.5">FCFA · {{ now()->translatedFormat('F') }}</p>
+            @if($kpis['volume_variation_pct'] !== null)
+                @php $up = $kpis['volume_variation_pct'] >= 0; @endphp
+                <p class="text-xs mt-0.5 {{ $up ? 'text-amber-600' : 'text-emerald-600' }}">
+                    {{ $up ? '↑' : '↓' }} {{ abs($kpis['volume_variation_pct']) }} % vs mois -1
+                </p>
+            @else
+                <p class="text-xs text-gray-400 mt-0.5">FCFA · {{ now()->translatedFormat('F') }}</p>
+            @endif
+        </div>
+
+        {{-- [ACHATS-PRO] DPO — Days Payable Outstanding --}}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase">📅 DPO</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $kpis['dpo_days'] }} j</p>
+            <p class="text-xs text-gray-400 mt-0.5">délai moyen de paiement fournisseurs</p>
         </div>
 
         <a href="{{ route('achats.dashboard.matching') }}" class="bg-white rounded-xl border-2 {{ ($matchingPreview['qty_count']+$matchingPreview['amount_count']) > 0 ? 'border-amber-300' : 'border-emerald-300' }} p-5 transition-colors block">
@@ -128,13 +142,13 @@
             @endif
         </div>
 
-        {{-- Top 5 fournisseurs --}}
+        {{-- Top 5 fournisseurs (scorecards qualité) --}}
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                <h2 class="text-sm font-semibold text-gray-700">🏆 Top fournisseurs (12 mois)</h2>
+                <h2 class="text-sm font-semibold text-gray-700">🏆 Scorecards fournisseurs (12 mois)</h2>
                 <a href="{{ route('achats.dashboard.suppliers') }}" class="text-xs text-blue-600 hover:underline">Évaluation complète →</a>
             </div>
-            @if($topSuppliers->isEmpty())
+            @if($topScorecards->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucun fournisseur actif.</div>
             @else
             <table class="min-w-full text-sm">
@@ -146,7 +160,7 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
-                    @foreach($topSuppliers as $s)
+                    @foreach($topScorecards as $s)
                     @php $gradeBg = ['A'=>'bg-emerald-100 text-emerald-800','B'=>'bg-blue-100 text-blue-800','C'=>'bg-amber-100 text-amber-800','D'=>'bg-orange-100 text-orange-800','E'=>'bg-red-100 text-red-800'][$s->grade ?? 'C']; @endphp
                     <tr>
                         <td class="px-4 py-2">
@@ -163,6 +177,115 @@
             </table>
             @endif
         </div>
+    </div>
+
+    {{-- [ACHATS-PRO] Pipeline PO par statut (funnel Odoo-style) --}}
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100">
+            <h2 class="text-sm font-semibold text-gray-700">📊 Pipeline bons de commande — répartition par statut</h2>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 p-4">
+            @foreach($pipeline as $key => $stage)
+                @php
+                    $colors = [
+                        'brouillon' => 'gray', 'confirmee' => 'blue', 'partiellement_recue' => 'amber',
+                        'recue' => 'emerald', 'facture' => 'violet', 'annulee' => 'red',
+                    ];
+                    $c = $colors[$key] ?? 'gray';
+                @endphp
+                <div class="text-center p-3 rounded-lg bg-{{ $c }}-50 border border-{{ $c }}-200">
+                    <p class="text-xs text-{{ $c }}-700 font-medium">{{ $stage['label'] }}</p>
+                    <p class="text-2xl font-bold tabular-nums text-{{ $c }}-800 mt-1">{{ $stage['count'] }}</p>
+                    <p class="text-xs text-{{ $c }}-600 mt-0.5">{{ $fmt($stage['total']) }}</p>
+                </div>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- [ACHATS-PRO] Top fournisseurs (volume) + Top articles + Évolution --}}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {{-- Top fournisseurs par CA achats --}}
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">💼 Top fournisseurs par CA achats — 12 mois</h2></div>
+            @if($topSuppliers->isEmpty())
+                <div class="p-6 text-center text-gray-400 text-sm">Aucun achat sur 12 mois.</div>
+            @else
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr><th class="px-4 py-2 text-left">Fournisseur</th><th class="px-4 py-2 text-right">CA TTC</th><th class="px-4 py-2 text-right">Reste à payer</th></tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach($topSuppliers as $s)
+                    <tr>
+                        <td class="px-4 py-2">
+                            <p class="text-sm">{{ $s->name }}</p>
+                            <p class="text-xs text-gray-500">{{ $s->invoices_count }} facture(s)</p>
+                        </td>
+                        <td class="px-4 py-2 text-right tabular-nums font-medium">{{ $fmt($s->total_ttc) }}</td>
+                        <td class="px-4 py-2 text-right tabular-nums {{ $s->outstanding > 0 ? 'text-orange-700' : 'text-gray-400' }}">{{ $fmt($s->outstanding) }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @endif
+        </div>
+
+        {{-- Top articles achetés --}}
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">📦 Top articles achetés — 12 mois</h2></div>
+            @if($topProducts->isEmpty())
+                <div class="p-6 text-center text-gray-400 text-sm">Aucun achat.</div>
+            @else
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr><th class="px-4 py-2 text-left">Article</th><th class="px-4 py-2 text-right">Quantité</th><th class="px-4 py-2 text-right">CA HT</th></tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    @foreach($topProducts as $p)
+                    <tr>
+                        <td class="px-4 py-2">
+                            <span class="font-mono text-xs text-blue-700">{{ $p->reference }}</span>
+                            <p class="text-sm">{{ $p->name }}</p>
+                        </td>
+                        <td class="px-4 py-2 text-right tabular-nums">{{ number_format($p->qty_bought, 2, ',', ' ') }}</td>
+                        <td class="px-4 py-2 text-right tabular-nums font-medium">{{ $fmt($p->total_ht) }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            @endif
+        </div>
+    </div>
+
+    {{-- [ACHATS-PRO] Évolution mensuelle 12 mois --}}
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">📈 Évolution mensuelle des achats — 12 mois</h2></div>
+        @if($monthly->isEmpty())
+            <div class="p-6 text-center text-gray-400 text-sm">Pas de données.</div>
+        @else
+        <table class="min-w-full text-sm">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr><th class="px-4 py-2 text-left">Mois</th><th class="px-4 py-2 text-right">CA TTC</th><th class="px-4 py-2 text-right"># factures</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                @php $maxCa = $monthly->max('total_ttc') ?: 1; @endphp
+                @foreach($monthly as $m)
+                @php $pct = $m->total_ttc > 0 ? round($m->total_ttc / $maxCa * 100, 0) : 0; @endphp
+                <tr>
+                    <td class="px-4 py-2 text-xs">{{ \Carbon\Carbon::createFromFormat('Y-m', $m->month)->translatedFormat('M Y') }}</td>
+                    <td class="px-4 py-2 text-right">
+                        <div class="inline-flex items-center gap-2 justify-end">
+                            <div class="w-16 bg-gray-200 rounded h-1.5"><div class="h-1.5 rounded bg-amber-500" style="width: {{ $pct }}%"></div></div>
+                            <span class="tabular-nums text-xs font-medium">{{ $fmt($m->total_ttc) }}</span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-600">{{ $m->invoices_count }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+        @endif
     </div>
 
     {{-- Preview écarts 3-way --}}

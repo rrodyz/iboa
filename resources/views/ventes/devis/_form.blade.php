@@ -156,11 +156,11 @@ window._quoteFormData = {
                                 </select>
                             </td>
 
-                            {{-- Quantité --}}
+                            {{-- Quantité — step=0.01 pour autoriser les fractions sans forcer l'affichage "1,0" en locale FR --}}
                             <td class="px-3 py-2">
                                 <input type="number" :name="'items[' + index + '][quantity]'"
                                        x-model.number="item.quantity"
-                                       min="0.0001" step="any"
+                                       min="1" step="1" inputmode="numeric"
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                             </td>
 
@@ -176,7 +176,7 @@ window._quoteFormData = {
                             <td class="px-3 py-2">
                                 <input type="number" :name="'items[' + index + '][discount_percent]'"
                                        x-model.number="item.discount_percent"
-                                       min="0" max="100" step="0.01"
+                                       min="0" max="100" step="1" inputmode="numeric"
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                             </td>
 
@@ -184,7 +184,7 @@ window._quoteFormData = {
                             <td class="px-3 py-2">
                                 <input type="number" :name="'items[' + index + '][tax_rate_value]'"
                                        x-model.number="item.tax_rate_value"
-                                       min="0" max="100" step="0.01"
+                                       min="0" max="100" step="1" inputmode="numeric"
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
                             </td>
 
@@ -295,7 +295,7 @@ function quoteForm() {
             _key:             nextKey++,
             product_id:       i.product_id        ?? '',
             description:      i.description       ?? '',
-            quantity:         parseFloat(i.quantity)         || 1,
+            quantity:         parseInt(i.quantity, 10) || 1,   // [FIX-QTY] entier propre, pas "1,0"
             unit_price:       parseFloat(i.unit_price)       || 0,
             discount_percent: parseFloat(i.discount_percent) || 0,
             tax_rate_value:   parseFloat(i.tax_rate_value)   || 18,

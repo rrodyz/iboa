@@ -62,6 +62,19 @@ class SupplierInvoiceService
     public function update(SupplierInvoice $inv, array $data): SupplierInvoice
     {
         return DB::transaction(function () use ($inv, $data) {
+            // [INVOICE-LOCKED-GUARD] Une FF validée/payée/partiellement payée/en retard/annulée
+            // ne peut plus être modifiée — utiliser un retour fournisseur pour corriger.
+            $inv = SupplierInvoice::lockForUpdate()->findOrFail($inv->id);
+
+            if (!in_array($inv->status, ['brouillon', 'recue'], true)) {
+                throw new \RuntimeException(sprintf(
+                    "La facture fournisseur %s est « %s » — la modification est interdite. "
+                    . "Pour corriger une erreur, créez un retour fournisseur ou annulez puis ressaisissez.",
+                    $inv->number,
+                    $inv->status
+                ));
+            }
+
             $items = $data['items'] ?? null;
             unset($data['items']);
 

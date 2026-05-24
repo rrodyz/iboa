@@ -15,14 +15,15 @@ class StoreSupplierRequest extends FormRequest
     {
         return [
             'name'    => 'required|string|max:150',
+            // [ANTI-DUPLICATE] Identifiants structurants : code, email, IFU, RCCM uniques.
             'code'    => 'nullable|string|max:30|unique:suppliers,code',
             'type'    => 'nullable|in:particulier,entreprise',
-            'email'   => 'nullable|email|max:150',
+            'email'   => 'nullable|email|max:150|unique:suppliers,email',
             'phone'   => 'nullable|string|max:20',
             'phone2'  => 'nullable|string|max:20',
             'website' => 'nullable|url|max:150',
-            'ifu'     => 'nullable|string|max:50',
-            'rccm'    => 'nullable|string|max:50',
+            'ifu'     => 'nullable|string|max:50|unique:suppliers,ifu',
+            'rccm'    => 'nullable|string|max:50|unique:suppliers,rccm',
             'address' => 'nullable|string|max:255',
             'city'    => 'nullable|string|max:100',
             'country' => 'nullable|string|max:100',
@@ -57,6 +58,16 @@ class StoreSupplierRequest extends FormRequest
             'email' => 'adresse e-mail',
             'ifu'   => 'IFU',
             'rccm'  => 'RCCM',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'code.unique'  => 'Ce fournisseur existe déjà avec ce code interne.',
+            'email.unique' => 'Ce fournisseur existe déjà avec cette adresse email.',
+            'ifu.unique'   => 'Ce fournisseur existe déjà avec ce numéro IFU.',
+            'rccm.unique'  => 'Ce fournisseur existe déjà avec ce numéro RCCM.',
         ];
     }
 }

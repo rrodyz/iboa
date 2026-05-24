@@ -90,4 +90,15 @@ class StoreProductRequest extends FormRequest
             'has_expiry_date'   => $this->boolean('has_expiry_date',   false),
         ]);
     }
+
+    /**
+     * [ANTI-DUPLICATE] Messages explicites pour les unicités produit.
+     */
+    public function messages(): array
+    {
+        return [
+            'reference.unique' => 'Cet article existe déjà avec cette référence interne.',
+            'barcode.unique'   => 'Cet article existe déjà avec ce code-barres (EAN).',
+        ];
+    }
 }

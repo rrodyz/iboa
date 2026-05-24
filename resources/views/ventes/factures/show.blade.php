@@ -59,6 +59,13 @@
                 @if($isOverdue)
                     <span class="badge bg-red-600 text-white font-bold">EN RETARD</span>
                 @endif
+                {{-- [INVOICE-LOCKED-GUARD] Badge "Verrouillée" pour les factures soldées --}}
+                @if($invoice->status === 'payee' || (int) $invoice->remaining_amount === 0)
+                    <span class="badge bg-gray-800 text-white font-bold inline-flex items-center gap-1" title="Cette facture est entièrement réglée et ne peut plus recevoir de nouveau paiement">
+                        <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                        VERROUILLÉE
+                    </span>
+                @endif
                 <span class="text-gray-500 text-sm">{{ $invoice->client?->name }}</span>
             </div>
 
@@ -106,15 +113,35 @@
                 </form>
                 @endif
 
-                {{-- Enregistrer un paiement --}}
-                @if(!in_array($invoice->status, ['brouillon', 'payee', 'annulee']))
-                <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $invoice->client_id]) }}"
+                {{-- Encaisser : actif uniquement pour factures encaissables, grisé sinon --}}
+                @php
+                    $canEncaisser = !in_array($invoice->status, ['brouillon', 'payee', 'annulee']);
+                    $disabledReason = match (true) {
+                        $invoice->status === 'brouillon' => 'Validez d\'abord la facture avant de pouvoir encaisser',
+                        $invoice->status === 'payee'     => 'Facture entièrement payée — verrouillée, aucun nouvel encaissement possible',
+                        $invoice->status === 'annulee'   => 'Facture annulée — aucun encaissement possible',
+                        default => null,
+                    };
+                @endphp
+                @if($canEncaisser)
+                <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $invoice->client_id, 'invoice_id' => $invoice->id]) }}"
                    class="inline-flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
                     </svg>
                     Encaisser
                 </a>
+                @else
+                {{-- [INVOICE-LOCKED-GUARD] Bouton grisé non cliquable + tooltip explicatif --}}
+                <button type="button" disabled
+                        title="{{ $disabledReason }}"
+                        aria-disabled="true"
+                        class="inline-flex items-center gap-2 px-3 py-2 bg-gray-300 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed opacity-70 select-none">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/>
+                    </svg>
+                    Encaisser
+                </button>
                 @endif
 
                 {{-- Créer un avoir --}}
@@ -171,6 +198,21 @@
                 </a>
             </div>
         </div>
+
+        {{-- [INVOICE-LOCKED-GUARD] Bandeau explicite quand la facture est verrouillée --}}
+        @if($invoice->status === 'payee' || (int) $invoice->remaining_amount === 0)
+        <div class="mt-4 bg-gray-100 border-l-4 border-gray-800 rounded-lg p-3 flex items-start gap-3">
+            <svg class="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+            <div class="text-sm text-gray-800">
+                <p class="font-semibold">Facture verrouillée — entièrement réglée</p>
+                <p class="text-xs text-gray-600 mt-0.5">
+                    Cette facture ne peut plus recevoir de nouveau paiement (total payé : {{ number_format($invoice->paid_amount, 0, ',', ' ') }} FCFA, reste à payer : 0).
+                    En cas de paiement excédentaire reçu, créez un <a href="{{ route('ventes.avoirs.create', ['invoice_id' => $invoice->id]) }}" class="underline font-medium">avoir client</a>
+                    ou laissez le paiement en crédit non alloué côté trésorerie.
+                </p>
+            </div>
+        </div>
+        @endif
     </div>
 
     {{-- En-tête document avec logo --}}
@@ -571,6 +613,274 @@
             </form>
         </div>
     </div>
+
+
+    {{-- ── Échéancier client ──────────────────────────────────────────────────── --}}
+    @if(!in_array($invoice->status, ['brouillon','annulee','payee']))
+    @php $schedules = $invoice->paymentSchedules; @endphp
+    <div class="bg-white rounded-xl border border-indigo-200 overflow-hidden"
+         x-data="{ tab: '{{ $schedules->count() ? 'view' : 'create' }}', mode: 'percent', rows: [{ percent: 100, days_after: 0, label: '' }], customRows: [{ due_date: '', amount: '', label: '' }] }">
+
+        {{-- Header --}}
+        <div class="px-4 py-3 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <h2 class="text-sm font-bold text-indigo-700">Échéancier de paiement</h2>
+                @if($schedules->count())
+                <span class="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                    {{ $schedules->count() }} échéance(s)
+                </span>
+                @endif
+            </div>
+            <div class="flex items-center gap-2">
+                @if($schedules->count())
+                <button @click="tab = (tab === 'view' ? 'create' : 'view')"
+                        class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">
+                    <span x-text="tab === 'view' ? 'Modifier' : 'Voir les échéances'"></span>
+                </button>
+                @endif
+            </div>
+        </div>
+
+        {{-- View existing schedule --}}
+        @if($schedules->count())
+        <div x-show="tab === 'view'">
+            <table class="w-full text-sm">
+                <thead class="bg-indigo-700 text-white">
+                    <tr>
+                        <th class="px-4 py-2.5 text-left font-semibold">Libellé</th>
+                        <th class="px-4 py-2.5 text-center font-semibold">Échéance</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Montant</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Payé</th>
+                        <th class="px-4 py-2.5 text-right font-semibold">Reste</th>
+                        <th class="px-4 py-2.5 text-center font-semibold">Statut</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-indigo-50">
+                    @foreach($schedules as $sch)
+                    @php
+                        $schColors = ['en_attente'=>'gray','partiel'=>'amber','paye'=>'green','annule'=>'red'];
+                        $schLabels = ['en_attente'=>'En attente','partiel'=>'Partiel','paye'=>'Payé','annule'=>'Annulé'];
+                        $sc2 = $schColors[$sch->status] ?? 'gray';
+                        $isLate = $sch->isOverdue();
+                    @endphp
+                    <tr class="hover:bg-indigo-50 {{ $isLate ? 'bg-rose-50' : '' }}">
+                        <td class="px-4 py-2.5 text-gray-700">
+                            {{ $sch->label ?: ('Échéance '.$sch->installment_number) }}
+                        </td>
+                        <td class="px-4 py-2.5 text-center {{ $isLate ? 'text-rose-700 font-semibold' : 'text-gray-700' }}">
+                            {{ $sch->due_date->format('d/m/Y') }}
+                            @if($isLate)
+                            <span class="ml-1 text-xs text-rose-600 font-bold">
+                                ({{ now()->diffInDays($sch->due_date) }}j)
+                            </span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($sch->amount, 0, ',', ' ') }}</td>
+                        <td class="px-4 py-2.5 text-right tabular-nums text-green-700">{{ number_format($sch->paid_amount, 0, ',', ' ') }}</td>
+                        <td class="px-4 py-2.5 text-right tabular-nums font-bold {{ $sch->remainingAmount() > 0 ? 'text-orange-600' : 'text-gray-400' }}">
+                            {{ number_format($sch->remainingAmount(), 0, ',', ' ') }}
+                        </td>
+                        <td class="px-4 py-2.5 text-center">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-{{ $sc2 }}-100 text-{{ $sc2 }}-700">
+                                {{ $schLabels[$sch->status] ?? $sch->status }}
+                            </span>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+                <tfoot class="bg-indigo-50">
+                    <tr>
+                        <td colspan="2" class="px-4 py-2.5 text-sm font-semibold text-indigo-800 text-right">Totaux</td>
+                        <td class="px-4 py-2.5 text-right tabular-nums font-bold text-indigo-800">{{ number_format($schedules->sum('amount'), 0, ',', ' ') }}</td>
+                        <td class="px-4 py-2.5 text-right tabular-nums font-bold text-green-700">{{ number_format($schedules->sum('paid_amount'), 0, ',', ' ') }}</td>
+                        <td class="px-4 py-2.5 text-right tabular-nums font-bold text-orange-600">{{ number_format($schedules->sum(fn($s) => $s->remainingAmount()), 0, ',', ' ') }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+            {{-- Delete all --}}
+            <div class="px-4 py-3 border-t border-indigo-100 flex justify-end">
+                <form action="{{ route('ventes.factures.schedules.destroy-all', $invoice) }}" method="POST"
+                      onsubmit="return confirm('Supprimer tout l\'échéancier ?')">
+                    @csrf @method('DELETE')
+                    <button type="submit"
+                            class="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Supprimer l'échéancier
+                    </button>
+                </form>
+            </div>
+        </div>
+        @endif
+
+        {{-- Create/Edit schedule --}}
+        <div x-show="tab === 'create'" class="p-4 space-y-4">
+
+            {{-- Mode toggle --}}
+            <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+                <button type="button" @click="mode = 'percent'"
+                        :class="mode === 'percent' ? 'bg-white shadow text-indigo-700 font-semibold' : 'text-gray-500 hover:text-gray-700'"
+                        class="px-3 py-1.5 rounded-md text-sm transition-all">
+                    Par tranches (%)
+                </button>
+                <button type="button" @click="mode = 'custom'"
+                        :class="mode === 'custom' ? 'bg-white shadow text-indigo-700 font-semibold' : 'text-gray-500 hover:text-gray-700'"
+                        class="px-3 py-1.5 rounded-md text-sm transition-all">
+                    Dates & montants
+                </button>
+            </div>
+
+            {{-- Percent mode --}}
+            <div x-show="mode === 'percent'">
+                <form action="{{ route('ventes.factures.schedules.store', $invoice) }}" method="POST" class="space-y-3">
+                    @csrf
+                    <div class="space-y-2" id="pct-rows">
+                        <template x-for="(row, i) in rows" :key="i">
+                            <div class="flex items-center gap-2">
+                                <input type="number" :name="'installments['+i+'][percent]'"
+                                       x-model="row.percent" min="1" max="100" step="0.01"
+                                       placeholder="%" required
+                                       class="w-20 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm text-center focus:ring-2 focus:ring-indigo-400">
+                                <span class="text-gray-400 text-sm">%</span>
+                                <input type="number" :name="'installments['+i+'][days_after]'"
+                                       x-model="row.days_after" min="0"
+                                       placeholder="jours après"
+                                       class="w-28 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400">
+                                <span class="text-gray-400 text-xs whitespace-nowrap">j. après émission</span>
+                                <input type="text" :name="'installments['+i+'][label]'"
+                                       x-model="row.label" placeholder="Libellé (optionnel)"
+                                       class="flex-1 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400">
+                                <button type="button" @click="rows.splice(i,1)" x-show="rows.length > 1"
+                                        class="text-red-400 hover:text-red-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1">
+                        <div class="flex items-center gap-3">
+                            <button type="button" @click="rows.push({ percent: 0, days_after: 30, label: '' })"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Ajouter une tranche
+                            </button>
+                            <span class="text-xs"
+                                  :class="Math.abs(rows.reduce((s,r)=>s+parseFloat(r.percent||0),0)-100)<0.01 ? 'text-green-600 font-medium' : 'text-orange-500'">
+                                Total : <strong x-text="rows.reduce((s,r)=>s+parseFloat(r.percent||0),0).toFixed(1)"></strong> %
+                                <span x-show="Math.abs(rows.reduce((s,r)=>s+parseFloat(r.percent||0),0)-100)>=0.01">(doit être 100)</span>
+                            </span>
+                        </div>
+                        <button type="submit"
+                                class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Créer l'échéancier
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            {{-- Custom mode --}}
+            <div x-show="mode === 'custom'">
+                <form action="{{ route('ventes.factures.schedules.store-custom', $invoice) }}" method="POST" class="space-y-3">
+                    @csrf
+                    <p class="text-xs text-gray-500">
+                        Total facture : <strong class="tabular-nums">{{ number_format($invoice->total_ttc, 0, ',', ' ') }} FCFA</strong>
+                        — la somme des montants doit être exactement égale.
+                    </p>
+                    <div class="space-y-2">
+                        <template x-for="(row, i) in customRows" :key="i">
+                            <div class="flex items-center gap-2">
+                                <input type="date" :name="'rows['+i+'][due_date]'"
+                                       x-model="row.due_date" required
+                                       class="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400">
+                                <input type="number" :name="'rows['+i+'][amount]'"
+                                       x-model="row.amount" min="1" required
+                                       placeholder="Montant FCFA"
+                                       class="w-40 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm tabular-nums focus:ring-2 focus:ring-indigo-400">
+                                <input type="text" :name="'rows['+i+'][label]'"
+                                       x-model="row.label" placeholder="Libellé"
+                                       class="flex-1 border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400">
+                                <button type="button" @click="customRows.splice(i,1)" x-show="customRows.length > 1"
+                                        class="text-red-400 hover:text-red-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="flex items-center justify-between pt-1">
+                        <div class="flex items-center gap-3">
+                            <button type="button" @click="customRows.push({ due_date: '', amount: '', label: '' })"
+                                    class="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                </svg>
+                                Ajouter une ligne
+                            </button>
+                            <span class="text-xs"
+                                  :class="customRows.reduce((s,r)=>s+parseInt(r.amount||0),0)==={{ (int) $invoice->total_ttc }} ? 'text-green-600 font-medium' : 'text-orange-500'">
+                                Saisi : <strong class="tabular-nums" x-text="customRows.reduce((s,r)=>s+parseInt(r.amount||0),0).toLocaleString('fr-FR')"></strong> FCFA
+                            </span>
+                        </div>
+                        <button type="submit"
+                                class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            Créer l'échéancier
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>{{-- /create --}}
+    </div>
+    @endif
+
+    {{-- [LIAISONS] Documents liés au cycle de vente --}}
+    @php
+        $relatedLinks = [];
+        if ($invoice->order) {
+            $relatedLinks[] = [
+                'icon' => '📋', 'label' => 'Commande ' . $invoice->order->number,
+                'href' => route('ventes.commandes.show', $invoice->order),
+                'subtitle' => 'Du ' . $invoice->order->ordered_at?->format('d/m/Y'),
+                'badge' => ucfirst((string) $invoice->order->status), 'badgeColor' => 'blue',
+            ];
+        }
+        if ($invoice->deliveryNote) {
+            $relatedLinks[] = [
+                'icon' => '🚚', 'label' => 'Bon de livraison ' . $invoice->deliveryNote->number,
+                'href' => route('ventes.bons-livraison.show', $invoice->deliveryNote),
+                'badge' => ucfirst((string) $invoice->deliveryNote->status), 'badgeColor' => 'teal',
+            ];
+        }
+        foreach ($invoice->creditNotes ?? [] as $cn) {
+            $relatedLinks[] = [
+                'icon' => '↩️', 'label' => 'Avoir ' . $cn->number,
+                'href' => route('ventes.avoirs.show', $cn),
+                'subtitle' => number_format($cn->total_ttc, 0, ',', ' ') . ' FCFA',
+                'badge' => ucfirst((string) $cn->status), 'badgeColor' => 'orange',
+            ];
+        }
+    @endphp
+    <x-document.related :links="$relatedLinks" />
+
+    <x-audit.timeline :model="\App\Models\Invoice::class" :id="$invoice->id" />
 
 </div>
 @endsection

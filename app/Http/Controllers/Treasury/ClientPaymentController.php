@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Treasury;
 
 use App\Exports\ClientPaymentsExport;
+use App\Helpers\NumberHelper;
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Requests\Treasury\StoreClientPaymentRequest;
 use App\Models\CashAccount;
 use App\Models\Client;
 use App\Models\ClientPayment;
+use App\Models\Invoice;
 use App\Models\PaymentMethod;
 use App\Repositories\ClientPaymentRepository;
 use App\Services\ClientPaymentService;
@@ -93,7 +96,7 @@ class ClientPaymentController extends Controller
     /**
      * Show the payment creation form.
      */
-    public function create(Request $request): View
+    public function create(Request $request)
     {
         $this->authorize('create', ClientPayment::class);
         $clients        = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
@@ -101,7 +104,57 @@ class ClientPaymentController extends Controller
         $cashAccounts   = CashAccount::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
         $selectedClient = $request->query('client_id');
 
+        // [OVERPAYMENT-GUARD-UI] Vérification PROACTIVE à l'ouverture du formulaire :
+        // si un client est pré-sélectionné via l'URL et qu'il a déjà des paiements non
+        // imputés couvrant ses dettes, on bloque l'accès au formulaire et on redirige
+        // l'utilisateur vers l'imputation des paiements existants.
+        if ($selectedClient) {
+            $pending = $this->checkPendingUnallocated((int) $selectedClient);
+            if ($pending) {
+                return redirect()
+                    ->route('tresorerie.encaissements.show', $pending['payment_id'])
+                    ->with('error', $pending['message']);
+            }
+        }
+
         return view('tresorerie.encaissements.create', compact('clients', 'paymentMethods', 'cashAccounts', 'selectedClient'));
+    }
+
+    /**
+     * [PENDING-PAYMENT-GUARD-UI] Bloque la création d'un nouvel encaissement
+     * si le client a déjà UN SEUL paiement non imputé. Force l'utilisateur à
+     * traiter d'abord les paiements en attente — élimine le doublon par construction.
+     *
+     * Retourne ['payment_id'=>X, 'message'=>...] si bloqué, null sinon.
+     */
+    private function checkPendingUnallocated(int $clientId): ?array
+    {
+        $pending = ClientPayment::where('client_id', $clientId)
+            ->where('unallocated_amount', '>', 0)
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->get(['id', 'number', 'amount', 'unallocated_amount', 'created_at']);
+
+        if ($pending->isEmpty()) return null;
+
+        $client = Client::find($clientId);
+        $totalPending = $pending->sum('unallocated_amount');
+        $count        = $pending->count();
+        $first        = $pending->first();
+
+        return [
+            'payment_id' => $first->id,
+            'message'    => sprintf(
+                "🔒 Création d'encaissement bloquée pour %s : %d paiement(s) non imputé(s) en attente "
+                . "totalisant %s FCFA (le plus ancien : %s). "
+                . "Imputez d'abord ce(s) paiement(s) sur ses factures impayées avant d'en saisir un nouveau. "
+                . "C'est obligatoire pour éviter les doublons d'encaissement.",
+                $client?->name ?? 'ce client',
+                $count,
+                number_format($totalPending, 0, ',', ' '),
+                $first->number
+            ),
+        ];
     }
 
     /**
@@ -110,7 +163,14 @@ class ClientPaymentController extends Controller
     public function store(StoreClientPaymentRequest $request): RedirectResponse
     {
         $this->authorize('create', ClientPayment::class);
-        $payment = $this->service->create($request->validated());
+
+        try {
+            $payment = $this->service->create($request->validated());
+        } catch (\RuntimeException $e) {
+            // [GUARD-UX] Anti-doublon, facture verrouillée, etc. : on renvoie au formulaire
+            // avec le message lisible au lieu d'une 500 générique.
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('tresorerie.encaissements.show', $payment)
@@ -126,6 +186,43 @@ class ClientPaymentController extends Controller
         $payment = $this->repository->findWithDetails($encaissement->id);
 
         return view('tresorerie.encaissements.show', compact('payment'));
+    }
+
+    /**
+     * Generate and download the payment receipt as PDF.
+     */
+    public function recu(ClientPayment $encaissement): mixed
+    {
+        $this->authorize('view', $encaissement);
+        $payment        = $this->repository->findWithDetails($encaissement->id);
+        $company        = Company::first();
+        $amountInWords  = NumberHelper::toWords((int) $payment->amount);
+
+        $pdf = Pdf::loadView('tresorerie.encaissements.pdf.receipt', compact('payment', 'company', 'amountInWords'))
+            ->setPaper([0, 0, 419.53, 595.28]); // A5 portrait
+
+        return $pdf->download('recu_' . $payment->number . '_' . now()->format('Ymd') . '.pdf');
+    }
+
+    /**
+     * Post-payment allocation: impute unallocated amount on a specific invoice.
+     */
+    public function imputer(Request $request, ClientPayment $encaissement): RedirectResponse
+    {
+        $this->authorize('create', ClientPayment::class);
+
+        $data = $request->validate([
+            'invoice_id'       => ['required', 'integer', 'exists:invoices,id'],
+            'allocated_amount' => ['required', 'integer', 'min:1'],
+        ]);
+
+        try {
+            $this->service->addAllocation($encaissement, (int) $data['invoice_id'], (int) $data['allocated_amount']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Imputation enregistrée avec succès.');
     }
 
     /**

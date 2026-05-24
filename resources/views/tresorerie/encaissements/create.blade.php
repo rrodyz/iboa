@@ -170,6 +170,22 @@ $formConfig = [
                                   placeholder="Observations, informations complémentaires...">{{ old('notes') }}</textarea>
                     </div>
 
+                    {{-- [DUP-FORCE] Confirmer un doublon légitime --}}
+                    <div class="md:col-span-2">
+                        <label class="inline-flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" name="force_duplicate" value="1"
+                                   {{ old('force_duplicate') ? 'checked' : '' }}
+                                   class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span>
+                                <span class="font-medium text-amber-700">Forcer le paiement (doublon confirmé)</span><br>
+                                <span class="text-gray-500">Ne cocher que si vous êtes certain que ce paiement N'EST PAS un doublon
+                                d'un encaissement récent. À utiliser pour des paiements légitimes répétés (ex. abonnement mensuel
+                                identique). Sans cette case, le système refusera tout encaissement du même montant pour le même
+                                client dans les 24h.</span>
+                            </span>
+                        </label>
+                    </div>
+
                 </div>
             </div>
 

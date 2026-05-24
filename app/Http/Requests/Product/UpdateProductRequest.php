@@ -92,4 +92,12 @@ class UpdateProductRequest extends FormRequest
             'has_expiry_date'   => $this->boolean('has_expiry_date',   false),
         ]);
     }
+
+    public function messages(): array
+    {
+        return [
+            'reference.unique' => 'Un autre article utilise déjà cette référence interne.',
+            'barcode.unique'   => 'Un autre article utilise déjà ce code-barres (EAN).',
+        ];
+    }
 }

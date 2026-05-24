@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Purchases;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\StorePurchaseRequestRequest;
+use App\Http\Requests\Purchase\UpdatePurchaseRequestRequest;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
 use App\Models\Supplier;
@@ -48,6 +49,32 @@ class PurchaseRequestController extends Controller
         $suppliers = Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']);
 
         return view('achats.demandes-achat.show', compact('pr', 'suppliers'));
+    }
+
+    public function edit(PurchaseRequest $demandesAchat): View|\Illuminate\Http\RedirectResponse
+    {
+        if (! $demandesAchat->isEditable()) {
+            return back()->with('error', 'Cette demande ne peut plus être modifiée.');
+        }
+
+        $pr       = $this->service->repository->findWithDetails($demandesAchat->id);
+        $products = Product::active()->orderBy('name')->get(['id', 'name', 'reference', 'purchase_price']);
+        $units    = Unit::orderBy('name')->get(['id', 'name', 'abbreviation']);
+
+        return view('achats.demandes-achat.edit', compact('pr', 'products', 'units'));
+    }
+
+    public function update(UpdatePurchaseRequestRequest $request, PurchaseRequest $demandesAchat): RedirectResponse
+    {
+        try {
+            $this->service->update($demandesAchat, $request->validated());
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('achats.demandes-achat.show', $demandesAchat)
+            ->with('success', 'Demande ' . $demandesAchat->number . ' mise à jour.');
     }
 
     public function destroy(PurchaseRequest $demandesAchat): RedirectResponse

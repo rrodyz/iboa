@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Traits\HasOptimisticLocking;
 use App\Models\Company;
 use App\Models\PurchaseOrder;
 use App\Models\Reception;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class PurchaseOrderService
 {
+    use HasOptimisticLocking;
+
     public function __construct(
         public readonly PurchaseOrderRepository $repository,
         private DocumentSequenceService $sequenceService,
@@ -64,6 +67,10 @@ class PurchaseOrderService
     public function update(PurchaseOrder $po, array $data): PurchaseOrder
     {
         return DB::transaction(function () use ($po, $data) {
+            // [CONCURRENCE] Verrou optimiste
+            $this->assertVersion($po, $data['_lock_version'] ?? null);
+            unset($data['_lock_version'], $data['_idempotency_key']);
+
             $items = $data['items'] ?? null;
             unset($data['items']);
 
@@ -112,6 +119,57 @@ class PurchaseOrderService
         }
 
         return $po->delete();
+    }
+
+    /**
+     * [ACHATS-PRO] Duplique un bon de commande en brouillon (équivalent Odoo).
+     * Reset reception/invoiced quantities, statut brouillon, nouveau numéro.
+     */
+    public function duplicate(PurchaseOrder $po): PurchaseOrder
+    {
+        return DB::transaction(function () use ($po) {
+            $po->load('items');
+            $company = Company::firstOrFail();
+
+            $new = PurchaseOrder::create([
+                'company_id'      => $company->id,
+                'supplier_id'     => $po->supplier_id,
+                'fiscal_year_id'  => $company->current_fiscal_year_id,
+                'number'          => $this->sequenceService->nextNumber($company, 'commande_achat'),
+                'status'          => 'brouillon',
+                'ordered_at'      => now()->toDateString(),
+                'expected_at'     => now()->addDays(7)->toDateString(),
+                'currency_code'   => $po->currency_code,
+                'exchange_rate'   => $po->exchange_rate,
+                'subtotal_ht'     => $po->subtotal_ht,
+                'total_tax'       => $po->total_tax,
+                'total_ttc'       => $po->total_ttc,
+                'notes'           => $po->notes,
+                'delivery_address'=> $po->delivery_address,
+                'created_by'      => Auth::id(),
+            ]);
+
+            foreach ($po->items as $i => $item) {
+                $new->items()->create([
+                    'product_id'        => $item->product_id,
+                    'description'       => $item->description,
+                    'unit_id'           => $item->unit_id,
+                    'quantity'          => $item->quantity,
+                    'unit_price'        => $item->unit_price,
+                    'discount_percent'  => $item->discount_percent ?? 0,
+                    'tax_rate_id'       => $item->tax_rate_id,
+                    'tax_rate_value'    => $item->tax_rate_value ?? 0,
+                    'line_total_ht'     => $item->line_total_ht,
+                    'line_tax'          => $item->line_tax,
+                    'line_total_ttc'    => $item->line_total_ttc,
+                    'received_quantity' => 0,
+                    'invoiced_quantity' => 0,
+                    'sort_order'        => $i,
+                ]);
+            }
+
+            return $new->fresh('items');
+        });
     }
 
     /**
@@ -166,12 +224,18 @@ class PurchaseOrderService
      */
     public function createSupplierInvoice(PurchaseOrder $po): SupplierInvoice
     {
-        // [FIX-ACHATS-01] Prevent double-invoicing the same PO.
-        if (SupplierInvoice::where('purchase_order_id', $po->id)->whereNotIn('status', ['annulee'])->exists()) {
-            throw new \RuntimeException('Une facture fournisseur a déjà été créée pour ce bon de commande ('.$po->number.').');
-        }
-
         return DB::transaction(function () use ($po) {
+            // [SYNC-FIX-02] Lock the PO row + check duplicate INSIDE the transaction
+            // to eliminate the TOCTOU race that allowed concurrent double-billing.
+            $po = PurchaseOrder::lockForUpdate()->findOrFail($po->id);
+            if (SupplierInvoice::where('purchase_order_id', $po->id)
+                ->whereNotIn('status', ['annulee'])
+                ->whereNull('deleted_at')
+                ->exists()
+            ) {
+                throw new \RuntimeException('Une facture fournisseur a déjà été créée pour ce bon de commande ('.$po->number.').');
+            }
+
             $company = Company::firstOrFail();
 
             $invoiceNumber = $this->sequenceService->nextNumber($company, 'facture_fournisseur');

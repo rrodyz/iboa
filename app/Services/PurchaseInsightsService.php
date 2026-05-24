@@ -90,6 +90,26 @@ class PurchaseInsightsService
             ->whereNotIn('status', ['brouillon', 'annulee'])
             ->sum('total_ttc');
 
+        $prevMonthVolume = (int) DB::table('purchase_orders')
+            ->whereNull('deleted_at')
+            ->whereYear('ordered_at', now()->subMonth()->year)
+            ->whereMonth('ordered_at', now()->subMonth()->month)
+            ->whereNotIn('status', ['brouillon', 'annulee'])
+            ->sum('total_ttc');
+
+        $volumeVariation = $prevMonthVolume > 0
+            ? round(($monthVolume - $prevMonthVolume) / $prevMonthVolume * 100, 1)
+            : null;
+
+        // [DPO] Days Payable Outstanding — délai moyen de paiement des fournisseurs
+        // (encours / achats 90 derniers jours) × 90
+        $purchases90 = (int) DB::table('supplier_invoices')
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['brouillon','annulee'])
+            ->where('received_at', '>=', now()->subDays(90))
+            ->sum('total_ttc');
+        $dpo = $purchases90 > 0 ? round($invoicesToPayAmount / $purchases90 * 90, 0) : 0;
+
         return [
             'open_po_count'         => $openPoCount,
             'open_po_value'         => $openPoValue,
@@ -101,7 +121,104 @@ class PurchaseInsightsService
             'overdue_amount'        => $overdueAmount,
             'pending_requests'      => $pendingRequests,
             'month_volume'          => $monthVolume,
+            'prev_month_volume'     => $prevMonthVolume,
+            'volume_variation_pct'  => $volumeVariation,
+            'dpo_days'              => $dpo,
         ];
+    }
+
+    /**
+     * [ACHATS-PRO] Pipeline PO par statut — équivalent funnel Odoo achats.
+     */
+    public function purchaseOrdersPipeline(): array
+    {
+        $rows = DB::table('purchase_orders')
+            ->whereNull('deleted_at')
+            ->select('status', DB::raw('COUNT(*) as count'), DB::raw('SUM(total_ttc) as total'))
+            ->groupBy('status')
+            ->get();
+
+        $labels = [
+            'brouillon'           => 'Brouillon',
+            'confirmee'           => 'Confirmée',
+            'partiellement_recue' => 'Partiellement reçue',
+            'recue'               => 'Reçue',
+            'facture'             => 'Facturée',
+            'annulee'             => 'Annulée',
+        ];
+
+        $result = [];
+        foreach ($labels as $k => $label) {
+            $row = $rows->firstWhere('status', $k);
+            $result[$k] = [
+                'label' => $label,
+                'count' => $row?->count ?? 0,
+                'total' => (int) ($row?->total ?? 0),
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * [ACHATS-PRO] Top fournisseurs par CA achats (12 derniers mois).
+     * Diffère du scorecard qui mesure la qualité — ici on mesure le VOLUME.
+     */
+    public function topSuppliers(int $limit = 5): Collection
+    {
+        $from = now()->subMonths(12)->startOfMonth();
+        return DB::table('supplier_invoices as si')
+            ->join('suppliers as s', 's.id', '=', 'si.supplier_id')
+            ->whereNull('si.deleted_at')
+            ->whereNotIn('si.status', ['brouillon', 'annulee'])
+            ->where('si.received_at', '>=', $from)
+            ->select('s.id', 's.name',
+                DB::raw('COUNT(DISTINCT si.id) as invoices_count'),
+                DB::raw('SUM(si.total_ttc) as total_ttc'),
+                DB::raw('SUM(si.remaining_amount) as outstanding'))
+            ->groupBy('s.id', 's.name')
+            ->orderByDesc('total_ttc')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * [ACHATS-PRO] Top articles achetés sur 12 mois (qté + montant).
+     */
+    public function topPurchasedProducts(int $limit = 5): Collection
+    {
+        $from = now()->subMonths(12)->startOfMonth();
+        return DB::table('supplier_invoice_items as it')
+            ->join('supplier_invoices as si', 'si.id', '=', 'it.supplier_invoice_id')
+            ->join('products as p', 'p.id', '=', 'it.product_id')
+            ->whereNull('si.deleted_at')
+            ->whereNotIn('si.status', ['brouillon', 'annulee'])
+            ->where('si.received_at', '>=', $from)
+            ->select('p.id', 'p.reference', 'p.name',
+                DB::raw('SUM(it.quantity) as qty_bought'),
+                DB::raw('SUM(it.line_total_ht) as total_ht'))
+            ->groupBy('p.id', 'p.reference', 'p.name')
+            ->orderByDesc('total_ht')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * [ACHATS-PRO] Évolution mensuelle des achats (12 mois) — pour graphique.
+     */
+    public function monthlyPurchaseEvolution(int $months = 12): Collection
+    {
+        $from = now()->subMonths($months - 1)->startOfMonth();
+        return DB::table('supplier_invoices')
+            ->whereNull('deleted_at')
+            ->whereNotIn('status', ['brouillon', 'annulee'])
+            ->where('received_at', '>=', $from)
+            ->select(
+                DB::raw('DATE_FORMAT(received_at, "%Y-%m") as month'),
+                DB::raw('SUM(total_ttc) as total_ttc'),
+                DB::raw('COUNT(*) as invoices_count'))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
     }
 
     /**

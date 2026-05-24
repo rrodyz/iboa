@@ -82,7 +82,7 @@
                                 <input type="text" :name="`items[${i}][description]`" x-model="item.description" required maxlength="255" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                             </td>
                             <td class="py-2 pr-2">
-                                <input type="number" :name="`items[${i}][quantity]`" required min="0.0001" step="0.0001" x-model="item.quantity" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right">
+                                <input type="number" :name="`items[${i}][quantity]`" required min="1" step="1" inputmode="numeric" x-model="item.quantity" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right">
                             </td>
                             <td class="py-2"><button type="button" @click="removeItem(i)" class="p-1 text-gray-400 hover:text-red-500" :disabled="items.length===1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></td>
                         </tr>

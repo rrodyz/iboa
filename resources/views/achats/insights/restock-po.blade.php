@@ -94,7 +94,7 @@
                                         <input type="hidden" :name="`items[{{ $key }}][product_id]`" value="{{ $item->id }}" :disabled="!selected[`{{ $key }}`]">
                                         <input type="hidden" :name="`items[{{ $key }}][supplier_id]`" value="{{ $supplierId }}" :disabled="!selected[`{{ $key }}`]">
                                         <input type="number" :name="`items[{{ $key }}][quantity]`"
-                                               min="1" step="0.0001"
+                                               min="1" step="1" inputmode="numeric"
                                                value="{{ (int) $item->suggested_qty }}"
                                                :disabled="!selected[`{{ $key }}`]"
                                                class="w-24 border border-gray-300 rounded px-2 py-1 text-sm text-right">

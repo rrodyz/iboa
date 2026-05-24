@@ -30,6 +30,9 @@ class SupplierPaymentService
 
             $data['created_by'] = Auth::id();
 
+            // [DOUBLE-PAYMENT-GUARD] Anti-doublon décaissement (cf. ClientPaymentService).
+            $this->assertNoDuplicateRecent($data);
+
             // Generate payment number
             $company = Auth::user()->company;
             if ($company) {
@@ -76,6 +79,21 @@ class SupplierPaymentService
                     throw new \RuntimeException(
                         'La facture ' . $invoice->number . ' n\'appartient pas au fournisseur sélectionné.'
                     );
+                }
+
+                // [INVOICE-LOCKED-GUARD] Refus explicite d'allouer un décaissement à une FF
+                // entièrement payée (status=payee) ou annulée.
+                if (in_array($invoice->status, ['payee', 'annulee'], true)) {
+                    throw new \RuntimeException(sprintf(
+                        "La facture fournisseur %s est %s — aucune nouvelle allocation n'est autorisée.",
+                        $invoice->number, $invoice->status === 'payee' ? 'déjà entièrement payée' : 'annulée'
+                    ));
+                }
+                if ((int) $invoice->remaining_amount <= 0) {
+                    throw new \RuntimeException(sprintf(
+                        "La facture fournisseur %s a un reste à payer nul — elle est techniquement soldée.",
+                        $invoice->number
+                    ));
                 }
 
                 // Cap allocation to actual remaining amount
@@ -254,5 +272,97 @@ class SupplierPaymentService
             ->where('remaining_amount', '>', 0)
             ->orderBy('due_at')
             ->get(['id', 'number', 'supplier_invoice_number', 'received_at', 'due_at', 'total_ttc', 'remaining_amount', 'status']);
+    }
+
+    /**
+     * [DOUBLE-PAYMENT-GUARD] Lève une exception si un décaissement strictement
+     * identique a été créé dans les 60 dernières secondes (double-clic, soumission
+     * concurrente, replay réseau), OU si la référence saisie est déjà utilisée
+     * pour ce fournisseur.
+     */
+    private function assertNoDuplicateRecent(array $data): void
+    {
+        $supplierId      = (int) ($data['supplier_id'] ?? 0);
+        $amount          = (int) ($data['amount']      ?? 0);
+        $paymentMethodId = $data['payment_method_id']  ?? null;
+        $cashAccountId   = $data['cash_account_id']    ?? null;
+        $reference       = trim((string) ($data['reference'] ?? ''));
+        $forceDuplicate  = (bool) ($data['force_duplicate'] ?? false);
+
+        if ($supplierId <= 0 || $amount <= 0) return;
+
+        $exists = SupplierPayment::where('supplier_id', $supplierId)
+            ->where('amount', $amount)
+            ->where('payment_method_id', $paymentMethodId)
+            ->where('cash_account_id', $cashAccountId)
+            ->whereNull('deleted_at')
+            ->where('created_at', '>=', now()->subSeconds(60))
+            ->first();
+
+        if ($exists) {
+            throw new \RuntimeException(sprintf(
+                "Un décaissement identique vient d'être enregistré il y a quelques secondes : %s (%s FCFA). "
+                . "Attendez 1 minute ou modifiez un attribut (méthode, référence…) pour confirmer un second décaissement légitime.",
+                $exists->number,
+                number_format($exists->amount, 0, ',', ' ')
+            ));
+        }
+
+        // [DUP-24H-GUARD] Doublon métier sur 24h pour même fournisseur + même montant
+        if (!$forceDuplicate) {
+            $sameAmountToday = SupplierPayment::where('supplier_id', $supplierId)
+                ->where('amount', $amount)
+                ->whereNull('deleted_at')
+                ->where('created_at', '>=', now()->subHours(24))
+                ->count();
+            if ($sameAmountToday > 0) {
+                $unpaidSum = (int) SupplierInvoice::where('supplier_id', $supplierId)
+                    ->whereIn('status', ['validee','partiellement_payee','en_retard'])
+                    ->whereNull('deleted_at')->sum('remaining_amount');
+                throw new \RuntimeException(sprintf(
+                    "⚠ Doublon probable : ce fournisseur a déjà reçu %d décaissement(s) de %s FCFA dans les 24h. "
+                    . "Total restant à payer au fournisseur : %s FCFA. "
+                    . "Pour confirmer ce décaissement supplémentaire, cochez « Forcer le paiement (doublon confirmé) ».",
+                    $sameAmountToday,
+                    number_format($amount, 0, ',', ' '),
+                    number_format($unpaidSum, 0, ',', ' ')
+                ));
+            }
+        }
+
+        // [OVERPAYMENT-GUARD] Refus si le fournisseur a déjà assez de décaissements
+        // non imputés pour couvrir tout son passif → empêche les saisies répétées.
+        if (!$forceDuplicate) {
+            $unallocatedSum = (int) SupplierPayment::where('supplier_id', $supplierId)
+                ->whereNull('deleted_at')->sum('unallocated_amount');
+            $outstandingSum = (int) SupplierInvoice::where('supplier_id', $supplierId)
+                ->whereIn('status', ['validee','partiellement_payee','en_retard'])
+                ->whereNull('deleted_at')->sum('remaining_amount');
+
+            if ($unallocatedSum >= $outstandingSum && $outstandingSum >= 0) {
+                throw new \RuntimeException(sprintf(
+                    "⚠ Doublon structurel : %s FCFA de décaissements non imputés sont déjà disponibles "
+                    . "pour ce fournisseur alors qu'il ne reste que %s FCFA à régler. "
+                    . "Imputez d'abord les décaissements existants sur ses factures avant d'en saisir un nouveau. "
+                    . "Si c'est un véritable nouveau paiement (avance), cochez « Forcer le paiement ».",
+                    number_format($unallocatedSum, 0, ',', ' '),
+                    number_format($outstandingSum, 0, ',', ' ')
+                ));
+            }
+        }
+
+        if ($reference !== '') {
+            $dup = SupplierPayment::where('supplier_id', $supplierId)
+                ->where('reference', $reference)
+                ->whereNull('deleted_at')
+                ->first();
+            if ($dup) {
+                throw new \RuntimeException(sprintf(
+                    "La référence « %s » est déjà utilisée pour ce fournisseur (décaissement %s). "
+                    . "Vérifiez qu'il ne s'agit pas d'un doublon — ou ajoutez un suffixe à la référence.",
+                    $reference, $dup->number
+                ));
+            }
+        }
     }
 }

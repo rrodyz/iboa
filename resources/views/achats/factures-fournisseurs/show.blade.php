@@ -42,13 +42,29 @@
                 @if($invoice->due_at && $invoice->due_at->isPast() && !in_array($invoice->status, ['payee', 'annulee']))
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-700">En retard</span>
                 @endif
+                {{-- [INVOICE-LOCKED-GUARD] --}}
+                @if($invoice->status === 'payee' || (int) $invoice->remaining_amount === 0)
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-gray-800 text-white" title="Facture entièrement réglée — aucun nouveau décaissement n'est autorisé">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
+                    VERROUILLÉE
+                </span>
+                @endif
                 <span class="text-gray-500 text-sm">{{ $invoice->supplier?->name }}</span>
             </div>
 
             <div class="flex flex-wrap items-center gap-2" x-data="{ payModal: false }">
 
-                {{-- Enregistrer un paiement --}}
-                @if(in_array($invoice->status, ['validee', 'partiellement_payee', 'recue']))
+                {{-- Enregistrer un paiement (grisé si facture verrouillée) --}}
+                @php
+                    $canPay = in_array($invoice->status, ['validee', 'partiellement_payee', 'recue']);
+                    $payDisabledReason = match (true) {
+                        $invoice->status === 'brouillon' => 'Validez d\'abord la facture',
+                        $invoice->status === 'payee'     => 'Facture entièrement réglée — verrouillée, aucun nouveau paiement',
+                        $invoice->status === 'annulee'   => 'Facture annulée — aucun paiement possible',
+                        default => null,
+                    };
+                @endphp
+                @if($canPay)
                 <button type="button" @click="payModal = true"
                         class="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,6 +72,18 @@
                     </svg>
                     Enregistrer un paiement
                 </button>
+                @else
+                <button type="button" disabled aria-disabled="true"
+                        title="{{ $payDisabledReason }}"
+                        class="inline-flex items-center gap-2 px-3 py-2 bg-gray-300 text-gray-500 rounded-lg text-sm font-medium cursor-not-allowed opacity-70 select-none">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"/>
+                    </svg>
+                    Enregistrer un paiement
+                </button>
+                @endif
+
+                @if($canPay)
 
                 {{-- Payment modal --}}
                 <div x-show="payModal" x-cloak
@@ -349,6 +377,38 @@
     <div class="bg-white rounded-xl border border-gray-200 p-5">
         <x-attachments.manager model="SupplierInvoice" :id="$invoice->id" />
     </div>
+
+    {{-- [LIAISONS] PO source · Réception · Cadencier --}}
+    @php
+        $relatedLinks = [];
+        if ($invoice->purchaseOrder) {
+            $relatedLinks[] = [
+                'icon' => '📋', 'label' => 'Bon de commande ' . $invoice->purchaseOrder->number,
+                'href' => route('achats.commandes.show', $invoice->purchaseOrder),
+                'subtitle' => 'Du ' . $invoice->purchaseOrder->ordered_at?->format('d/m/Y'),
+                'badge' => ucfirst((string) $invoice->purchaseOrder->status), 'badgeColor' => 'blue',
+            ];
+        }
+        if ($invoice->reception) {
+            $relatedLinks[] = [
+                'icon' => '📦', 'label' => 'Réception ' . $invoice->reception->number,
+                'href' => route('achats.receptions.show', $invoice->reception),
+                'badge' => ucfirst((string) $invoice->reception->status), 'badgeColor' => 'teal',
+            ];
+        }
+        $scheduleCount = $invoice->paymentSchedules?->count() ?? 0;
+        if ($scheduleCount > 0) {
+            $relatedLinks[] = [
+                'icon' => '💰', 'label' => 'Cadencier de paiement (' . $scheduleCount . ' échéances)',
+                'href' => route('achats.schedules.upcoming'),
+                'subtitle' => 'Suivi des échéances multiples',
+                'badge' => 'Détail', 'badgeColor' => 'violet',
+            ];
+        }
+    @endphp
+    <x-document.related :links="$relatedLinks" />
+
+    <x-audit.timeline :model="\App\Models\SupplierInvoice::class" :id="$invoice->id" />
 
 </div>
 @endsection
