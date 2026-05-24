@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\HR;
 
+use App\Exports\HR\CnssExport;
+use App\Exports\HR\IutsExport;
+use App\Exports\HR\LivreDepaieExport;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Employee;
@@ -10,6 +13,7 @@ use App\Models\PayrollVariable;
 use App\Services\PayrollService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class PayrollRunController extends Controller
 {
@@ -257,6 +261,29 @@ class PayrollRunController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    // ─── Exports Excel ────────────────────────────────────────────────────────
+
+    public function livreDepaieXlsx(PayrollRun $run)
+    {
+        $run->load(['items.employee', 'company']);
+        $filename = "livre-paie-{$run->period_year}-{$run->period_month}.xlsx";
+        return Excel::download(new LivreDepaieExport($run), $filename);
+    }
+
+    public function cnssXlsx(PayrollRun $run)
+    {
+        $run->load(['items.employee', 'company']);
+        $filename = "cnss-{$run->period_year}-{$run->period_month}.xlsx";
+        return Excel::download(new CnssExport($run), $filename);
+    }
+
+    public function iutsXlsx(PayrollRun $run)
+    {
+        $run->load(['items', 'company']);
+        $filename = "iuts-{$run->period_year}-{$run->period_month}.xlsx";
+        return Excel::download(new IutsExport($run), $filename);
     }
 
     /**

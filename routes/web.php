@@ -754,6 +754,10 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::get('/{run}/cnss-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssPdf'])->name('cnss-pdf');
         Route::get('/{run}/iuts-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsPdf'])->name('iuts-pdf');
         Route::get('/{run}/virement-csv',        [\App\Http\Controllers\HR\PayrollRunController::class, 'virementCsv'])->name('virement-csv');
+        // Exports Excel
+        Route::get('/{run}/livre-paie-xlsx',     [\App\Http\Controllers\HR\PayrollRunController::class, 'livreDepaieXlsx'])->name('livre-paie-xlsx');
+        Route::get('/{run}/cnss-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssXlsx'])->name('cnss-xlsx');
+        Route::get('/{run}/iuts-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsXlsx'])->name('iuts-xlsx');
     });
 
     // ── Dashboard RH ──────────────────────────────────────────────────────────

@@ -69,10 +69,14 @@
             <div x-show="open" @click.away="open=false"
                  class="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
                 <a href="{{ route('rh.paie.recap-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📄 Récap mensuel PDF</a>
-                <a href="{{ route('rh.paie.cnss-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 Bordereau CNSS</a>
-                <a href="{{ route('rh.paie.iuts-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 État IUTS</a>
-                <hr class="my-1">
-                <a href="{{ route('rh.paie.virement-csv', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📊 Ordre de virement CSV</a>
+                <a href="{{ route('rh.paie.cnss-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 Bordereau CNSS PDF</a>
+                <a href="{{ route('rh.paie.iuts-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 État IUTS PDF</a>
+                <hr class="my-1 border-gray-100">
+                <a href="{{ route('rh.paie.livre-paie-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 Livre de paie Excel</a>
+                <a href="{{ route('rh.paie.cnss-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 CNSS Excel</a>
+                <a href="{{ route('rh.paie.iuts-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 IUTS Excel</a>
+                <hr class="my-1 border-gray-100">
+                <a href="{{ route('rh.paie.virement-csv', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 Ordre de virement CSV</a>
             </div>
         </div>
         @endif
