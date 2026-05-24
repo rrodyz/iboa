@@ -782,6 +782,16 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::post('/types',                  [\App\Http\Controllers\HR\LeaveController::class, 'storeType'])->name('types.store');
     });
 
+    // Portail self-service employé
+    Route::prefix('portail')->name('portail.')->group(function () {
+        Route::get('/',                          [\App\Http\Controllers\HR\EmployeePortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/bulletins',                 [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletins'])->name('bulletins');
+        Route::get('/bulletins/{item}/pdf',      [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletinPdf'])->name('bulletin-pdf');
+        Route::get('/conges',                    [\App\Http\Controllers\HR\EmployeePortalController::class, 'conges'])->name('conges');
+        Route::post('/conges',                   [\App\Http\Controllers\HR\EmployeePortalController::class, 'storeConge'])->name('conges.store');
+        Route::get('/documents',                 [\App\Http\Controllers\HR\EmployeePortalController::class, 'documents'])->name('documents');
+    });
+
     // Prêts salariés
     Route::prefix('prets')->name('prets.')->group(function () {
         Route::get('/',                      [\App\Http\Controllers\HR\EmployeeLoanController::class, 'index'])->name('index');

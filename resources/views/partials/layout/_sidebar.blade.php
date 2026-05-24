@@ -469,6 +469,7 @@ request()->routeIs('achats.*')                                                  
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach([
                             [route('rh.dashboard'),             'Tableau de bord',   'rh.dashboard'],
+                            [route('rh.portail.dashboard'),     'Mon Espace RH',     'rh.portail*'],
                             [route('rh.employes.index'),        'Employés',          'rh.employes*'],
                             [route('rh.departments.index'),     'Départements',      'rh.departments*'],
                             [route('rh.paie.index'),            'Bulletins de paie', 'rh.paie*'],

@@ -23,7 +23,7 @@ class Employee extends Model
         'bank_account_number', 'bank_rib_key', 'payment_mode',
         'emergency_contact_name', 'emergency_contact_phone',
         'education_level', 'fonction',
-        'created_by',
+        'created_by', 'user_id',
     ];
 
     protected $casts = [
@@ -37,6 +37,7 @@ class Employee extends Model
 
     public function company(): BelongsTo     { return $this->belongsTo(Company::class); }
     public function department(): BelongsTo  { return $this->belongsTo(Department::class); }
+    public function user(): BelongsTo        { return $this->belongsTo(\App\Models\User::class); }
     public function contracts(): HasMany       { return $this->hasMany(EmployeeContract::class); }
     public function allowances(): HasMany      { return $this->hasMany(EmployeeAllowance::class); }
     public function payrollItems(): HasMany    { return $this->hasMany(PayrollItem::class); }
