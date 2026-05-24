@@ -13,7 +13,7 @@ class Employee extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'company_id', 'department_id', 'matricule',
+        'company_id', 'department_id', 'matricule', 'photo_path',
         'last_name', 'first_name', 'gender', 'birth_date', 'birth_place', 'nationality',
         'cin_number', 'cnss_number',
         'email', 'phone', 'address', 'city',
@@ -21,6 +21,8 @@ class Employee extends Model
         'family_status', 'nb_children',
         'bank_name', 'bank_account', 'bank_code', 'bank_branch',
         'bank_account_number', 'bank_rib_key', 'payment_mode',
+        'emergency_contact_name', 'emergency_contact_phone',
+        'education_level', 'fonction',
         'created_by',
     ];
 
@@ -42,6 +44,9 @@ class Employee extends Model
     public function salaryAdvances(): HasMany  { return $this->hasMany(SalaryAdvance::class); }
     public function leaveRequests(): HasMany   { return $this->hasMany(LeaveRequest::class); }
     public function leaveBalances(): HasMany   { return $this->hasMany(LeaveBalance::class); }
+    public function documents(): HasMany       { return $this->hasMany(EmployeeDocument::class); }
+    public function loans(): HasMany           { return $this->hasMany(EmployeeLoan::class); }
+    public function activeLoans(): HasMany     { return $this->hasMany(EmployeeLoan::class)->where('status', 'actif'); }
 
     public function activeContract(): HasOne
     {

@@ -122,10 +122,105 @@
         @endif
     </div>
 
+    {{-- Documents --}}
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wide">Documents</h2>
+            <button onclick="document.getElementById('modal-document').classList.remove('hidden')"
+                    class="text-xs text-blue-600 hover:underline">+ Ajouter</button>
+        </div>
+
+        @if(session('success'))
+            <div class="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if($employe->documents->isNotEmpty())
+        <div class="space-y-2">
+            @foreach($employe->documents as $doc)
+            @php
+                $docIcons = [
+                    'cnib'=>'🪪','passeport'=>'📘','contrat'=>'📝','avenant'=>'📋',
+                    'diplome'=>'🎓','attestation'=>'📄','medical'=>'🏥','cnss'=>'🏛',
+                    'photo'=>'🖼','autre'=>'📎',
+                ];
+                $docLabels = [
+                    'cnib'=>'CNIB','passeport'=>'Passeport','contrat'=>'Contrat',
+                    'avenant'=>'Avenant','diplome'=>'Diplôme','attestation'=>'Attestation',
+                    'medical'=>'Médical','cnss'=>'CNSS','photo'=>'Photo','autre'=>'Autre',
+                ];
+                $isExpired = $doc->expires_at && $doc->expires_at->isPast();
+                $expiringSoon = $doc->expires_at && !$isExpired && $doc->expires_at->diffInDays(now()) <= 30;
+            @endphp
+            <div class="flex items-center justify-between p-3 rounded-lg border
+                {{ $isExpired ? 'border-red-200 bg-red-50' : ($expiringSoon ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-gray-50') }}">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-lg flex-shrink-0">{{ $docIcons[$doc->document_type] ?? '📎' }}</span>
+                    <div class="min-w-0">
+                        <div class="text-sm font-medium text-gray-800 truncate">{{ $doc->label }}</div>
+                        <div class="text-xs text-gray-500">
+                            {{ $docLabels[$doc->document_type] ?? $doc->document_type }}
+                            @if($doc->document_date) · {{ $doc->document_date->format('d/m/Y') }}@endif
+                            @if($doc->expires_at)
+                                · <span class="{{ $isExpired ? 'text-red-600 font-semibold' : ($expiringSoon ? 'text-amber-600 font-semibold' : '') }}">
+                                    Exp. {{ $doc->expires_at->format('d/m/Y') }}
+                                    @if($isExpired) ⚠ Expiré @elseif($expiringSoon) ⚡ Bientôt @endif
+                                </span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <a href="{{ route('rh.employes.documents.download', [$employe, $doc]) }}"
+                       class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                        Télécharger
+                    </a>
+                    <form method="POST" action="{{ route('rh.employes.documents.destroy', [$employe, $doc]) }}"
+                          onsubmit="return confirm('Supprimer ce document ?')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="text-xs text-red-500 hover:text-red-700">✕</button>
+                    </form>
+                </div>
+            </div>
+            @endforeach
+        </div>
+        @else
+        <p class="text-sm text-gray-400">Aucun document enregistré.</p>
+        @endif
+    </div>
+
 </div>
 
-{{-- Colonne droite : statut + simulation --}}
+{{-- Colonne droite : photo + statut + simulation --}}
 <div class="space-y-5">
+
+    {{-- Photo de profil --}}
+    <div class="bg-white rounded-xl border border-gray-200 p-5 text-center">
+        <div class="flex flex-col items-center gap-3">
+            @if($employe->photo_path)
+                <img src="{{ route('rh.employes.photo', $employe) }}"
+                     alt="Photo {{ $employe->full_name }}"
+                     class="w-24 h-24 rounded-full object-cover border-2 border-gray-200 shadow-sm">
+            @else
+                <div class="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-gray-200">
+                    <span class="text-3xl font-bold text-indigo-400">
+                        {{ strtoupper(substr($employe->last_name, 0, 1)) }}
+                    </span>
+                </div>
+            @endif
+            <form method="POST" action="{{ route('rh.employes.photo.update', $employe) }}"
+                  enctype="multipart/form-data" class="w-full">
+                @csrf
+                <label class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg text-xs text-gray-600 hover:bg-gray-50">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    Changer la photo
+                    <input type="file" name="photo" accept="image/*" class="hidden" onchange="this.form.submit()">
+                </label>
+            </form>
+        </div>
+    </div>
+
     <div class="bg-white rounded-xl border border-gray-200 p-5">
         <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-3">Statut</h2>
         @php $color = $employe->status_color @endphp
@@ -199,6 +294,59 @@
                 </div>
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" onclick="document.getElementById('modal-contract').classList.add('hidden')"
+                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm">Annuler</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Enregistrer</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{-- Modal : Ajouter document --}}
+<div id="modal-document" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+        <h3 class="text-base font-semibold text-gray-900 mb-4">Ajouter un document</h3>
+        <form method="POST" action="{{ route('rh.employes.documents.store', $employe) }}" enctype="multipart/form-data">
+            @csrf
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Type de document</label>
+                        <select name="document_type" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            @foreach(['cnib'=>'CNIB','passeport'=>'Passeport','contrat'=>'Contrat','avenant'=>'Avenant','diplome'=>'Diplôme','attestation'=>'Attestation','medical'=>'Médical','cnss'=>'CNSS','photo'=>'Photo','autre'=>'Autre'] as $v=>$l)
+                                <option value="{{ $v }}">{{ $l }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Libellé</label>
+                        <input type="text" name="label" required maxlength="200"
+                               placeholder="ex: CNIB 2024"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date du document</label>
+                        <input type="date" name="document_date"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date d'expiration</label>
+                        <input type="date" name="expires_at"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fichier <span class="text-xs text-gray-400">(PDF, image, Word, Excel — max 10 Mo)</span></label>
+                    <input type="file" name="document_file" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes (optionnel)</label>
+                    <input type="text" name="notes" maxlength="500"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modal-document').classList.add('hidden')"
                             class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm">Annuler</button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Enregistrer</button>
                 </div>

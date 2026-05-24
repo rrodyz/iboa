@@ -152,7 +152,12 @@ class EmployeeController extends Controller
 
     public function show(Employee $employe)
     {
-        $employe->load(['department', 'contracts' => fn($q) => $q->orderByDesc('start_date'), 'allowances.type']);
+        $employe->load([
+            'department',
+            'contracts'  => fn($q) => $q->orderByDesc('start_date'),
+            'allowances.type',
+            'documents'  => fn($q) => $q->orderByDesc('created_at'),
+        ]);
         $allowanceTypes = PayrollAllowanceType::active()->orderBy('name')->get();
 
         return view('rh.employes.show', compact('employe', 'allowanceTypes'));

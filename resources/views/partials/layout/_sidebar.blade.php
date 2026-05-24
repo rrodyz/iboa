@@ -468,12 +468,15 @@ request()->routeIs('achats.*')                                                  
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach([
-                            [route('rh.dashboard'),         'Tableau de bord',   'rh.dashboard'],
-                            [route('rh.employes.index'),    'Employés',          'rh.employes*'],
-                            [route('rh.departments.index'), 'Départements',      'rh.departments*'],
-                            [route('rh.paie.index'),        'Bulletins de paie', 'rh.paie*'],
-                            [route('rh.conges.index'),      'Congés',            'rh.conges*'],
-                            [route('rh.avances.index'),     'Avances salaire',   'rh.avances*'],
+                            [route('rh.dashboard'),             'Tableau de bord',   'rh.dashboard'],
+                            [route('rh.employes.index'),        'Employés',          'rh.employes*'],
+                            [route('rh.departments.index'),     'Départements',      'rh.departments*'],
+                            [route('rh.paie.index'),            'Bulletins de paie', 'rh.paie*'],
+                            [route('rh.conges.index'),          'Congés',            'rh.conges*'],
+                            [route('rh.avances.index'),         'Avances salaire',   'rh.avances*'],
+                            [route('rh.prets.index'),           'Prêts salariés',    'rh.prets*'],
+                            [route('rh.rubriques.index'),       'Rubriques de paie', 'rh.rubriques*'],
+                            [route('rh.parametrage.edit'),      'Paramétrage paie',  'rh.parametrage*'],
                         ] as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"

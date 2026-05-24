@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\Employee;
 use App\Models\PayrollItem;
 use App\Models\PayrollRun;
+use App\Models\PayrollSetting;
 use App\Models\PayrollVariable;
 use App\Models\SalaryAdvance;
 use Illuminate\Support\Collection;
@@ -15,30 +16,26 @@ use Illuminate\Support\Facades\DB;
 /**
  * [RH-PAIE] Service de calcul de paie — normes Burkina Faso (CNSS + IUTS).
  *
+ * Les taux (CNSS, IUTS) sont désormais lus depuis la table payroll_settings
+ * pour rendre le moteur entièrement paramétrable via l'interface.
+ * Les constantes ci-dessous restent comme FALLBACK si la table est vide.
+ *
  * ─── Cotisations CNSS ─────────────────────────────────────────────────────────
  *   Employé  :  5,5 % du salaire brut plafonné à 650 000 FCFA/mois
  *   Patronal : 16,0 % du salaire brut plafonné à 650 000 FCFA/mois
  *
  * ─── IUTS ────────────────────────────────────────────────────────────────────
  *   Base : Salaire brut - CNSS employé
- *   Méthode : quotient familial (base / nb_parts → barème → × nb_parts)
- *
- * ─── Heures supplémentaires ───────────────────────────────────────────────────
- *   Taux horaire = salaire_base / (nb_jours_paie × 8h)
- *   HS 25% → taux × 1.25  |  HS 50% → taux × 1.50  |  Nuit → taux × 1.75
+ *   Méthode : quotient familial (base / nb_parts → barème × nb_parts)
  */
 class PayrollService
 {
-    // ─── Paramètres CNSS ──────────────────────────────────────────────────────
+    // ─── Constantes de fallback (si payroll_settings non configuré) ───────────
     const CNSS_EMPLOYEE_RATE = 5.5;
     const CNSS_EMPLOYER_RATE = 16.0;
     const CNSS_CEILING       = 650_000;
-
-    // ─── Paramètres HS ────────────────────────────────────────────────────────
-    const WORK_DAYS_MONTH  = 26;  // jours ouvrés de référence
-    const WORK_HOURS_DAY   = 8;   // heures / jour
-
-    // ─── Barème IUTS mensuel par part (Burkina Faso) ─────────────────────────
+    const WORK_DAYS_MONTH    = 26;
+    const WORK_HOURS_DAY     = 8;
     const IUTS_BRACKETS = [
         [25_000,       0],
         [40_000,      12],
@@ -47,6 +44,18 @@ class PayrollService
         [120_000,     27],
         [PHP_INT_MAX, 33],
     ];
+
+    /** Paramètres chargés depuis la DB pour la session de calcul. */
+    private ?PayrollSetting $settings = null;
+
+    // ─── Chargement des paramètres ───────────────────────────────────────────
+    private function loadSettings(int $companyId): PayrollSetting
+    {
+        if (! $this->settings || $this->settings->company_id !== $companyId) {
+            $this->settings = PayrollSetting::forCompany($companyId);
+        }
+        return $this->settings;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // API publique
@@ -88,6 +97,9 @@ class PayrollService
             if (!$run->isEditable()) {
                 throw new \RuntimeException('Ce bulletin est déjà validé et ne peut plus être recalculé.');
             }
+
+            // Charger les paramètres de paie depuis la DB
+            $this->loadSettings($run->company_id);
 
             // Supprimer les anciens calculs
             $run->items()->delete();
@@ -177,6 +189,7 @@ class PayrollService
     /** Simulation individuelle sans enregistrement. */
     public function simulate(Employee $employee, ?Collection $variables = null): array
     {
+        $this->loadSettings($employee->company_id);
         return $this->calculateItem($employee, null, $variables ?? collect(), ['brut'=>0,'cnss'=>0,'iuts'=>0,'net'=>0]);
     }
 
@@ -199,8 +212,12 @@ class PayrollService
         foreach ($absenceVars as $v) {
             $absenceDays += $v->qty;
         }
-        $workedDays = max(0, self::WORK_DAYS_MONTH - $absenceDays);
-        $totalDays  = self::WORK_DAYS_MONTH;
+        // Utiliser les paramètres de la DB (avec fallback aux constantes)
+        $workDays  = $this->settings?->work_days_month ?? self::WORK_DAYS_MONTH;
+        $workHours = $this->settings?->work_hours_day  ?? self::WORK_HOURS_DAY;
+
+        $workedDays = max(0, $workDays - $absenceDays);
+        $totalDays  = $workDays;
 
         // ─── Salaire de base (proratisé si absence) ───────────────────────────
         $proratedBase = $absenceDays > 0
@@ -208,28 +225,34 @@ class PayrollService
             : $baseSalary;
 
         // ─── Déduction pour absences ──────────────────────────────────────────
-        $dailyRate    = $baseSalary / $totalDays;
+        $dailyRate    = $totalDays > 0 ? $baseSalary / $totalDays : 0;
         $absenceAmount= (int) round($dailyRate * $absenceDays);
 
         // ─── Taux horaire pour HS ─────────────────────────────────────────────
-        $hourlyRate = $baseSalary / ($totalDays * self::WORK_HOURS_DAY);
+        $hourlyRate = $totalDays > 0 && $workHours > 0
+            ? $baseSalary / ($totalDays * $workHours)
+            : 0;
 
         // ─── Heures supplémentaires ───────────────────────────────────────────
         $hs25Hours = $hs25Amount = 0;
         $hs50Hours = $hs50Amount = 0;
         $hsNuitHours = $hsNuitAmount = 0;
 
+        $hsRate25   = 1 + (($this->settings?->hs_rate_25   ?? 25.0)  / 100);
+        $hsRate50   = 1 + (($this->settings?->hs_rate_50   ?? 50.0)  / 100);
+        $hsRateNuit = 1 + (($this->settings?->hs_rate_nuit ?? 75.0)  / 100);
+
         foreach ($variables->filter(fn($v) => $v->type === 'hs_25') as $v) {
             $hs25Hours  += $v->qty;
-            $hs25Amount += $v->amount ?: (int) round($hourlyRate * $v->qty * 1.25);
+            $hs25Amount += $v->amount ?: (int) round($hourlyRate * $v->qty * $hsRate25);
         }
         foreach ($variables->filter(fn($v) => $v->type === 'hs_50') as $v) {
             $hs50Hours  += $v->qty;
-            $hs50Amount += $v->amount ?: (int) round($hourlyRate * $v->qty * 1.50);
+            $hs50Amount += $v->amount ?: (int) round($hourlyRate * $v->qty * $hsRate50);
         }
         foreach ($variables->filter(fn($v) => $v->type === 'hs_nuit') as $v) {
             $hsNuitHours  += $v->qty;
-            $hsNuitAmount += $v->amount ?: (int) round($hourlyRate * $v->qty * 1.75);
+            $hsNuitAmount += $v->amount ?: (int) round($hourlyRate * $v->qty * $hsRateNuit);
         }
 
         // ─── Primes et indemnités FIXES ───────────────────────────────────────
@@ -272,14 +295,22 @@ class PayrollService
             + $primesExcept;
 
         // ─── CNSS ─────────────────────────────────────────────────────────────
-        $cnssBase     = min($salaireBrut, self::CNSS_CEILING);
-        $cnssEmployee = (int) round($cnssBase * self::CNSS_EMPLOYEE_RATE / 100);
-        $cnssEmployer = (int) round($cnssBase * self::CNSS_EMPLOYER_RATE / 100);
+        $cnssPlafond  = $this->settings?->cnss_ceiling       ?? self::CNSS_CEILING;
+        $cnssEmpRate  = $this->settings?->cnss_employee_rate ?? self::CNSS_EMPLOYEE_RATE;
+        $cnssPatRate  = $this->settings?->cnss_employer_rate ?? self::CNSS_EMPLOYER_RATE;
+
+        $cnssBase     = min($salaireBrut, $cnssPlafond);
+        $cnssEmployee = (int) round($cnssBase * $cnssEmpRate / 100);
+        $cnssEmployer = (int) round($cnssBase * $cnssPatRate / 100);
 
         // ─── IUTS ─────────────────────────────────────────────────────────────
         $salaireImposable = max(0, $salaireBrut - $cnssEmployee);
-        $nbParts          = $employee->nb_parts;
-        $iuts             = $this->computeIuts($salaireImposable, $nbParts);
+        $nbParts          = $this->settings
+            ? $this->settings->computeNbParts($employee->family_status ?? 'celibataire', $employee->nb_children ?? 0)
+            : $employee->nb_parts;
+        $iuts             = $this->settings
+            ? $this->settings->computeIuts($salaireImposable, $nbParts)
+            : $this->computeIuts($salaireImposable, $nbParts);
 
         // ─── Net à payer ───────────────────────────────────────────────────────
         $salaireNet = $salaireBrut

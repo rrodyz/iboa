@@ -712,6 +712,15 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         // Primes
         Route::post('/{employe}/primes',              [\App\Http\Controllers\HR\EmployeeController::class, 'storeAllowance'])->name('allowances.store');
         Route::delete('/{employe}/primes/{allowance}',[\App\Http\Controllers\HR\EmployeeController::class, 'destroyAllowance'])->name('allowances.destroy');
+
+        // Documents
+        Route::post('/{employe}/documents',                       [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'store'])->name('documents.store');
+        Route::get( '/{employe}/documents/{document}/dl',         [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'download'])->name('documents.download');
+        Route::delete('/{employe}/documents/{document}',          [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'destroy'])->name('documents.destroy');
+
+        // Photo
+        Route::post('/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'updatePhoto'])->name('photo.update');
+        Route::get( '/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'photo'])->name('photo');
     });
 
     // Départements
@@ -767,6 +776,32 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::get('/soldes',                  [\App\Http\Controllers\HR\LeaveController::class, 'balances'])->name('balances');
         Route::get('/types',                   [\App\Http\Controllers\HR\LeaveController::class, 'indexTypes'])->name('types.index');
         Route::post('/types',                  [\App\Http\Controllers\HR\LeaveController::class, 'storeType'])->name('types.store');
+    });
+
+    // Prêts salariés
+    Route::prefix('prets')->name('prets.')->group(function () {
+        Route::get('/',                      [\App\Http\Controllers\HR\EmployeeLoanController::class, 'index'])->name('index');
+        Route::post('/',                     [\App\Http\Controllers\HR\EmployeeLoanController::class, 'store'])->name('store');
+        Route::get('/{pret}',                [\App\Http\Controllers\HR\EmployeeLoanController::class, 'show'])->name('show');
+        Route::post('/{pret}/approuver',     [\App\Http\Controllers\HR\EmployeeLoanController::class, 'approve'])->name('approve');
+        Route::post('/{pret}/annuler',       [\App\Http\Controllers\HR\EmployeeLoanController::class, 'cancel'])->name('cancel');
+        Route::post('/{pret}/remboursement', [\App\Http\Controllers\HR\EmployeeLoanController::class, 'recordPayment'])->name('payment');
+    });
+
+    // Paramétrage de la paie
+    Route::prefix('parametrage')->name('parametrage.')->group(function () {
+        Route::get('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'edit'])->name('edit');
+        Route::put('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'update'])->name('update');
+    });
+
+    // Rubriques de paie
+    Route::prefix('rubriques')->name('rubriques.')->group(function () {
+        Route::get('/',              [\App\Http\Controllers\HR\PayRubricController::class, 'index'])->name('index');
+        Route::get('/creer',         [\App\Http\Controllers\HR\PayRubricController::class, 'create'])->name('create');
+        Route::post('/',             [\App\Http\Controllers\HR\PayRubricController::class, 'store'])->name('store');
+        Route::get('/{rubric}',      [\App\Http\Controllers\HR\PayRubricController::class, 'edit'])->name('edit');
+        Route::put('/{rubric}',      [\App\Http\Controllers\HR\PayRubricController::class, 'update'])->name('update');
+        Route::delete('/{rubric}',   [\App\Http\Controllers\HR\PayRubricController::class, 'destroy'])->name('destroy');
     });
 });
 
