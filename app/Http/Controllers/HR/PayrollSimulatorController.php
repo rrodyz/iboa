@@ -132,22 +132,31 @@ class PayrollSimulatorController extends Controller
         $cnssPlafond = (int)   $payroll->cnss_ceiling;
         $abattRate   = (float) $payroll->iuts_abattement_rate;
 
-        // Recherche binaire sur brut_total (= base + prime_imposable)
-        $lo    = max(0, $netSouhaite - $primeNonImposable + $avances);
-        $hi    = $lo * 5 + 2_000_000;
-        $brut  = $lo;
-        $calcNet = 0;
+        // Cas special : la prime non imposable couvre deja le net cible
+        // (ex: PNI = 800k pour un net cible de 720k → brut = 0, pas de salaire taxable)
+        if ($primeNonImposable - $avances >= $netSouhaite) {
+            $brut    = 0;
+            $calcNet = $primeNonImposable - $avances;
+        } else {
+            // Recherche binaire sur brut_total (= base + prime_imposable)
+            // lo = borne inferieure certaine (brut minimum pour atteindre le net)
+            $lo = max(1, $netSouhaite - $primeNonImposable + $avances);
+            $hi = $lo * 5 + 2_000_000;
+            $brut    = $lo;
+            $calcNet = 0;
 
-        for ($i = 0; $i < 150; $i++) {
-            $mid = (int) round(($lo + $hi) / 2);
-            $c   = $this->compute($mid, $nbParts, $cnssEmpRate, $cnssPatRate, $cnssPlafond, $abattRate, $payroll);
-            $netMid = $c['net'] + $primeNonImposable - $avances;
-            $diff   = $netMid - $netSouhaite;
+            for ($i = 0; $i < 150; $i++) {
+                if ($lo > $hi) break;                             // convergence impossibe : sortie propre
+                $mid = max(1, (int) round(($lo + $hi) / 2));     // jamais negatif ni zero
+                $c      = $this->compute($mid, $nbParts, $cnssEmpRate, $cnssPatRate, $cnssPlafond, $abattRate, $payroll);
+                $netMid = $c['net'] + $primeNonImposable - $avances;
+                $diff   = $netMid - $netSouhaite;
 
-            if (abs($diff) <= 5) { $brut = $mid; $calcNet = $netMid; break; }
-            if ($diff < 0) { $lo = $mid + 1; } else { $hi = $mid - 1; }
-            $brut    = $mid;
-            $calcNet = $netMid;
+                if (abs($diff) <= 5) { $brut = $mid; $calcNet = $netMid; break; }
+                if ($diff < 0) { $lo = $mid + 1; } else { $hi = $mid - 1; }
+                $brut    = $mid;
+                $calcNet = $netMid;
+            }
         }
 
         $detail  = $this->compute($brut, $nbParts, $cnssEmpRate, $cnssPatRate, $cnssPlafond, $abattRate, $payroll);

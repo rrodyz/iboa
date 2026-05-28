@@ -197,17 +197,17 @@
                 </h2>
                 <div class="space-y-3">
                     @foreach([
-                        ['prime_imposable',    'Primes imposables (dans le brut)',   'emerald', 'Transport, logement taxable…'],
-                        ['prime_non_imposable','Primes non imposables (hors brut)',   'blue',    'Panier, deplacement, exonerees…'],
-                        ['avances',            'Avances / Retenues sur salaire',      'orange',  ''],
-                    ] as [$field, $label, $color, $hint])
+                        ['prime_imposable',    'Primes imposables (dans le brut)',  'Transport, logement taxable…'],
+                        ['prime_non_imposable','Primes non imposables (hors brut)', 'Panier, deplacement, exonerees…'],
+                        ['avances',            'Avances / Retenues sur salaire',    ''],
+                    ] as [$field, $label, $hint])
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">{{ $label }}</label>
                         <div class="relative">
                             <input type="number" x-model.number="form.{{ $field }}"
                                    @input.debounce.500ms="simulate()"
                                    min="0" step="1000" placeholder="0"
-                                   class="w-full pl-3 pr-14 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-{{ $color }}-300">
+                                   class="w-full pl-3 pr-14 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400">
                             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">FCFA</span>
                         </div>
                         @if($hint)<p class="text-xs text-gray-400 mt-0.5">{{ $hint }}</p>@endif
@@ -249,8 +249,18 @@
             <template x-if="result">
                 <div class="space-y-4">
 
+                    {{-- Alerte : PNI couvre deja le net (brut = 0) --}}
+                    <div x-show="result.salaire_brut === 0"
+                         class="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+                        <svg class="w-5 h-5 flex-shrink-0 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span>La prime non imposable (<strong x-text="fmt(form.prime_non_imposable)+' F'"></strong>)
+                        couvre integralement le net cible. Le salaire brut taxable est <strong>0 F</strong> — pas de CNSS ni d'IUTS.</span>
+                    </div>
+
                     {{-- Alerte ecart --}}
-                    <div x-show="!result.exact"
+                    <div x-show="!result.exact && result.salaire_brut > 0"
                          class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
                         <svg class="w-5 h-5 flex-shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
