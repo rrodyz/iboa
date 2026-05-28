@@ -155,34 +155,44 @@ class PayrollSimulatorController extends Controller
         $ecart   = abs($calcNet - $netSouhaite);
 
         $result = [
-            'salaire_base'        => $salaireBase,
-            'prime_imposable'     => $primeImposable,
-            'salaire_brut'        => $brut,
-            'cnss_employee'       => $detail['cnss_emp'],
-            'cnss_employer'       => $detail['cnss_pat'],
-            'iuts'                => $detail['iuts'],
-            'prime_non_imposable' => $primeNonImposable,
-            'avances'             => $avances,
-            'net_calcule'         => $calcNet,
-            'net_souhaite'        => $netSouhaite,
-            'ecart'               => $ecart,
-            'exact'               => $ecart <= 5,
-            'cout_employeur'      => $brut + $detail['cnss_pat'],
-            'nb_parts'            => $nbParts,
-            'cnss_employee_rate'  => $cnssEmpRate,
-            'cnss_employer_rate'  => $cnssPatRate,
-            'abattement_rate'     => $abattRate,
+            'salaire_base'          => $salaireBase,
+            'prime_imposable'       => $primeImposable,
+            'salaire_brut'          => $brut,
+            'cnss_employee'         => $detail['cnss_emp'],
+            'cnss_employer'         => $detail['cnss_pat'],
+            'salaire_net_imposable' => $detail['net_imposable'],
+            'base_iuts'             => $detail['base_iuts'],
+            'iuts'                  => $detail['iuts'],
+            'prime_non_imposable'   => $primeNonImposable,
+            'avances'               => $avances,
+            'net_calcule'           => $calcNet,
+            'net_souhaite'          => $netSouhaite,
+            'ecart'                 => $ecart,
+            'exact'                 => $ecart <= 5,
+            'cout_employeur'        => $brut + $detail['cnss_pat'],
+            'nb_parts'              => $nbParts,
+            'cnss_employee_rate'    => $cnssEmpRate,
+            'cnss_employer_rate'    => $cnssPatRate,
+            'abattement_rate'       => $abattRate,
             'detail' => [
-                ['label'=>'Salaire de base estime',    'montant'=>$salaireBase,               'signe'=>'+','color'=>'gray'],
-                ['label'=>'Prime(s) imposable(s)',     'montant'=>$primeImposable,            'signe'=>'+','color'=>'indigo'],
-                ['label'=>'Salaire brut',              'montant'=>$brut,                      'signe'=>'=','color'=>'blue','bold'=>true],
-                ['label'=>'CNSS salarie ('.$cnssEmpRate.'%)', 'montant'=>$detail['cnss_emp'],'signe'=>'-','color'=>'red'],
-                ['label'=>'IUTS ('.$nbParts.' parts)', 'montant'=>$detail['iuts'],           'signe'=>'-','color'=>'purple'],
-                ['label'=>'Prime(s) non imposable(s)', 'montant'=>$primeNonImposable,         'signe'=>'+','color'=>'emerald'],
-                ['label'=>'Avances / Retenues',        'montant'=>$avances,                   'signe'=>'-','color'=>'orange'],
-                ['label'=>'Net a payer',               'montant'=>$calcNet,                   'signe'=>'=','color'=>'green','bold'=>true],
-                ['label'=>'CNSS patronal ('.$cnssPatRate.'%)', 'montant'=>$detail['cnss_pat'],'signe'=>'+','color'=>'amber','section'=>'employeur'],
-                ['label'=>'Cout total employeur',      'montant'=>$brut+$detail['cnss_pat'],  'signe'=>'=','color'=>'rose','bold'=>true,'section'=>'employeur'],
+                // ── Composantes du brut ──────────────────────────────────
+                ['label'=>'Salaire de base estime',         'montant'=>$salaireBase,                'signe'=>'+','color'=>'gray'],
+                ['label'=>'Prime(s) imposable(s)',          'montant'=>$primeImposable,             'signe'=>'+','color'=>'indigo'],
+                ['label'=>'Salaire brut',                   'montant'=>$brut,                       'signe'=>'=','color'=>'blue','bold'=>true],
+                // ── Deductions salariales ────────────────────────────────
+                ['label'=>'CNSS salarie ('.$cnssEmpRate.'%)','montant'=>$detail['cnss_emp'],        'signe'=>'-','color'=>'red'],
+                ['label'=>'Salaire net imposable',          'montant'=>$detail['net_imposable'],    'signe'=>'=','color'=>'teal','bold'=>true],
+                ['label'=>'Abattement IUTS ('.$abattRate.'%)',
+                          'montant'=>(int)round($detail['net_imposable']*$abattRate/100),           'signe'=>'-','color'=>'slate'],
+                ['label'=>'Base imposable IUTS',            'montant'=>$detail['base_iuts'],        'signe'=>'=','color'=>'violet','bold'=>false],
+                ['label'=>'IUTS ('.$nbParts.' part(s))',    'montant'=>$detail['iuts'],             'signe'=>'-','color'=>'purple'],
+                // ── Elements hors brut ───────────────────────────────────
+                ['label'=>'Prime(s) non imposable(s)',      'montant'=>$primeNonImposable,          'signe'=>'+','color'=>'emerald'],
+                ['label'=>'Avances / Retenues',             'montant'=>$avances,                    'signe'=>'-','color'=>'orange'],
+                ['label'=>'Net a payer',                    'montant'=>$calcNet,                    'signe'=>'=','color'=>'green','bold'=>true],
+                // ── Charge patronale ─────────────────────────────────────
+                ['label'=>'CNSS patronal ('.$cnssPatRate.'%)', 'montant'=>$detail['cnss_pat'],      'signe'=>'+','color'=>'amber','section'=>'employeur'],
+                ['label'=>'Cout total employeur',           'montant'=>$brut+$detail['cnss_pat'],   'signe'=>'=','color'=>'rose','bold'=>true,'section'=>'employeur'],
             ],
         ];
 
@@ -191,11 +201,19 @@ class PayrollSimulatorController extends Controller
 
     private function compute(int $brut, float $nbParts, float $cnssEmpRate, float $cnssPatRate, int $cnssPlafond, float $abattRate, PayrollSetting $payroll): array
     {
-        $cnssBase = min($brut, $cnssPlafond);
-        $cnssEmp  = (int) round($cnssBase * $cnssEmpRate / 100);
-        $cnssPat  = (int) round($cnssBase * $cnssPatRate / 100);
-        $imposable = (int) round(max(0, $brut - $cnssEmp) * (1 - $abattRate / 100));
-        $iuts      = $payroll->computeIuts($imposable, $nbParts);
-        return ['cnss_emp'=>$cnssEmp, 'cnss_pat'=>$cnssPat, 'iuts'=>$iuts, 'net'=>$brut - $cnssEmp - $iuts];
+        $cnssBase      = min($brut, $cnssPlafond);
+        $cnssEmp       = (int) round($cnssBase * $cnssEmpRate / 100);
+        $cnssPat       = (int) round($cnssBase * $cnssPatRate / 100);
+        $netImposable  = max(0, $brut - $cnssEmp);                                        // brut − CNSS
+        $baseIuts      = (int) round($netImposable * (1 - $abattRate / 100));             // après abattement
+        $iuts          = $payroll->computeIuts($baseIuts, $nbParts);
+        return [
+            'cnss_emp'     => $cnssEmp,
+            'cnss_pat'     => $cnssPat,
+            'net_imposable'=> $netImposable,
+            'base_iuts'    => $baseIuts,
+            'iuts'         => $iuts,
+            'net'          => $brut - $cnssEmp - $iuts,
+        ];
     }
 }

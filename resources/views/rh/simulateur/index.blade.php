@@ -274,12 +274,22 @@
                         <div class="bg-red-50 border border-red-200 rounded-xl p-4">
                             <p class="text-xs text-red-500 font-medium uppercase tracking-wide mb-1">CNSS salarie</p>
                             <p class="text-xl font-bold text-red-700 tabular-nums" x-text="fmt(result.cnss_employee)+' F'"></p>
-                            <p class="text-xs text-red-400 mt-1" x-text="result.cnss_employee_rate+'% du brut plafonné'"></p>
+                            <p class="text-xs text-red-400 mt-1" x-text="result.cnss_employee_rate+'% du brut plafonne'"></p>
                         </div>
                         <div class="bg-purple-50 border border-purple-200 rounded-xl p-4">
                             <p class="text-xs text-purple-500 font-medium uppercase tracking-wide mb-1">IUTS</p>
                             <p class="text-xl font-bold text-purple-700 tabular-nums" x-text="fmt(result.iuts)+' F'"></p>
                             <p class="text-xs text-purple-400 mt-1" x-text="result.nb_parts+' part(s) fiscale(s)'"></p>
+                        </div>
+                        <div class="bg-teal-50 border border-teal-200 rounded-xl p-4">
+                            <p class="text-xs text-teal-600 font-medium uppercase tracking-wide mb-1">Salaire net imposable</p>
+                            <p class="text-xl font-bold text-teal-700 tabular-nums" x-text="fmt(result.salaire_net_imposable)+' F'"></p>
+                            <p class="text-xs text-teal-400 mt-1">Brut &minus; CNSS</p>
+                        </div>
+                        <div class="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                            <p class="text-xs text-violet-600 font-medium uppercase tracking-wide mb-1">Base imposable IUTS</p>
+                            <p class="text-xl font-bold text-violet-700 tabular-nums" x-text="fmt(result.base_iuts)+' F'"></p>
+                            <p class="text-xs text-violet-400 mt-1" x-text="'Apres abattement '+result.abattement_rate+'%'"></p>
                         </div>
                         <div class="col-span-2 bg-gray-900 rounded-xl p-4 flex items-center justify-between">
                             <div>
@@ -343,6 +353,9 @@
                                                   'text-indigo-600': row.color==='indigo',
                                                   'text-orange-600': row.color==='orange',
                                                   'text-gray-700':   row.color==='gray',
+                                                  'font-bold text-teal-700':   row.color==='teal',
+                                                  'text-violet-600': row.color==='violet',
+                                                  'text-slate-500':  row.color==='slate',
                                               }"
                                               x-text="(row.montant>0||row.bold)?fmt(row.montant)+' F':'—'"></span>
                                     </div>
@@ -423,10 +436,11 @@ function simulateur() {
             if (!this.result?.salaire_brut) return [];
             const b = this.result.salaire_brut, t = this.result.cout_employeur;
             return [
-                { label:'CNSS salarie / brut',  pct: this.result.cnss_employee / b * 100, color:'bg-red-400' },
-                { label:'IUTS / brut',           pct: this.result.iuts          / b * 100, color:'bg-purple-400' },
-                { label:'Pression fiscale tot.', pct:(this.result.cnss_employee + this.result.iuts) / b * 100, color:'bg-blue-400' },
-                { label:'Net / cout employeur',  pct: this.result.net_calcule   / t * 100, color:'bg-emerald-400' },
+                { label:'CNSS salarie / brut',      pct: this.result.cnss_employee         / b * 100, color:'bg-red-400' },
+                { label:'Net imposable / brut',      pct: this.result.salaire_net_imposable / b * 100, color:'bg-teal-400' },
+                { label:'IUTS / brut',               pct: this.result.iuts                 / b * 100, color:'bg-purple-400' },
+                { label:'Pression fiscale totale',   pct:(this.result.cnss_employee + this.result.iuts) / b * 100, color:'bg-blue-400' },
+                { label:'Net a payer / cout emp.',   pct: this.result.net_calcule           / t * 100, color:'bg-emerald-400' },
             ];
         },
 

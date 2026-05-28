@@ -55,6 +55,9 @@
     .c-orange { color: #c2410c; }
     .c-rose   { color: #be123c; }
     .c-emerald{ color: #047857; }
+    .c-teal   { color: #0f766e; font-weight: bold; }
+    .c-violet { color: #6d28d9; }
+    .c-slate  { color: #64748b; }
     .section-header td { background: #374151 !important; color: #d1d5db !important;
                          font-size: 7pt; text-transform: uppercase; letter-spacing: .5px; padding: 3px 8px; }
 
@@ -103,6 +106,10 @@
     <div class="kpi-item red">
         <span class="kpi-lbl">CNSS salarie</span>
         <span class="kpi-val">{{ number_format($result['cnss_employee'], 0, ',', ' ') }} F</span>
+    </div>
+    <div class="kpi-item" style="border-right:1px solid #2d4f7f;">
+        <span class="kpi-lbl" style="color:#5eead4;">Net imposable</span>
+        <span class="kpi-val" style="color:#99f6e4;">{{ number_format($result['salaire_net_imposable'], 0, ',', ' ') }} F</span>
     </div>
     <div class="kpi-item red">
         <span class="kpi-lbl">IUTS</span>
@@ -165,13 +172,16 @@
             <td class="td-label">{{ $row['label'] }}</td>
             <td class="td-montant
                 @if(($row['bold']??false) && $row['color']==='rose') style='color:#fff'
-                @elseif($row['color']==='green') c-green
-                @elseif($row['color']==='blue') c-blue
-                @elseif($row['color']==='red') c-red
-                @elseif($row['color']==='purple') c-purple
-                @elseif($row['color']==='amber') c-amber
-                @elseif($row['color']==='orange') c-orange
+                @elseif($row['color']==='green')   c-green
+                @elseif($row['color']==='blue')    c-blue
+                @elseif($row['color']==='red')     c-red
+                @elseif($row['color']==='purple')  c-purple
+                @elseif($row['color']==='amber')   c-amber
+                @elseif($row['color']==='orange')  c-orange
                 @elseif($row['color']==='emerald') c-emerald
+                @elseif($row['color']==='teal')    c-teal
+                @elseif($row['color']==='violet')  c-violet
+                @elseif($row['color']==='slate')   c-slate
                 @endif">
                 @if($row['montant'] > 0 || ($row['bold'] ?? false))
                     {{ number_format($row['montant'], 0, ',', ' ') }} F
@@ -191,10 +201,11 @@
     $b = $result['salaire_brut'];
     $t = $result['cout_employeur'];
     $taux = [
-        ['Pression CNSS salarie',  $b > 0 ? round($result['cnss_employee']/$b*100,1) : 0, '#ef4444'],
-        ['Pression IUTS',          $b > 0 ? round($result['iuts']/$b*100,1) : 0,           '#7c3aed'],
-        ['Pression fiscale totale',$b > 0 ? round(($result['cnss_employee']+$result['iuts'])/$b*100,1) : 0, '#2563eb'],
-        ['Net / Cout employeur',   $t > 0 ? round($result['net_calcule']/$t*100,1) : 0,    '#059669'],
+        ['CNSS salarie / brut',    $b > 0 ? round($result['cnss_employee']/$b*100,1) : 0,                             '#ef4444'],
+        ['Net imposable / brut',   $b > 0 ? round($result['salaire_net_imposable']/$b*100,1) : 0,                     '#0f766e'],
+        ['IUTS / brut',            $b > 0 ? round($result['iuts']/$b*100,1) : 0,                                      '#7c3aed'],
+        ['Pression fiscale totale',$b > 0 ? round(($result['cnss_employee']+$result['iuts'])/$b*100,1) : 0,           '#2563eb'],
+        ['Net a payer / cout emp.',$t > 0 ? round($result['net_calcule']/$t*100,1) : 0,                               '#059669'],
     ];
     @endphp
     <table style="margin-top:4px;">
