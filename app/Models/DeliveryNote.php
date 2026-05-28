@@ -84,4 +84,11 @@ class DeliveryNote extends Model
     {
         return $this->hasMany(Invoice::class, 'delivery_note_id');
     }
+
+    /** [AUDIT-ERP-C] Mouvements de stock générés par ce bon de livraison. */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class, 'reference_id')
+                    ->where('reference_type', 'delivery_note');
+    }
 }

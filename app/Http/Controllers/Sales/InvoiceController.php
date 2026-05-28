@@ -39,7 +39,31 @@ class InvoiceController extends Controller
 
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
 
-        return view('ventes.factures.index', compact('invoices', 'filters', 'clients'));
+        // ── Totaux agrégés sur l'ensemble des filtres (pas seulement la page courante) ──
+        $company = Company::firstOrFail();
+        $totalsQuery = Invoice::where('company_id', $company->id)
+            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['type']),      fn($q) => $q->where('type', $filters['type']))
+            ->when(!empty($filters['date_from']), fn($q) => $q->whereDate('issued_at', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']),   fn($q) => $q->whereDate('issued_at', '<=', $filters['date_to']))
+            ->when(!empty($filters['overdue']),   fn($q) => $q->where('due_at', '<', now()->toDateString())
+                ->whereNotIn('status', ['payee', 'annulee']))
+            ->when(!empty($filters['search']),    fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('client', fn($c) => $c->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'       => (int) $totalsQuery->sum('total_ttc'),
+            'total_ht'        => (int) (clone $totalsQuery)->sum('subtotal_ht'),
+            'total_remaining' => (int) (clone $totalsQuery)->sum('remaining_amount'),
+            'count_overdue'   => (int) (clone $totalsQuery)->where('due_at', '<', now()->toDateString())
+                                    ->whereNotIn('status', ['payee', 'annulee'])->count(),
+            'count_paid'      => (int) (clone $totalsQuery)->where('status', 'payee')->count(),
+        ];
+
+        return view('ventes.factures.index', compact('invoices', 'filters', 'clients', 'summary'));
     }
 
     public function create(Request $request)

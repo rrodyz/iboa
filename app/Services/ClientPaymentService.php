@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Events\PaymentReceived;
 use App\Models\CashAccount;
 use App\Models\ClientPayment;
+use App\Models\ClientPaymentSchedule;
 use App\Models\Invoice;
 use App\Repositories\ClientPaymentRepository;
 use App\Services\AccountingService;
@@ -19,6 +20,7 @@ class ClientPaymentService
         protected DocumentSequenceService $sequenceService,
         protected CashAccountService $cashService,
         protected AccountingService $accountingService,
+        protected ClientPaymentScheduleService $scheduleService,
     ) {}
 
     public function create(array $data): ClientPayment
@@ -129,6 +131,10 @@ class ClientPaymentService
                     'remaining_amount' => $newRemaining,
                     'status'           => $newRemaining <= 0 ? 'payee' : 'partiellement_payee',
                 ]);
+
+                // [ECHEANCIER] Appliquer le montant encaissé aux lignes d'échéancier
+                // dans l'ordre chronologique (plus ancienne d'abord).
+                $this->applyPaymentToSchedule($invoice->id, $amount);
             }
 
             // Update allocated/unallocated on the payment
@@ -331,6 +337,40 @@ class ClientPaymentService
                 'allocated_amount'   => $payment->allocated_amount + $amount,
                 'unallocated_amount' => max(0, $payment->unallocated_amount - $amount),
             ]);
+
+            // [ECHEANCIER] Mettre à jour les lignes d'échéancier
+            $this->applyPaymentToSchedule($invoice->id, $amount);
         });
+    }
+
+    /**
+     * [ECHEANCIER] Applique un montant reçu sur les lignes de l'échéancier de la facture,
+     * en commençant par la plus ancienne échéance non réglée (ordre chronologique).
+     *
+     * Ne lève pas d'exception si la facture n'a pas d'échéancier — dans ce cas, rien
+     * ne se passe (la mise à jour paid_amount/remaining_amount sur Invoice suffit).
+     */
+    private function applyPaymentToSchedule(int $invoiceId, int $allocatedAmount): void
+    {
+        if ($allocatedAmount <= 0) return;
+
+        $schedules = ClientPaymentSchedule::where('invoice_id', $invoiceId)
+            ->whereIn('status', ['en_attente', 'partiel'])
+            ->orderBy('due_date')
+            ->orderBy('installment_number')
+            ->get();
+
+        $remaining = $allocatedAmount;
+
+        foreach ($schedules as $schedule) {
+            if ($remaining <= 0) break;
+
+            $scheduleRemaining = (int) $schedule->remainingAmount();
+            if ($scheduleRemaining <= 0) continue;
+
+            $toApply = min($remaining, $scheduleRemaining);
+            $this->scheduleService->markPayment($schedule, $toApply);
+            $remaining -= $toApply;
+        }
     }
 }

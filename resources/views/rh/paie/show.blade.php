@@ -27,59 +27,325 @@
     </div>
 
     <div class="flex flex-wrap gap-2 justify-end">
-        {{-- Calculer --}}
-        @if($run->isEditable())
-        <form method="POST" action="{{ route('rh.paie.calculate', $run) }}">
+
+        {{-- Écriture comptable --}}
+        @if($run->isValidated())
+        @if($run->journal_entry_id)
+        <a href="{{ route('comptabilite.journaux.show', $run->journal_entry_id) }}"
+           class="inline-flex items-center gap-2 px-3 py-2 bg-violet-100 text-violet-700 rounded-lg text-sm font-medium hover:bg-violet-200">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Écriture #{{ $run->journal_entry_id }}
+        </a>
+        @else
+        <form method="POST" action="{{ route('rh.paie.journalize', $run) }}">
             @csrf
-            <button class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
-                Calculer la paie
+            <button class="inline-flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Comptabiliser
             </button>
         </form>
         @endif
-
-        {{-- Valider --}}
-        @if($run->status === 'calcule')
-        <form method="POST" action="{{ route('rh.paie.validate', $run) }}"
-              onsubmit="return confirm('Valider ce bulletin ? Cette action est irréversible.')">
-            @csrf
-            <button class="inline-flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Valider le bulletin
-            </button>
-        </form>
         @endif
 
-        {{-- Marquer payé --}}
-        @if($run->status === 'valide')
-        <button @click="$refs.modalPaid.classList.remove('hidden')"
-                class="inline-flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-            Marquer payé
-        </button>
-        @endif
-
-        {{-- Exports --}}
+        {{-- États de paie --}}
         @if($run->status !== 'brouillon')
         <div x-data="{open:false}" class="relative">
-            <button @click="open=!open" class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                Exports <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <button @click="open=!open"
+                    class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                États de paie
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
             </button>
             <div x-show="open" @click.away="open=false"
-                 class="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
-                <a href="{{ route('rh.paie.recap-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📄 Récap mensuel PDF</a>
-                <a href="{{ route('rh.paie.cnss-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 Bordereau CNSS PDF</a>
-                <a href="{{ route('rh.paie.iuts-pdf', $run) }}" target="_blank" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 État IUTS PDF</a>
-                <hr class="my-1 border-gray-100">
-                <a href="{{ route('rh.paie.livre-paie-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 Livre de paie Excel</a>
-                <a href="{{ route('rh.paie.cnss-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 CNSS Excel</a>
-                <a href="{{ route('rh.paie.iuts-xlsx', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 hover:bg-emerald-50">📊 IUTS Excel</a>
-                <hr class="my-1 border-gray-100">
-                <a href="{{ route('rh.paie.virement-csv', $run) }}" class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">📋 Ordre de virement CSV</a>
+                 class="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1">
+
+                {{-- Titre section Salaires --}}
+                <div class="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Salaires</div>
+                <a href="{{ route('rh.paie.recap-pdf', $run) }}" target="_blank"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📄</span> Livre de paie (récap mensuel)
+                </a>
+                <a href="{{ route('rh.paie.livre-paie-xlsx', $run) }}"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50">
+                    <span class="text-emerald-600">📊</span> Livre de paie Excel
+                </a>
+
+                {{-- CNSS --}}
+                <div class="px-4 py-1.5 mt-1 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100">CNSS</div>
+                <a href="{{ route('rh.paie.cnss-pdf', $run) }}" target="_blank"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📄</span> Bordereau CNSS PDF
+                </a>
+                <a href="{{ route('rh.paie.cnss-xlsx', $run) }}"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50">
+                    <span class="text-emerald-600">📊</span> CNSS Excel
+                </a>
+
+                {{-- IUTS --}}
+                <div class="px-4 py-1.5 mt-1 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100">ITS / IUTS</div>
+                <a href="{{ route('rh.paie.iuts-pdf', $run) }}" target="_blank"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📄</span> État IUTS PDF
+                </a>
+                <a href="{{ route('rh.paie.iuts-xlsx', $run) }}"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-emerald-50">
+                    <span class="text-emerald-600">📊</span> IUTS Excel
+                </a>
+
+                {{-- Avances & Prêts --}}
+                <div class="px-4 py-1.5 mt-1 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100">Avances & Prêts</div>
+                <a href="{{ route('rh.paie.avances-pdf', $run) }}" target="_blank"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📄</span> État avances PDF
+                </a>
+                <a href="{{ route('rh.paie.prets-pdf', $run) }}" target="_blank"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📄</span> État prêts PDF
+                </a>
+
+                {{-- Virement --}}
+                <div class="px-4 py-1.5 mt-1 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100">Banque</div>
+                <a href="{{ route('rh.paie.virement-csv', $run) }}"
+                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <span>📋</span> Ordre de virement CSV
+                </a>
             </div>
         </div>
         @endif
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════════════════════════
+     Workflow de validation — Préparation → Contrôle → Validation → Clôture
+     Inspiré Sage Paie : stepper horizontal avec état visuel + action contextuelle
+══════════════════════════════════════════════════════════════════════════════ --}}
+@php
+    $wfStep = match($run->status) {
+        'brouillon' => 1,
+        'calcule'   => 2,
+        'valide'    => 3,
+        'paye'      => 4,
+        default     => 1,
+    };
+    $wfSteps = [
+        1 => [
+            'label'    => 'Préparation',
+            'sub'      => 'Saisie des variables & vérification',
+            'icon'     => 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+            'color'    => 'blue',
+            'date'     => $run->created_at?->format('d/m/Y'),
+        ],
+        2 => [
+            'label'    => 'Contrôle',
+            'sub'      => 'Calcul & vérification des montants',
+            'icon'     => 'M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18',
+            'color'    => 'indigo',
+            'date'     => $run->status === 'calcule' || $wfStep > 2 ? $run->updated_at?->format('d/m/Y') : null,
+        ],
+        3 => [
+            'label'    => 'Validation',
+            'sub'      => 'Approbation finale du bulletin',
+            'icon'     => 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+            'color'    => 'green',
+            'date'     => $run->validated_at?->format('d/m/Y'),
+        ],
+        4 => [
+            'label'    => 'Clôture',
+            'sub'      => 'Paiement & archivage de la période',
+            'icon'     => 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
+            'color'    => 'emerald',
+            'date'     => $run->paid_at?->format('d/m/Y'),
+        ],
+    ];
+@endphp
+
+<div class="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
+    {{-- Barre de titre --}}
+    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Workflow de traitement</span>
+        <span class="text-xs text-gray-400">{{ $run->period_label }}</span>
+    </div>
+
+    {{-- Stepper — classes Tailwind STATIQUES par étape (pas de concat dynamique) --}}
+    <div class="px-6 py-5">
+        <div class="flex items-start">
+
+            {{-- ── ÉTAPE 1 : Préparation ── --}}
+            <div class="flex-1 flex flex-col items-center relative min-w-0">
+                {{-- Connecteur droite --}}
+                <div class="absolute right-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep > 1 ? 'bg-blue-400' : 'bg-gray-200' }}"></div>
+                {{-- Cercle --}}
+                <div class="relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
+                            {{ $wfStep > 1 ? 'bg-blue-500 border-blue-500 text-white'
+                               : ($wfStep === 1 ? 'bg-white border-blue-500 text-blue-600 ring-4 ring-blue-100'
+                                              : 'bg-white border-gray-200 text-gray-300') }}">
+                    @if($wfStep > 1)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    @else
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    @endif
+                </div>
+                <div class="mt-2 text-center px-1">
+                    <div class="text-xs font-semibold {{ $wfStep >= 1 ? 'text-blue-700' : 'text-gray-400' }}">Préparation</div>
+                    @if($wfStep === 1)<div class="text-[10px] text-gray-500 mt-0.5 hidden sm:block">Saisie des variables</div>@endif
+                    @if($wfSteps[1]['date'])<div class="text-[10px] text-gray-400 mt-0.5">{{ $wfSteps[1]['date'] }}</div>@endif
+                </div>
+            </div>
+
+            {{-- ── ÉTAPE 2 : Contrôle ── --}}
+            <div class="flex-1 flex flex-col items-center relative min-w-0">
+                {{-- Connecteur gauche --}}
+                <div class="absolute left-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep >= 2 ? 'bg-blue-400' : 'bg-gray-200' }}"></div>
+                {{-- Connecteur droite --}}
+                <div class="absolute right-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep > 2 ? 'bg-indigo-400' : 'bg-gray-200' }}"></div>
+                {{-- Cercle --}}
+                <div class="relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
+                            {{ $wfStep > 2 ? 'bg-indigo-500 border-indigo-500 text-white'
+                               : ($wfStep === 2 ? 'bg-white border-indigo-500 text-indigo-600 ring-4 ring-indigo-100'
+                                              : 'bg-white border-gray-200 text-gray-300') }}">
+                    @if($wfStep > 2)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    @elseif($wfStep === 2)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+                    @else
+                        <span class="text-sm font-bold text-gray-300">2</span>
+                    @endif
+                </div>
+                <div class="mt-2 text-center px-1">
+                    <div class="text-xs font-semibold {{ $wfStep >= 2 ? 'text-indigo-700' : 'text-gray-400' }}">Contrôle</div>
+                    @if($wfStep === 2)<div class="text-[10px] text-gray-500 mt-0.5 hidden sm:block">Vérification des montants</div>@endif
+                    @if($wfSteps[2]['date'])<div class="text-[10px] text-gray-400 mt-0.5">{{ $wfSteps[2]['date'] }}</div>@endif
+                </div>
+            </div>
+
+            {{-- ── ÉTAPE 3 : Validation ── --}}
+            <div class="flex-1 flex flex-col items-center relative min-w-0">
+                {{-- Connecteur gauche --}}
+                <div class="absolute left-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep >= 3 ? 'bg-indigo-400' : 'bg-gray-200' }}"></div>
+                {{-- Connecteur droite --}}
+                <div class="absolute right-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep > 3 ? 'bg-green-400' : 'bg-gray-200' }}"></div>
+                {{-- Cercle --}}
+                <div class="relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
+                            {{ $wfStep > 3 ? 'bg-green-500 border-green-500 text-white'
+                               : ($wfStep === 3 ? 'bg-white border-green-500 text-green-600 ring-4 ring-green-100'
+                                              : 'bg-white border-gray-200 text-gray-300') }}">
+                    @if($wfStep > 3)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    @elseif($wfStep === 3)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    @else
+                        <span class="text-sm font-bold text-gray-300">3</span>
+                    @endif
+                </div>
+                <div class="mt-2 text-center px-1">
+                    <div class="text-xs font-semibold {{ $wfStep >= 3 ? 'text-green-700' : 'text-gray-400' }}">Validation</div>
+                    @if($wfStep === 3)<div class="text-[10px] text-gray-500 mt-0.5 hidden sm:block">Approbation finale</div>@endif
+                    @if($wfSteps[3]['date'])<div class="text-[10px] text-gray-400 mt-0.5">{{ $wfSteps[3]['date'] }}</div>@endif
+                </div>
+            </div>
+
+            {{-- ── ÉTAPE 4 : Clôture ── --}}
+            <div class="flex-1 flex flex-col items-center relative min-w-0">
+                {{-- Connecteur gauche --}}
+                <div class="absolute left-0 top-5 -translate-y-1/2 w-1/2 h-0.5
+                            {{ $wfStep > 4 ? 'bg-green-400' : 'bg-gray-200' }}"></div>
+                {{-- Cercle --}}
+                <div class="relative z-10 flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all duration-300
+                            {{ $wfStep > 4 ? 'bg-emerald-500 border-emerald-500 text-white'
+                               : ($wfStep === 4 ? 'bg-white border-emerald-500 text-emerald-600 ring-4 ring-emerald-100'
+                                              : 'bg-white border-gray-200 text-gray-300') }}">
+                    @if($wfStep > 4)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    @elseif($wfStep === 4)
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    @else
+                        <span class="text-sm font-bold text-gray-300">4</span>
+                    @endif
+                </div>
+                <div class="mt-2 text-center px-1">
+                    <div class="text-xs font-semibold {{ $wfStep >= 4 ? 'text-emerald-700' : 'text-gray-400' }}">Clôture</div>
+                    @if($wfStep === 4)<div class="text-[10px] text-gray-500 mt-0.5 hidden sm:block">Paiement & archivage</div>@endif
+                    @if($wfSteps[4]['date'])<div class="text-[10px] text-gray-400 mt-0.5">{{ $wfSteps[4]['date'] }}</div>@endif
+                </div>
+            </div>
+
+        </div>
+
+        {{-- Action contextuelle du workflow --}}
+        <div class="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
+            <div class="text-sm text-gray-600">
+                @if($wfStep === 1)
+                    <span class="font-medium text-blue-700">Étape 1 : Préparation</span>
+                    — Saisissez les variables mensuelles, vérifiez les paramètres, puis lancez le calcul.
+                @elseif($wfStep === 2)
+                    <span class="font-medium text-indigo-700">Étape 2 : Contrôle</span>
+                    — Vérifiez les montants calculés ligne par ligne avant validation.
+                    @if($run->validatedBy)
+                    Calculé le {{ $run->updated_at?->format('d/m/Y') }}.
+                    @endif
+                @elseif($wfStep === 3)
+                    <span class="font-medium text-green-700">Étape 3 : Validation</span>
+                    — Bulletin validé le {{ $run->validated_at?->format('d/m/Y') }} par {{ $run->validatedBy?->name ?? '—' }}.
+                    Procédez au paiement pour clôturer la période.
+                @elseif($wfStep === 4)
+                    <span class="font-medium text-emerald-700">✓ Période clôturée</span>
+                    — Payé le {{ $run->paid_at?->format('d/m/Y') }}. Toutes les étapes sont complètes.
+                @endif
+            </div>
+
+            <div class="flex items-center gap-2">
+                @if($wfStep === 1)
+                {{-- Calculer → passe à Contrôle --}}
+                <form method="POST" action="{{ route('rh.paie.calculate', $run) }}">
+                    @csrf
+                    <button class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 shadow-sm transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/></svg>
+                        Lancer le calcul →
+                    </button>
+                </form>
+                @elseif($wfStep === 2)
+                {{-- Valider → passe à Validation --}}
+                <form method="POST" action="{{ route('rh.paie.validate', $run) }}"
+                      onsubmit="return confirm('Valider définitivement ce bulletin ? Cette action est irréversible.')">
+                    @csrf
+                    <button class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow-sm transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Valider le bulletin →
+                    </button>
+                </form>
+                {{-- Recalculer si besoin --}}
+                <form method="POST" action="{{ route('rh.paie.calculate', $run) }}">
+                    @csrf
+                    <button class="inline-flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Recalculer
+                    </button>
+                </form>
+                @elseif($wfStep === 3)
+                {{-- Payer → passe à Clôture --}}
+                <button @click="$refs.modalPaid.classList.remove('hidden')"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                    Marquer comme payé →
+                </button>
+                @elseif($wfStep === 4)
+                <span class="inline-flex items-center gap-1.5 text-sm text-emerald-600 font-medium">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Période clôturée
+                </span>
+                @endif
+            </div>
+        </div>
     </div>
 </div>
 
@@ -194,7 +460,7 @@
             <tbody class="divide-y divide-gray-100">
                 <template x-for="v in variables" :key="v.id">
                     <tr class="hover:bg-gray-50">
-                        <td class="px-3 py-2 font-medium" x-text="v.employee?.employee_name || empName(v.employee_id)"></td>
+                        <td class="px-3 py-2 font-medium" x-text="v.employee?.full_name || empName(v.employee_id)"></td>
                         <td class="px-3 py-2 text-gray-600" x-text="v.label"></td>
                         <td class="px-3 py-2 text-center text-gray-400" x-text="v.unit"></td>
                         <td class="px-3 py-2 text-right font-mono" x-text="v.qty > 0 ? v.qty : '—'"></td>
@@ -262,8 +528,8 @@
                 @endif
             </td>
             <td class="px-3 py-2 text-right font-mono text-indigo-600">
-                {{ $item->total_allowances_taxable + $item->primes_exceptionnelles > 0
-                    ? number_format($item->total_allowances_taxable + $item->primes_exceptionnelles, 0, ',', ' ')
+                {{ $item->total_allowances_taxable + $item->primes_exceptionnelles + ($item->autres_gains ?? 0) > 0
+                    ? number_format($item->total_allowances_taxable + $item->primes_exceptionnelles + ($item->autres_gains ?? 0), 0, ',', ' ')
                     : '—' }}
             </td>
             <td class="px-3 py-2 text-right font-mono text-orange-600">

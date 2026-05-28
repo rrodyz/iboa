@@ -20,7 +20,16 @@ class ClientController extends Controller
         $this->authorize('viewAny', Client::class);
         $filters = $request->only(['search', 'type', 'is_active']);
         $clients = $this->service->search($filters, 15);
-        return view('clients.index', compact('clients', 'filters'));
+
+        // ── Indicateurs globaux (tous les clients de la société) ──
+        $summary = [
+            'total'      => Client::count(),
+            'active'     => Client::where('is_active', true)->count(),
+            'entreprise' => Client::where('type', 'entreprise')->count(),
+            'particulier'=> Client::where('type', 'particulier')->count(),
+        ];
+
+        return view('clients.index', compact('clients', 'filters', 'summary'));
     }
 
     public function create()

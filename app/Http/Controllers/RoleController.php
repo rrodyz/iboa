@@ -33,6 +33,9 @@ class RoleController extends Controller
             'Paiements'     => 'payments',
             'Trésorerie'    => 'cash_accounts',
             'Rapports'      => 'reports',
+            // ── Module RH / Paie ─────────────────────────────────────────────
+            'Ressources Humaines'   => 'rh',
+            // ─────────────────────────────────────────────────────────────────
             'Administration' => null, // catch-all pour users, roles, settings, company, audit
         ];
 

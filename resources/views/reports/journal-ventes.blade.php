@@ -16,7 +16,13 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Journal des ventes</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Toutes les factures émises sur la période — FCFA</p>
+            <p class="text-sm text-gray-500 mt-0.5">
+                @if($clientName)
+                    Factures de <span class="font-medium text-indigo-700">{{ $clientName }}</span> — {{ \Carbon\Carbon::parse($from)->format('d/m/Y') }} au {{ \Carbon\Carbon::parse($to)->format('d/m/Y') }} — FCFA
+                @else
+                    Toutes les factures émises sur la période — FCFA
+                @endif
+            </p>
         </div>
         <div class="flex items-center gap-2">
             <a href="{{ request()->fullUrlWithQuery(['export' => 'excel']) }}"
@@ -48,7 +54,7 @@
                 <select name="client_id" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 bg-white">
                     <option value="">— Tous les clients —</option>
                     @foreach($clients as $c)
-                        <option value="{{ $c->id }}" {{ request('client_id') == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
+                        <option value="{{ $c->id }}" {{ $clientId == $c->id ? 'selected' : '' }}>{{ $c->name }}</option>
                     @endforeach
                 </select>
             </div>

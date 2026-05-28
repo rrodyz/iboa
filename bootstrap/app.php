@@ -18,11 +18,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\TrackLastLogin::class,
             \App\Http\Middleware\SecurityHeaders::class,
+            // [CONCURRENCE-MULTI-USER] Anti-double-soumission sur tous les POST
+            // (s'active uniquement si le champ _idempotency_key est présent)
+            \App\Http\Middleware\IdempotencyMiddleware::class,
         ]);
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            // [INVOICE-LOCK] Verrouille les factures encaissées (PUT/PATCH/DELETE → 403)
+            'invoice.locked' => \App\Http\Middleware\InvoiceLockGuard::class,
+            // [CONCURRENCE-MULTI-USER] Anti-double-soumission de formulaire
+            'idempotency' => \App\Http\Middleware\IdempotencyMiddleware::class,
         ]);
 
         // Champs où l'espace est significatif (séparateurs typographiques, codes…)

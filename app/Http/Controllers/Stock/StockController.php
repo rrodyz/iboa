@@ -295,7 +295,7 @@ class StockController extends Controller
         $alertOnly  = $request->boolean('alert_only');
 
         $query = Product::active()->where('is_stockable', true)
-            ->with(['family', 'unit', 'stocks'])
+            ->with(['family', 'unit', 'productStocks'])
             ->orderBy('name');
 
         if ($search) {
@@ -308,7 +308,7 @@ class StockController extends Controller
         if ($alertOnly) {
             $query->where(function ($q) {
                 $q->whereRaw('stock_min > 0')
-                  ->whereHas('stocks', fn($s) =>
+                  ->whereHas('productStocks', fn($s) =>
                       $s->whereRaw('(quantity - reserved_quantity) <= (SELECT stock_min FROM products WHERE id = product_stocks.product_id)')
                   );
             });

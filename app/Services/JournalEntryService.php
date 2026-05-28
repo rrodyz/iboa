@@ -27,13 +27,13 @@ class JournalEntryService
     public function create(array $data): JournalEntry
     {
         // [COMPTA-PRO-05] Bloquer la création d'un brouillon sur une période verrouillée.
-        $this->assertPeriodNotLocked(Company::firstOrFail()->id, $data['entry_date'] ?? null);
+        $this->assertPeriodNotLocked(Auth::user()->company_id, $data['entry_date'] ?? null);
 
         return DB::transaction(function () use ($data) {
             $lines = $data['lines'] ?? [];
             unset($data['lines']);
 
-            $company = Company::firstOrFail();
+            $company = Company::findOrFail(Auth::user()->company_id);
 
             $data['company_id']    = $company->id;
             $data['number']        = $this->sequenceService->nextNumber($company, 'ecriture_comptable');

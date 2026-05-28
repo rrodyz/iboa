@@ -58,7 +58,7 @@
         <td>{{ $item->employee_name }}</td>
         <td style="font-size:7px; color:#6b7280;">{{ $item->department_name }}</td>
         <td class="text-right">{{ number_format($item->base_salary, 0, ',', ' ') }}</td>
-        <td class="text-right">{{ number_format($item->total_allowances_taxable + $item->total_allowances_non_taxable, 0, ',', ' ') }}</td>
+        <td class="text-right">{{ number_format($item->total_allowances_taxable + $item->total_allowances_non_taxable + ($item->primes_exceptionnelles ?? 0) + ($item->autres_gains ?? 0), 0, ',', ' ') }}</td>
         <td class="text-right" style="font-weight:600;">{{ number_format($item->salaire_brut, 0, ',', ' ') }}</td>
         <td class="text-right" style="color:#dc2626;">{{ number_format($item->cnss_employee, 0, ',', ' ') }}</td>
         <td class="text-right" style="color:#d97706;">{{ number_format($item->cnss_employer, 0, ',', ' ') }}</td>

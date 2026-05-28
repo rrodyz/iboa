@@ -46,20 +46,35 @@
             <div class="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 @foreach($permissions as $perm)
                 @php
-                    $action = explode('.', $perm->name)[1] ?? $perm->name;
+                    $parts  = explode('.', $perm->name);
+                    // Dernier segment = action (view, manage, validate…)
+                    $action = end($parts);
+                    // Sous-module RH : 2e segment si 3 parties (ex: rh.employees.view → employees)
+                    $subModule = (count($parts) === 3) ? $parts[1] : null;
                     $actionLabels = [
-                        'view'     => ['label' => 'Voir',       'color' => 'text-gray-600',  'dot' => 'bg-gray-400'],
-                        'create'   => ['label' => 'Créer',      'color' => 'text-green-700', 'dot' => 'bg-green-500'],
-                        'edit'     => ['label' => 'Modifier',   'color' => 'text-blue-700',  'dot' => 'bg-blue-500'],
-                        'delete'   => ['label' => 'Supprimer',  'color' => 'text-red-700',   'dot' => 'bg-red-500'],
-                        'validate' => ['label' => 'Valider',    'color' => 'text-purple-700','dot' => 'bg-purple-500'],
-                        'manage'   => ['label' => 'Gérer',      'color' => 'text-indigo-700','dot' => 'bg-indigo-500'],
-                        'adjust'   => ['label' => 'Ajuster',    'color' => 'text-orange-700','dot' => 'bg-orange-500'],
-                        'transfer' => ['label' => 'Transférer', 'color' => 'text-teal-700',  'dot' => 'bg-teal-500'],
-                        'send'     => ['label' => 'Envoyer',    'color' => 'text-sky-700',   'dot' => 'bg-sky-500'],
-                        'export'   => ['label' => 'Exporter',   'color' => 'text-amber-700', 'dot' => 'bg-amber-500'],
+                        'view'     => ['label' => 'Voir',           'color' => 'text-gray-600',   'dot' => 'bg-gray-400'],
+                        'create'   => ['label' => 'Créer',          'color' => 'text-green-700',  'dot' => 'bg-green-500'],
+                        'edit'     => ['label' => 'Modifier',       'color' => 'text-blue-700',   'dot' => 'bg-blue-500'],
+                        'delete'   => ['label' => 'Supprimer',      'color' => 'text-red-700',    'dot' => 'bg-red-500'],
+                        'validate' => ['label' => 'Valider',        'color' => 'text-purple-700', 'dot' => 'bg-purple-500'],
+                        'manage'   => ['label' => 'Gérer',          'color' => 'text-indigo-700', 'dot' => 'bg-indigo-500'],
+                        'adjust'   => ['label' => 'Ajuster',        'color' => 'text-orange-700', 'dot' => 'bg-orange-500'],
+                        'transfer' => ['label' => 'Transférer',     'color' => 'text-teal-700',   'dot' => 'bg-teal-500'],
+                        'send'     => ['label' => 'Envoyer',        'color' => 'text-sky-700',    'dot' => 'bg-sky-500'],
+                        'export'   => ['label' => 'Exporter',       'color' => 'text-amber-700',  'dot' => 'bg-amber-500'],
+                        'approve'  => ['label' => 'Approuver',      'color' => 'text-emerald-700','dot' => 'bg-emerald-500'],
+                        'portail'  => ['label' => 'Portail',        'color' => 'text-violet-700', 'dot' => 'bg-violet-500'],
+                        'settings' => ['label' => 'Paramétrage',    'color' => 'text-rose-700',   'dot' => 'bg-rose-500'],
                     ];
-                    $style = $actionLabels[$action] ?? ['label' => $action, 'color' => 'text-gray-600', 'dot' => 'bg-gray-400'];
+                    // Noms lisibles des sous-modules RH
+                    $subModuleLabels = [
+                        'employees' => 'Employés',
+                        'payroll'   => 'Paie',
+                        'leaves'    => 'Congés',
+                        'loans'     => 'Prêts',
+                    ];
+                    $style = $actionLabels[$action] ?? ['label' => ucfirst($action), 'color' => 'text-gray-600', 'dot' => 'bg-gray-400'];
+                    $subLabel = $subModule ? ($subModuleLabels[$subModule] ?? $subModule) : null;
                 @endphp
                 <label class="flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors
                     {{ in_array($perm->id, $currentPerms) ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-200 hover:bg-gray-50' }}
@@ -68,8 +83,11 @@
                            {{ in_array($perm->id, $currentPerms) ? 'checked' : '' }}
                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0">
                     <div class="min-w-0">
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center gap-1.5 flex-wrap">
                             <span class="w-1.5 h-1.5 rounded-full {{ $style['dot'] }} flex-shrink-0"></span>
+                            @if($subLabel)
+                                <span class="text-xs font-medium text-gray-400">{{ $subLabel }} ·</span>
+                            @endif
                             <span class="text-xs font-semibold {{ $style['color'] }}">{{ $style['label'] }}</span>
                         </div>
                         <p class="text-xs text-gray-400 font-mono truncate mt-0.5">{{ $perm->name }}</p>

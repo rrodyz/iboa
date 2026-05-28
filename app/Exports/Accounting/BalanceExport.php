@@ -5,6 +5,7 @@ namespace App\Exports\Accounting;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\JournalEntryLine;
+use App\Models\PayrollSetting;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\RegistersEventListeners;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -72,7 +73,7 @@ class BalanceExport implements FromArray, WithTitle, WithColumnWidths, WithEvent
     private function build(): void
     {
         $company  = Company::find($this->companyId) ?? Company::firstOrFail();
-        $currency = 'FCFA';
+        $currency = PayrollSetting::forCompany($company->id)->currency_code ?? 'FCFA';
         $period   = $this->periodLabel();
 
         // ── Document header ──────────────────────────────────────────────────

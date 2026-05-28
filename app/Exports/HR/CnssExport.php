@@ -3,6 +3,7 @@
 namespace App\Exports\HR;
 
 use App\Models\PayrollRun;
+use App\Models\PayrollSetting;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\RegistersEventListeners;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -21,10 +22,12 @@ class CnssExport implements FromArray, WithTitle, WithColumnWidths, WithEvents
 {
     use RegistersEventListeners;
 
-    private array $rows = [];
+    private array $rows    = [];
+    private PayrollSetting $payroll;
 
     public function __construct(private PayrollRun $run)
     {
+        $this->payroll = PayrollSetting::forCompany($run->company_id ?? $run->company->id);
         $this->build();
     }
 
@@ -55,7 +58,9 @@ class CnssExport implements FromArray, WithTitle, WithColumnWidths, WithEvents
         $this->rows[] = [];
         $this->rows[] = [
             'Matricule', 'Nom & Prénom', 'N° CNSS Salarié',
-            'Salaire Brut', 'Base CNSS', 'CNSS Salarié (5,5%)', 'CNSS Patronal (16%)',
+            'Salaire Brut', 'Base CNSS',
+            'CNSS Salarié (' . $this->payroll->cnss_employee_rate . '%)',
+            'CNSS Patronal (' . $this->payroll->cnss_employer_rate . '%)',
         ];
 
         foreach ($run->items as $item) {

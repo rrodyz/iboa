@@ -55,7 +55,19 @@
     </tfoot>
 </table>
 <p style="margin-top:10px; font-size:8px; color:#6b7280;">
-    Barème mensuel par part : 0–25 000 F:0% | 25 001–40 000 F:12% | 40 001–60 000 F:17% | 60 001–80 000 F:22% | 80 001–120 000 F:27% | +120 000 F:33%<br>
+    @php
+        $cur = $payroll->currency_code;
+        $bracketLabels = collect($payroll->iuts_brackets)->map(function($b, $i) use ($payroll, $cur) {
+            $brackets = $payroll->iuts_brackets;
+            $from = $i === 0 ? 0 : ($brackets[$i-1][0] + 1);
+            $to   = $b[0] >= 9_999_999_999 ? '+' . number_format($brackets[$i-1][0] ?? 0, 0, ',', ' ') . ' ' . $cur : number_format($b[0], 0, ',', ' ') . ' ' . $cur;
+            $label = $b[0] >= 9_999_999_999
+                ? '+' . number_format($brackets[$i-1][0] ?? 0, 0, ',', ' ') . ' ' . $cur . ' : ' . $b[1] . '%'
+                : number_format($from, 0, ',', ' ') . '–' . number_format($b[0], 0, ',', ' ') . ' ' . $cur . ' : ' . $b[1] . '%';
+            return $label;
+        })->implode(' | ');
+    @endphp
+    Barème mensuel par part : {{ $bracketLabels }}<br>
     {{ $settings?->company_name ?? '' }} — {{ now()->format('d/m/Y') }}
 </p>
 </div>

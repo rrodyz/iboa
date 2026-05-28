@@ -82,6 +82,12 @@
 
 @stack('modals')
 
+{{-- Command Palette (Ctrl+K / Cmd+K) --}}
+@include('partials.layout._command-palette')
+
+{{-- Keyboard Shortcuts Help (?) --}}
+@include('partials.layout._keyboard-shortcuts')
+
 {{-- DataTables init est dans app.js (enregistré une seule fois, avec lazy title) --}}
 
 @include('partials.layout._layout-styles')

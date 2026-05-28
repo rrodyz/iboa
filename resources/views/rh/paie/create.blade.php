@@ -6,47 +6,165 @@
 @endsection
 
 @section('content')
-<div class="max-w-lg mx-auto">
-<h1 class="text-2xl font-bold text-gray-900 mb-6">Nouveau bulletin de paie</h1>
+@php
+    $months = [
+        1=>'Janvier', 2=>'Février',  3=>'Mars',     4=>'Avril',
+        5=>'Mai',     6=>'Juin',     7=>'Juillet',  8=>'Août',
+        9=>'Septembre',10=>'Octobre',11=>'Novembre',12=>'Décembre',
+    ];
+@endphp
 
-<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-5 text-sm text-blue-700">
-    <strong>{{ $activeCount }}</strong> employé(s) actif(s) avec contrat seront inclus dans le calcul.
-</div>
+<div class="max-w-xl mx-auto"
+     x-data="{
+         month: {{ $suggestMonth }},
+         year:  {{ $suggestYear }},
+         months: {
+             1:'Janvier', 2:'Février',  3:'Mars',     4:'Avril',
+             5:'Mai',     6:'Juin',     7:'Juillet',  8:'Août',
+             9:'Septembre',10:'Octobre',11:'Novembre',12:'Décembre'
+         },
+         get label() { return this.months[this.month] + ' ' + this.year; }
+     }">
 
-@if($errors->any())
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-    <ul class="list-disc list-inside">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-</div>
-@endif
-
-<form method="POST" action="{{ route('rh.paie.store') }}">
-@csrf
-<x-form-guard />
-<div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-    <div class="grid grid-cols-2 gap-4">
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Mois <span class="text-red-500">*</span></label>
-            <select name="period_month" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                @foreach([1=>'Janvier',2=>'Février',3=>'Mars',4=>'Avril',5=>'Mai',6=>'Juin',7=>'Juillet',8=>'Août',9=>'Septembre',10=>'Octobre',11=>'Novembre',12=>'Décembre'] as $m=>$l)
-                    <option value="{{ $m }}" @selected($m == $suggestMonth)>{{ $l }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Année <span class="text-red-500">*</span></label>
-            <input type="number" name="period_year" value="{{ $suggestYear }}" min="2020" max="2100" required
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-center">
+    {{-- En-tête --}}
+    <div class="mb-6">
+        <div class="flex items-center gap-3 mb-1">
+            <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-indigo-100">
+                <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">Nouveau bulletin de paie</h1>
+                <p class="text-sm text-gray-500">Sélectionnez la période pour lancer le traitement</p>
+            </div>
         </div>
     </div>
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Notes internes</label>
-        <textarea name="notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"></textarea>
+
+    {{-- Erreurs --}}
+    @if($errors->any())
+    <div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+        <ul class="list-disc list-inside space-y-0.5">
+            @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
+        </ul>
     </div>
-</div>
-<div class="flex justify-end gap-3 mt-4">
-    <a href="{{ route('rh.paie.index') }}" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm">Annuler</a>
-    <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">Créer le bulletin</button>
-</div>
-</form>
+    @endif
+
+    <form method="POST" action="{{ route('rh.paie.store') }}">
+    @csrf
+    <x-form-guard />
+
+    {{-- Carte principale --}}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+
+        {{-- Section période --}}
+        <div class="px-6 pt-6 pb-4">
+            <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Période</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        Mois <span class="text-red-500">*</span>
+                    </label>
+                    <select name="period_month" x-model.number="month"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors">
+                        @foreach($months as $m => $l)
+                            <option value="{{ $m }}" @selected($m == $suggestMonth)>{{ $l }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                        Année <span class="text-red-500">*</span>
+                    </label>
+                    <input type="number" name="period_year" x-model.number="year"
+                           value="{{ $suggestYear }}" min="2020" max="2100" required
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors">
+                </div>
+            </div>
+        </div>
+
+        {{-- Preview dynamique --}}
+        <div class="mx-6 mb-4 rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p class="text-xs text-indigo-500 font-medium">Bulletin pour</p>
+                    <p class="text-sm font-bold text-indigo-800" x-text="label"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 bg-white border border-indigo-200 rounded-lg px-3 py-1.5">
+                <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                </svg>
+                <span class="text-xs font-semibold text-indigo-700">{{ $activeCount }} employé(s)</span>
+            </div>
+        </div>
+
+        {{-- Notes --}}
+        <div class="px-6 pb-5">
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                Notes internes <span class="text-gray-400 font-normal">(optionnel)</span>
+            </label>
+            <textarea name="notes" rows="2"
+                      placeholder="Ex : Intégration des primes de fin d'année…"
+                      class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors placeholder-gray-400">{{ old('notes') }}</textarea>
+        </div>
+
+        {{-- Séparateur + étapes --}}
+        <div class="border-t border-gray-100 bg-gray-50 px-6 py-4">
+            <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Ce qui va se passer</p>
+            <ol class="space-y-2">
+                <li class="flex items-start gap-2.5">
+                    <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Création du bulletin en brouillon</p>
+                        <p class="text-xs text-gray-400">Le bulletin est créé avec statut <em>Brouillon</em>, aucun calcul automatique</p>
+                    </div>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex items-center justify-center mt-0.5">2</span>
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Saisie des variables mensuelles</p>
+                        <p class="text-xs text-gray-400">Primes, heures sup., absences et retenues saisies par employé</p>
+                    </div>
+                </li>
+                <li class="flex items-start gap-2.5">
+                    <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex items-center justify-center mt-0.5">3</span>
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Calcul, validation et paiement</p>
+                        <p class="text-xs text-gray-400">Calcul des rubriques, validation RH, puis marquage comme payé</p>
+                    </div>
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    {{-- Actions --}}
+    <div class="flex items-center justify-between mt-5">
+        <a href="{{ route('rh.paie.index') }}"
+           class="flex items-center gap-1.5 px-4 py-2.5 border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Annuler
+        </a>
+        <button type="submit"
+                class="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            Créer le bulletin
+            <span class="opacity-70 font-normal text-xs" x-text="'— ' + label"></span>
+        </button>
+    </div>
+
+    </form>
 </div>
 @endsection

@@ -18,7 +18,12 @@ class SupplierController extends Controller
         $filters   = $request->only(['search', 'is_active']);
         $suppliers = $this->service->search($filters, 15);
 
-        return view('suppliers.index', compact('suppliers', 'filters'));
+        $summary = [
+            'total'  => Supplier::count(),
+            'active' => Supplier::where('is_active', true)->count(),
+        ];
+
+        return view('suppliers.index', compact('suppliers', 'filters', 'summary'));
     }
 
     public function create()

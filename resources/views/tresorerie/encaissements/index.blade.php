@@ -10,7 +10,24 @@
 @endsection
 
 @section('content')
+@php $fmt = fn($n) => number_format((int)$n, 0, ',', ' '); @endphp
 <div class="space-y-5">
+
+    {{-- KPI summary bar --}}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Total encaissé (filtré)</p>
+            <p class="text-lg font-bold text-emerald-600 tabular-nums">{{ $fmt($summary['total_amount']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Ce mois-ci</p>
+            <p class="text-lg font-bold text-blue-600 tabular-nums">{{ $fmt($summary['this_month']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Nombre d'encaissements</p>
+            <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $summary['count'] }}</p>
+        </div>
+    </div>
 
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

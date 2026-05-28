@@ -19,7 +19,20 @@ class DeliveryNoteController extends Controller
         $filters       = $request->only(['client_id', 'status', 'order_id', 'search']);
         $deliveryNotes = $this->service->search($filters, 15);
 
-        return view('ventes.bons-livraison.index', compact('deliveryNotes', 'filters'));
+        $company = Company::firstOrFail();
+        $totalsQuery = DeliveryNote::where('company_id', $company->id)
+            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['search']),    fn($q) => $q->where('number', 'like', '%'.$filters['search'].'%'));
+
+        $summary = [
+            'total'           => (int) $totalsQuery->count(),
+            'count_draft'     => (int) (clone $totalsQuery)->where('status', 'brouillon')->count(),
+            'count_validated' => (int) (clone $totalsQuery)->where('status', 'valide')->count(),
+            'count_invoiced'  => (int) (clone $totalsQuery)->where('status', 'facture')->count(),
+        ];
+
+        return view('ventes.bons-livraison.index', compact('deliveryNotes', 'filters', 'summary'));
     }
 
     public function show(DeliveryNote $bonsLivraison)

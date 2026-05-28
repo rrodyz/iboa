@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\AccountClass;
+use App\Models\BankDeposit;
 use App\Models\CashAccount;
 use App\Models\ClientPayment;
 use App\Models\Company;
@@ -55,6 +56,7 @@ class AccountingService
         'variation_stocks'    => ['6031', 'Variations de stocks de marchandises', 'charge', 6],
         'produits_inventaire' => ['7097', 'Produits sur inventaire',         'produit', 7],
         'pertes_inventaire'   => ['6097', 'Pertes sur inventaire',           'charge',  6],
+        'virements_internes'  => ['585',  'Virements de fonds',              'actif',   5],
     ];
 
     // =========================================================================
@@ -111,11 +113,18 @@ class AccountingService
             $lines[] = $this->line($this->account($company, 'retours_ventes'), 'Remise '.$invoice->number, $discount, 0);
         }
 
-        return $this->post($company, 'vente', [
+        $entry = $this->post($company, 'vente', [
             'entry_date'  => $invoice->issued_at ?? today(),
             'reference'   => $invoice->number,
             'description' => 'Facture client '.$invoice->number.' — '.($invoice->client?->name ?? ''),
         ], $lines);
+
+        // [AUDIT-ERP-E] Lier l'écriture à la facture source
+        if ($entry) {
+            $invoice->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -134,7 +143,7 @@ class AccountingService
         $tresorerie  = $this->tresorerieAccount($company, $payment->cash_account_id);
         $journalCode = ($tresorerie->code === '571') ? 'caisse' : 'banque';
 
-        return $this->post($company, $journalCode, [
+        $entry = $this->post($company, $journalCode, [
             'entry_date'  => $payment->payment_date ?? today(),
             'reference'   => $payment->number,
             'description' => 'Encaissement '.$payment->number.' — '.($payment->client?->name ?? ''),
@@ -142,6 +151,13 @@ class AccountingService
             $this->line($tresorerie,                           'Encaissement '.$payment->number, $amount, 0),
             $this->line($this->account($company, 'clients'),   'Encaissement '.$payment->number, 0, $amount),
         ]);
+
+        // [AUDIT-ERP-E] Lier l'écriture au paiement source
+        if ($entry) {
+            $payment->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -184,11 +200,18 @@ class AccountingService
             }
         }
 
-        return $this->post($company, 'achat', [
+        $entry = $this->post($company, 'achat', [
             'entry_date'  => $invoice->received_at ?? today(),
             'reference'   => $invoice->number,
             'description' => 'Facture fournisseur '.$invoice->number.' — '.($invoice->supplier?->name ?? ''),
         ], $lines);
+
+        // [AUDIT-ERP-E] Lier l'écriture à la facture fournisseur source
+        if ($entry) {
+            $invoice->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -207,7 +230,7 @@ class AccountingService
         $tresorerie  = $this->tresorerieAccount($company, $payment->cash_account_id);
         $journalCode = ($tresorerie->code === '571') ? 'caisse' : 'banque';
 
-        return $this->post($company, $journalCode, [
+        $entry = $this->post($company, $journalCode, [
             'entry_date'  => $payment->payment_date ?? today(),
             'reference'   => $payment->number,
             'description' => 'Décaissement '.$payment->number.' — '.($payment->supplier?->name ?? ''),
@@ -215,6 +238,13 @@ class AccountingService
             $this->line($this->account($company, 'fournisseurs'), 'Décaissement '.$payment->number, $amount, 0),
             $this->line($tresorerie,                              'Décaissement '.$payment->number, 0, $amount),
         ]);
+
+        // [AUDIT-ERP-E] Lier l'écriture au paiement fournisseur source
+        if ($entry) {
+            $payment->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
     }
 
     /**
@@ -569,6 +599,52 @@ class AccountingService
             'reference'   => $session->number,
             'description' => $label,
         ], $lines);
+    }
+
+    /**
+     * [COMPTA-BANQUE] Remise en banque validée.
+     *
+     * Écriture générée lors de la validation d'une remise :
+     *
+     *   DR 521 Banque (compte destination)         = total_amount
+     *   CR 571 Caisse / 521 Banque (source)        = total_amount   ← si source renseignée
+     *   CR 585 Virements de fonds (transit)        = total_amount   ← sinon (dépôt direct)
+     *
+     * Le compte de débit dépend du type du cash_account cible :
+     *   - type 'banque' ou 'mobile_money' → 521 Banques
+     *   - type 'caisse'                   → 571 Caisse
+     *
+     * Le journal utilisé est le journal Banque (type = 'banque').
+     */
+    public function postBankDeposit(BankDeposit $deposit): ?JournalEntry
+    {
+        $company = $this->company($deposit->company_id);
+        if (!$company) return null;
+
+        $amount = (int) $deposit->total_amount;
+        if ($amount <= 0) return null;
+
+        $deposit->loadMissing(['cashAccount', 'sourceCashAccount']);
+
+        // Compte de débit : cash account de destination
+        $destAccount   = $this->tresorerieAccount($company, $deposit->cash_account_id);
+
+        // Compte de crédit : cash account source (si renseigné) ou virement interne
+        $sourceAccount = $deposit->source_cash_account_id
+            ? $this->tresorerieAccount($company, $deposit->source_cash_account_id)
+            : $this->account($company, 'virements_internes');
+
+        $label       = 'Remise en banque ' . $deposit->number;
+        $journalCode = ($destAccount->code === '571') ? 'caisse' : 'banque';
+
+        return $this->post($company, $journalCode, [
+            'entry_date'  => $deposit->deposit_date->toDateString(),
+            'reference'   => $deposit->number,
+            'description' => $label,
+        ], [
+            $this->line($destAccount,   $label, $amount, 0),
+            $this->line($sourceAccount, $label, 0, $amount),
+        ]);
     }
 
     /**

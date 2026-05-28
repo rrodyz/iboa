@@ -27,7 +27,7 @@ class VatDeclarationService
     // ─────────────────────────────────────────────────────────────────────────
     public function calculatePeriod(string $dateFrom, string $dateTo): array
     {
-        $company = Company::firstOrFail();
+        $company = Company::findOrFail(Auth::user()->company_id);
 
         // TVA collectée = credit sur comptes 441x/445x
         $tvaCollectee = $this->sumAccountMovements(
@@ -48,7 +48,7 @@ class VatDeclarationService
     public function create(array $data): VatDeclaration
     {
         return DB::transaction(function () use ($data) {
-            $company            = Company::firstOrFail();
+            $company            = Company::findOrFail(Auth::user()->company_id);
 
             // [PRIO-4] Anti-doublon : interdit 2 déclarations actives sur la même période
             if (!empty($data['period_start']) && !empty($data['period_end'])) {
@@ -132,7 +132,7 @@ class VatDeclarationService
      */
     private function postVatPayment(VatDeclaration $decl, int $amount): void
     {
-        $company = Company::firstOrFail();
+        $company = Company::findOrFail(Auth::user()->company_id);
 
         // Resolve accounts — use firstOrCreate so missing accounts are auto-bootstrapped
         $classId4 = $this->classId($company, 4);
@@ -149,8 +149,8 @@ class VatDeclarationService
         );
 
         $journalType = JournalType::firstOrCreate(
-            ['company_id' => $company->id, 'type' => 'od'],
-            ['code' => 'OD', 'name' => 'Opérations diverses', 'is_active' => true]
+            ['company_id' => $company->id, 'code' => 'OD'],
+            ['name' => 'Opérations diverses', 'type' => 'operations_diverses', 'is_active' => true]
         );
 
         $number = app(DocumentSequenceService::class)->nextNumber($company, 'ecriture_comptable');
@@ -211,15 +211,19 @@ class VatDeclarationService
     // ─────────────────────────────────────────────────────────────────────────
     private function sumAccountMovements(array $codes, string $from, string $to, string $side): int
     {
+        $companyId = Auth::user()->company_id;
+
         return (int) JournalEntryLine::query()
-            ->whereHas('account', function ($q) use ($codes) {
-                $q->where(function ($sub) use ($codes) {
-                    foreach ($codes as $code) {
-                        $sub->orWhere('code', 'like', $code . '%');
-                    }
-                });
+            ->whereHas('account', function ($q) use ($codes, $companyId) {
+                $q->where('company_id', $companyId)
+                  ->where(function ($sub) use ($codes) {
+                      foreach ($codes as $code) {
+                          $sub->orWhere('code', 'like', $code . '%');
+                      }
+                  });
             })
             ->whereHas('journalEntry', fn ($q) => $q
+                ->where('company_id', $companyId)
                 ->where('status', 'valide')
                 ->whereBetween('entry_date', [$from, $to])
             )
@@ -228,17 +232,21 @@ class VatDeclarationService
 
     private function getAccountBreakdown(array $codes, string $from, string $to, string $side): \Illuminate\Support\Collection
     {
+        $companyId = Auth::user()->company_id;
+
         return JournalEntryLine::query()
             ->selectRaw('account_id, SUM(' . $side . ') as total')
             ->with('account:id,code,name')
-            ->whereHas('account', function ($q) use ($codes) {
-                $q->where(function ($sub) use ($codes) {
-                    foreach ($codes as $code) {
-                        $sub->orWhere('code', 'like', $code . '%');
-                    }
-                });
+            ->whereHas('account', function ($q) use ($codes, $companyId) {
+                $q->where('company_id', $companyId)
+                  ->where(function ($sub) use ($codes) {
+                      foreach ($codes as $code) {
+                          $sub->orWhere('code', 'like', $code . '%');
+                      }
+                  });
             })
             ->whereHas('journalEntry', fn ($q) => $q
+                ->where('company_id', $companyId)
                 ->where('status', 'valide')
                 ->whereBetween('entry_date', [$from, $to])
             )

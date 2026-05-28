@@ -40,7 +40,15 @@ class ProductController extends Controller
         $products  = $this->repository->search($request->all(), 20);
         $families  = ProductFamily::whereNull('parent_id')->with('children')->orderBy('name')->get();
         $brands    = Brand::where('is_active', true)->orderBy('name')->get();
-        return view('products.index', compact('products', 'families', 'brands'));
+
+        $summary = [
+            'total'     => Product::count(),
+            'active'    => Product::where('is_active', true)->count(),
+            'sellable'  => Product::where('is_active', true)->where('is_sellable', true)->count(),
+            'purchasable'=> Product::where('is_active', true)->where('is_purchasable', true)->count(),
+        ];
+
+        return view('products.index', compact('products', 'families', 'brands', 'summary'));
     }
 
     public function create(): View

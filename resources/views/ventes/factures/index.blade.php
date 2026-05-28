@@ -8,6 +8,7 @@
 @endsection
 
 @section('content')
+@php $fmt = fn($n) => number_format((int)$n, 0, ',', ' '); @endphp
 <div class="space-y-5">
 
     {{-- Header --}}
@@ -100,6 +101,28 @@
             </div>
         </div>
     </form>
+
+    {{-- KPI summary bar --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Total TTC filtré</p>
+            <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $fmt($summary['total_ttc']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Reste à encaisser</p>
+            <p class="text-lg font-bold text-orange-600 tabular-nums">{{ $fmt($summary['total_remaining']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">En retard</p>
+            <p class="text-lg font-bold {{ $summary['count_overdue'] > 0 ? 'text-red-600' : 'text-gray-900' }} tabular-nums">
+                {{ $summary['count_overdue'] }} <span class="text-xs font-normal text-gray-400">facture(s)</span>
+            </p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Payées</p>
+            <p class="text-lg font-bold text-emerald-600 tabular-nums">{{ $summary['count_paid'] }} <span class="text-xs font-normal text-gray-400">facture(s)</span></p>
+        </div>
+    </div>
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">

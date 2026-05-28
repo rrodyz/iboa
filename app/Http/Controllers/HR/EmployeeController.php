@@ -9,6 +9,8 @@ use App\Models\Employee;
 use App\Models\EmployeeAllowance;
 use App\Models\EmployeeContract;
 use App\Models\PayrollAllowanceType;
+use App\Models\PayrollSetting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +51,15 @@ class EmployeeController extends Controller
         $employees   = $query->paginate(20)->withQueryString();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
 
-        return view('rh.employes.index', compact('employees', 'filters', 'departments'));
+        // ── Indicateurs globaux ──
+        $summary = [
+            'total'    => Employee::where('company_id', $company->id)->count(),
+            'actif'    => Employee::where('company_id', $company->id)->where('status', 'actif')->count(),
+            'suspendu' => Employee::where('company_id', $company->id)->where('status', 'suspendu')->count(),
+            'quitte'   => Employee::where('company_id', $company->id)->whereIn('status', ['licencie', 'demissionne'])->count(),
+        ];
+
+        return view('rh.employes.index', compact('employees', 'filters', 'departments', 'summary'));
     }
 
     public function create()
@@ -57,79 +67,97 @@ class EmployeeController extends Controller
         $company     = Company::firstOrFail();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
         $nextMatricule = $this->nextMatricule($company->id);
+        $payroll     = PayrollSetting::forCompany($company->id);
 
-        return view('rh.employes.create', compact('departments', 'nextMatricule'));
+        $allowanceTypes = PayrollAllowanceType::active()->orderBy('name')->get(['id','name','code','is_taxable']);
+        return view('rh.employes.create', compact('departments', 'nextMatricule', 'payroll', 'allowanceTypes'));
     }
 
     public function store(Request $request)
     {
         $company = Company::firstOrFail();
 
-        $data = $request->validate([
-            'last_name'          => ['required', 'string', 'max:100'],
-            'first_name'         => ['required', 'string', 'max:100'],
-            'gender'             => ['required', 'in:M,F'],
-            'birth_date'         => ['nullable', 'date'],
-            'birth_place'        => ['nullable', 'string', 'max:100'],
-            'nationality'        => ['nullable', 'string', 'max:60'],
-            'cin_number'         => ['nullable', 'string', 'max:30'],
-            'cnss_number'        => ['nullable', 'string', 'max:30'],
-            'email'              => ['nullable', 'email', 'max:150'],
-            'phone'              => ['nullable', 'string', 'max:20'],
-            'address'            => ['nullable', 'string'],
-            'city'               => ['nullable', 'string', 'max:80'],
-            'department_id'      => ['nullable', 'exists:departments,id'],
-            'job_title'          => ['nullable', 'string', 'max:100'],
-            'category'           => ['required', 'in:cadre,agent_maitrise,employe,ouvrier'],
-            'hiring_date'        => ['nullable', 'date'],
-            'family_status'      => ['required', 'in:celibataire,marie,veuf,divorce'],
-            'nb_children'        => ['required', 'integer', 'min:0', 'max:20'],
-            // Banque
-            'payment_mode'       => ['nullable', 'in:virement,especes,cheque,mobile'],
-            'bank_name'          => ['nullable', 'string', 'max:100'],
-            'bank_account'       => ['nullable', 'string', 'max:50'],
-            'bank_code'          => ['nullable', 'string', 'max:5'],
-            'bank_branch'        => ['nullable', 'string', 'max:5'],
-            'bank_account_number'=> ['nullable', 'string', 'max:11'],
-            'bank_rib_key'       => ['nullable', 'string', 'max:2'],
-            // Contrat initial
-            'contract_type'      => ['required', 'in:CDI,CDD,stage,consultant'],
-            'contract_start'     => ['required', 'date'],
-            'contract_end'       => ['nullable', 'date', 'after:contract_start'],
-            'base_salary'        => ['required', 'integer', 'min:0'],
+        // Validation des primes (facultatif à la création)
+        $request->validate([
+            'allowances'           => ['nullable', 'array'],
+            'allowances.*.type_id' => ['required_with:allowances.*', 'exists:payroll_allowance_types,id'],
+            'allowances.*.amount'  => ['required_with:allowances.*', 'integer', 'min:0'],
         ]);
 
-        $employee = DB::transaction(function () use ($data, $company) {
+        $data = $request->validate([
+            'last_name'               => ['required', 'string', 'max:100'],
+            'first_name'              => ['required', 'string', 'max:100'],
+            'gender'                  => ['required', 'in:M,F'],
+            'birth_date'              => ['nullable', 'date'],
+            'birth_place'             => ['nullable', 'string', 'max:100'],
+            'nationality'             => ['nullable', 'string', 'max:60'],
+            'cin_number'              => ['nullable', 'string', 'max:30'],
+            'cnss_number'             => ['nullable', 'string', 'max:30'],
+            'email'                   => ['nullable', 'email', 'max:150'],
+            'phone'                   => ['nullable', 'string', 'max:20'],
+            'address'                 => ['nullable', 'string'],
+            'city'                    => ['nullable', 'string', 'max:80'],
+            'family_status'           => ['required', 'in:celibataire,marie,veuf,divorce'],
+            'nb_children'             => ['required', 'integer', 'min:0', 'max:20'],
+            'education_level'         => ['nullable', 'string', 'max:50'],
+            'emergency_contact_name'  => ['nullable', 'string', 'max:100'],
+            'emergency_contact_phone' => ['nullable', 'string', 'max:20'],
+            // Affectation
+            'department_id'           => ['nullable', 'exists:departments,id'],
+            'job_title'               => ['nullable', 'string', 'max:100'],
+            'fonction'                => ['nullable', 'string', 'max:100'],
+            'category'                => ['required', 'in:cadre,agent_maitrise,employe,ouvrier'],
+            'hiring_date'             => ['nullable', 'date'],
+            // Banque
+            'payment_mode'            => ['nullable', 'in:virement,especes,cheque,mobile'],
+            'bank_name'               => ['nullable', 'string', 'max:100'],
+            'bank_account'            => ['nullable', 'string', 'max:50'],
+            'bank_code'               => ['nullable', 'string', 'max:5'],
+            'bank_branch'             => ['nullable', 'string', 'max:5'],
+            'bank_account_number'     => ['nullable', 'string', 'max:11'],
+            'bank_rib_key'            => ['nullable', 'string', 'max:2'],
+            // Contrat initial
+            'contract_type'           => ['required', 'in:CDI,CDD,stage,consultant'],
+            'contract_start'          => ['required', 'date'],
+            'contract_end'            => ['nullable', 'date', 'after:contract_start'],
+            'base_salary'             => ['required', 'integer', 'min:0'],
+        ]);
+
+        $employee = DB::transaction(function () use ($data, $company, $request) {
             $employee = Employee::create([
-                'company_id'         => $company->id,
-                'matricule'          => $this->nextMatricule($company->id),
-                'last_name'          => $data['last_name'],
-                'first_name'         => $data['first_name'],
-                'gender'             => $data['gender'],
-                'birth_date'         => $data['birth_date'] ?? null,
-                'birth_place'        => $data['birth_place'] ?? null,
-                'nationality'        => $data['nationality'] ?? 'Burkinabè',
-                'cin_number'         => $data['cin_number'] ?? null,
-                'cnss_number'        => $data['cnss_number'] ?? null,
-                'email'              => $data['email'] ?? null,
-                'phone'              => $data['phone'] ?? null,
-                'address'            => $data['address'] ?? null,
-                'city'               => $data['city'] ?? null,
-                'department_id'      => $data['department_id'] ?? null,
-                'job_title'          => $data['job_title'] ?? null,
-                'category'           => $data['category'],
-                'hiring_date'        => $data['hiring_date'] ?? $data['contract_start'],
-                'status'             => 'actif',
-                'family_status'      => $data['family_status'],
-                'nb_children'        => $data['nb_children'],
-                'payment_mode'       => $data['payment_mode'] ?? 'virement',
-                'bank_name'          => $data['bank_name'] ?? null,
-                'bank_account'       => $data['bank_account'] ?? null,
-                'bank_code'          => $data['bank_code'] ?? null,
-                'bank_branch'        => $data['bank_branch'] ?? null,
-                'bank_account_number'=> $data['bank_account_number'] ?? null,
-                'bank_rib_key'       => $data['bank_rib_key'] ?? null,
-                'created_by'         => Auth::id(),
+                'company_id'              => $company->id,
+                'matricule'               => $this->nextMatricule($company->id),
+                'last_name'               => $data['last_name'],
+                'first_name'              => $data['first_name'],
+                'gender'                  => $data['gender'],
+                'birth_date'              => $data['birth_date'] ?? null,
+                'birth_place'             => $data['birth_place'] ?? null,
+                'nationality'             => $data['nationality'] ?? 'Burkinabè',
+                'cin_number'              => $data['cin_number'] ?? null,
+                'cnss_number'             => $data['cnss_number'] ?? null,
+                'email'                   => $data['email'] ?? null,
+                'phone'                   => $data['phone'] ?? null,
+                'address'                 => $data['address'] ?? null,
+                'city'                    => $data['city'] ?? null,
+                'family_status'           => $data['family_status'],
+                'nb_children'             => $data['nb_children'],
+                'education_level'         => $data['education_level'] ?? null,
+                'emergency_contact_name'  => $data['emergency_contact_name'] ?? null,
+                'emergency_contact_phone' => $data['emergency_contact_phone'] ?? null,
+                'department_id'           => $data['department_id'] ?? null,
+                'job_title'               => $data['job_title'] ?? null,
+                'fonction'                => $data['fonction'] ?? null,
+                'category'                => $data['category'],
+                'hiring_date'             => $data['hiring_date'] ?? $data['contract_start'],
+                'status'                  => 'actif',
+                'payment_mode'            => $data['payment_mode'] ?? 'virement',
+                'bank_name'               => $data['bank_name'] ?? null,
+                'bank_account'            => $data['bank_account'] ?? null,
+                'bank_code'               => $data['bank_code'] ?? null,
+                'bank_branch'             => $data['bank_branch'] ?? null,
+                'bank_account_number'     => $data['bank_account_number'] ?? null,
+                'bank_rib_key'            => $data['bank_rib_key'] ?? null,
+                'created_by'              => Auth::id(),
             ]);
 
             // Contrat initial
@@ -141,6 +169,17 @@ class EmployeeController extends Controller
                 'base_salary' => $data['base_salary'],
                 'status'      => 'actif',
             ]);
+
+            // Primes & indemnités initiales
+            foreach ($request->input('allowances', []) as $row) {
+                if (empty($row['type_id']) || ($row['amount'] ?? 0) <= 0) continue;
+                $employee->allowances()->create([
+                    'payroll_allowance_type_id' => $row['type_id'],
+                    'amount'     => (int) $row['amount'],
+                    'start_date' => $data['contract_start'],
+                    'is_active'  => true,
+                ]);
+            }
 
             return $employee;
         });
@@ -159,17 +198,19 @@ class EmployeeController extends Controller
             'documents'  => fn($q) => $q->orderByDesc('created_at'),
         ]);
         $allowanceTypes = PayrollAllowanceType::active()->orderBy('name')->get();
+        $payroll        = PayrollSetting::forCompany(Company::first()->id);
 
-        return view('rh.employes.show', compact('employe', 'allowanceTypes'));
+        return view('rh.employes.show', compact('employe', 'allowanceTypes', 'payroll'));
     }
 
     public function edit(Employee $employe)
     {
         $company     = Company::firstOrFail();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
+        $users       = User::where('company_id', $company->id)->orderBy('name')->get(['id', 'name', 'email']);
         $employe->load(['activeContract', 'department']);
 
-        return view('rh.employes.edit', compact('employe', 'departments'));
+        return view('rh.employes.edit', compact('employe', 'departments', 'users'));
     }
 
     public function update(Request $request, Employee $employe)
@@ -202,6 +243,7 @@ class EmployeeController extends Controller
             'bank_branch'        => ['nullable', 'string', 'max:5'],
             'bank_account_number'=> ['nullable', 'string', 'max:11'],
             'bank_rib_key'       => ['nullable', 'string', 'max:2'],
+            'user_id'            => ['nullable', 'exists:users,id'],
         ]);
 
         $employe->update($data);
@@ -260,6 +302,26 @@ class EmployeeController extends Controller
     {
         $allowance->delete();
         return back()->with('success', 'Prime supprimée.');
+    }
+
+    // ─── Contrats (liste globale) ─────────────────────────────────────────────
+
+    public function contracts(Request $request)
+    {
+        $company   = \App\Models\Company::firstOrFail();
+        $contracts = \App\Models\EmployeeContract::with('employee')
+            ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
+            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            ->when($request->type,   fn($q, $t) => $q->where('type', $t))
+            ->orderByRaw("FIELD(status,'actif','expire','resilie') ASC")
+            ->orderByDesc('start_date')
+            ->paginate(20)
+            ->withQueryString();
+
+        $statusOptions = ['actif' => 'Actif', 'expire' => 'Expiré', 'resilie' => 'Résilié'];
+        $typeOptions   = ['CDI' => 'CDI', 'CDD' => 'CDD', 'stage' => 'Stage', 'consultant' => 'Consultant'];
+
+        return view('rh.contrats.index', compact('contracts', 'company', 'statusOptions', 'typeOptions'));
     }
 
     // ─── Départements ─────────────────────────────────────────────────────────

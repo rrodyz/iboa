@@ -254,6 +254,52 @@
     </div>
 </div>
 
+{{-- ─── Accès Portail Employé ──────────────────────────────────────────── --}}
+<div class="bg-white rounded-xl border border-gray-200 p-6">
+    <h2 class="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-1 flex items-center gap-2">
+        <svg class="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        Accès portail employé
+    </h2>
+    <p class="text-xs text-gray-400 mb-4">
+        Liez ce dossier employé à un compte utilisateur pour qu'il accède à son espace RH (bulletins, congés, documents).
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Compte utilisateur lié</label>
+            <select name="user_id"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="">— Aucun (portail désactivé) —</option>
+                @foreach($users as $u)
+                    @php $selected = old('user_id', $employe->user_id) == $u->id; @endphp
+                    <option value="{{ $u->id }}" @selected($selected)>
+                        {{ $u->name }} — {{ $u->email }}
+                    </option>
+                @endforeach
+            </select>
+            @error('user_id')<p class="text-red-500 text-xs mt-1">{{ $message }}</p>@enderror
+        </div>
+        <div class="flex items-end">
+            @if($employe->user_id)
+            <div class="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700">
+                <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Portail actif — compte lié
+            </div>
+            @else
+            <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-500">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                </svg>
+                Portail désactivé — aucun compte lié
+            </div>
+            @endif
+        </div>
+    </div>
+</div>
+
 </div>{{-- end space-y --}}
 
 <div class="flex justify-end gap-3 mt-6">

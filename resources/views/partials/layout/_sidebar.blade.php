@@ -60,6 +60,7 @@ request()->routeIs('achats.*')                                                  
             request()->routeIs('tresorerie.*')                                                                                        => 'tresorerie',
             request()->routeIs('comptabilite.*')                                                                                      => 'comptabilite',
             request()->routeIs('rh.*','rh.dashboard')                                                                                  => 'rh',
+            request()->routeIs('crm.*')                                                                                               => 'crm',
             request()->routeIs('users*','roles*','audit*','company*','units*')                                                        => 'parametres',
             default => null,
         };
@@ -427,6 +428,8 @@ request()->routeIs('achats.*')                                                  
                             auth()->user()->can('accounting.view') ? [route('comptabilite.lettrage.index'),        'Lettrage',            'comptabilite.lettrage*']          : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.rapprochement.index'),   'Rapprochement banc.', 'comptabilite.rapprochement*']     : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.tva.index'),             'Déclarations TVA',    'comptabilite.tva*']               : null,
+                            auth()->user()->can('accounting.validate') ? [route('comptabilite.periods.index'),    'Verrouillage périodes','comptabilite.periods*']           : null,
+                            auth()->user()->can('accounting.view') ? [route('comptabilite.immobilisations.index'), 'Immobilisations',     'comptabilite.immobilisations*']    : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.bilan'),                 'Bilan',               'comptabilite.bilan']              : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.compte-de-resultat'),    'Compte de résultat',  'comptabilite.compte-de-resultat']  : null,
                         ]) as [$href, $label, $match])
@@ -467,23 +470,169 @@ request()->routeIs('achats.*')                                                  
                      x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        {{-- ── Gestion des salariés ── --}}
+                        <div class="px-3 pt-2 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Salariés</span>
+                        </div>
                         @foreach([
-                            [route('rh.dashboard'),             'Tableau de bord',   'rh.dashboard'],
-                            [route('rh.portail.dashboard'),     'Mon Espace RH',     'rh.portail*'],
-                            [route('rh.employes.index'),        'Employés',          'rh.employes*'],
-                            [route('rh.departments.index'),     'Départements',      'rh.departments*'],
-                            [route('rh.paie.index'),            'Bulletins de paie', 'rh.paie*'],
-                            [route('rh.conges.index'),          'Congés',            'rh.conges*'],
-                            [route('rh.avances.index'),         'Avances salaire',   'rh.avances*'],
-                            [route('rh.prets.index'),           'Prêts salariés',    'rh.prets*'],
-                            [route('rh.rubriques.index'),       'Rubriques de paie', 'rh.rubriques*'],
-                            [route('rh.parametrage.edit'),      'Paramétrage paie',  'rh.parametrage*'],
+                            [route('rh.dashboard'),         'Tableau de bord',     'rh.dashboard'],
+                            [route('rh.portail.dashboard'), 'Mon Espace RH',       'rh.portail*'],
+                            [route('rh.employes.index'),    'Employés',            'rh.employes*'],
+                            [route('rh.contrats.index'),    'Contrats',            'rh.contrats*'],
+                            [route('rh.departments.index'), 'Départements',        'rh.departments*'],
+                            [route('rh.presences.index'),   'Présences & absences','rh.presences*'],
+                            [route('rh.conges.index'),      'Congés',              'rh.conges*'],
                         ] as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
                                   {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
                             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-rose-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+
+                        {{-- ── Traitement de la paie ── --}}
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Paie</span>
+                        </div>
+                        @foreach([
+                            [route('rh.variables.index'),   'Variables mensuelles','rh.variables*'],
+                            [route('rh.paie.create'),       'Préparation de la paie','rh.paie.create'],
+                            [route('rh.paie.index'),        'Bulletins de paie',  'rh.paie*'],
+                            [route('rh.avances.index'),     'Avances salaire',    'rh.avances*'],
+                            [route('rh.prets.index'),       'Prêts salariés',     'rh.prets*'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-rose-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+
+                        {{-- ── Configuration ── --}}
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Configuration</span>
+                        </div>
+                        @foreach([
+                            [route('rh.rubriques.index'),          'Rubriques de paie',      'rh.rubriques*'],
+                            [route('rh.plans.index'),              'Plans de paie',           'rh.plans*'],
+                            [route('rh.profils.index'),            'Profils de paie',         'rh.profils*'],
+                            [route('rh.constantes.index'),         'Constantes',              'rh.constantes*'],
+                            [route('rh.baremes.index'),            'Barèmes fiscaux',         'rh.baremes*'],
+                            [route('rh.cotisations.index'),        'Cotisations sociales',    'rh.cotisations*'],
+                            [route('rh.numerotation.index'),       'Numérotation bulletins',  'rh.numerotation*'],
+                            [route('rh.modeles-bulletins.index'),  'Modèles de bulletins',    'rh.modeles-bulletins*'],
+                            [route('rh.periodes.index'),           'Périodes de paie',        'rh.periodes*'],
+                            [route('rh.parametrage.edit'),         'Paramétrage général',     'rh.parametrage*'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-rose-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+
+                        {{-- ── États & comptabilité ── --}}
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Éditions</span>
+                        </div>
+                        @foreach([
+                            [route('rh.etats.index'),           'États de paie',        'rh.etats*'],
+                            [route('rh.comptabilisation.index'),'Comptabilisation paie', 'rh.comptabilisation*'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-rose-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- ── CRM ──────────────────────────────────── --}}
+            @php $gId = 'crm'; $gActive = request()->routeIs('crm.*'); @endphp
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               {{ $gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white' }}">
+                    @if($gActive)<span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-cyan-300 rounded-r-full"></span>@endif
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 {{ $gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">CRM</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '{{ $gId }}' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        CRM <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '{{ $gId }}' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        @foreach([
+                            [route('crm.dashboard'),         'Tableau de bord',  'crm.dashboard'],
+                            [route('crm.contacts.index'),    'Contacts',         'crm.contacts*'],
+                            [route('crm.opportunities.index'),'Pipeline',        'crm.opportunities*'],
+                            [route('crm.activities.index'),  'Activités',        'crm.activities*'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-cyan-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+
+            {{-- ── INTÉGRATIONS ─────────────────────────── --}}
+            @php $gId = 'integrations'; $gActive = request()->routeIs('integrations.*'); @endphp
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               {{ $gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white' }}">
+                    @if($gActive)<span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-orange-300 rounded-r-full"></span>@endif
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 {{ $gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">Intégrations</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '{{ $gId }}' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        Intégrations <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '{{ $gId }}' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        @foreach([
+                            [route('integrations.dashboard'), 'Tableau de bord',    'integrations.dashboard'],
+                            [route('integrations.index'),     'Toutes les intégrations', 'integrations.index'],
+                            [route('integrations.create'),    'Nouvelle intégration', 'integrations.create'],
+                        ] as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-orange-300' : 'bg-white/20' }}"></span>
                             {{ $label }}
                         </a>
                         @endforeach
@@ -602,6 +751,20 @@ request()->routeIs('achats.*')                                                  
             <div class="h-4"></div>
 
         </nav>
+
+        {{-- Bottom: Command Palette shortcut --}}
+        <div x-show="!$store.sidebar.collapsed"
+             class="flex-shrink-0 px-3 pb-3"
+             style="border-top:1px solid rgba(255,255,255,.06);">
+            <button @click="$dispatch('open-palette')"
+                    class="w-full mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-indigo-300/70 hover:text-white hover:bg-white/8 transition-all group">
+                <svg class="w-3.5 h-3.5 flex-shrink-0 text-indigo-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                </svg>
+                <span class="flex-1 text-left">Recherche rapide</span>
+                <kbd class="text-[9px] font-bold bg-white/10 border border-white/10 rounded px-1.5 py-0.5">Ctrl K</kbd>
+            </button>
+        </div>
 
     </aside>
 

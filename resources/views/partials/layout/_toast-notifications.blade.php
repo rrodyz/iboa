@@ -1,19 +1,32 @@
 {{--
     Système de notifications toast (haut-droite).
 
-    - Lit les flash messages session (success/error/warning/info) qui sont stockés
-      dans des variables window.__flash_* (réinjectés dans <body> à chaque navigation Turbo).
-    - Le composant Alpine `toastManager` (défini dans app.js) gère l'affichage, le timeout
-      et l'animation. Voir Alpine.data('toastManager', ...) dans resources/js/app.js.
+    - Les flash messages session (success/error/warning/info) sont injectés via des
+      balises <meta name="flash-*"> (data-turbo-temporary) — aucun <script> inline.
+      Cette approche évite les erreurs Turbo Drive lors du body-swap (replaceWith SyntaxError).
+    - Le composant Alpine `toastManager` (défini dans app.js) lit les <meta> dans init(),
+      les affiche, et les supprime. Voir Alpine.data('toastManager', ...) dans app.js.
 --}}
 
-{{-- Flash messages — dans <body> pour être réexécutés à chaque navigation Turbo --}}
-<script>
-    window.__flash_success = @json(session('success'));
-    window.__flash_error   = @json(session('error'));
-    window.__flash_warning = @json(session('warning'));
-    window.__flash_info    = @json(session('info'));
-</script>
+{{--
+    Flash messages — passés via <meta> dans le <body> plutôt qu'un <script> inline.
+    Avantage Turbo : aucun script activé lors du body-swap (pas de SyntaxError potentiel).
+    data-turbo-temporary → Turbo supprime ces éléments avant la mise en cache ; ils ne
+    réapparaissent donc pas lors d'une restauration depuis le cache Turbo.
+    Le toastManager Alpine les lit dans init() via querySelector, puis les supprime.
+--}}
+@if(session('success'))
+<meta name="flash-success" content="{{ session('success') }}" data-turbo-temporary>
+@endif
+@if(session('error'))
+<meta name="flash-error" content="{{ session('error') }}" data-turbo-temporary>
+@endif
+@if(session('warning'))
+<meta name="flash-warning" content="{{ session('warning') }}" data-turbo-temporary>
+@endif
+@if(session('info'))
+<meta name="flash-info" content="{{ session('info') }}" data-turbo-temporary>
+@endif
 
 {{-- ── Toast Notifications (fixed top-right) ──────────────────────────────── --}}
 <div x-data="toastManager"

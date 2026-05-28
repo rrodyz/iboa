@@ -35,6 +35,7 @@ class ClientPayment extends Model
         'unallocated_amount',
         'is_acompte',
         'created_by',
+        'journal_entry_id',   // [AUDIT-ERP-A]
     ];
 
     protected $casts = [
@@ -78,5 +79,11 @@ class ClientPayment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** [AUDIT-ERP-B] Écriture comptable générée lors de l'encaissement. */
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class);
     }
 }

@@ -21,7 +21,8 @@ class Invoice extends Model
 
     // Statuts
     const STATUS_DRAFT     = 'brouillon';
-    const STATUS_VALIDATED = 'validee';
+    const STATUS_ISSUED    = 'emise';          // [AUDIT-ERP-B] valeur réelle après validate()
+    const STATUS_VALIDATED = 'emise';          // alias rétrocompat — même valeur que STATUS_ISSUED
     const STATUS_SENT      = 'envoyee';
     const STATUS_PARTIAL   = 'partiellement_payee';
     const STATUS_PAID      = 'payee';
@@ -66,6 +67,8 @@ class Invoice extends Model
         'recurring_frequency',
         'next_recurring_date',
         'parent_invoice_id',
+        'journal_entry_id',   // [AUDIT-ERP-A]
+        'quote_id',           // [AUDIT-ERP-A]
     ];
 
     protected $casts = [
@@ -168,13 +171,27 @@ class Invoice extends Model
         return $this->belongsTo(Quote::class);
     }
 
+    /** [AUDIT-ERP-B] Écriture comptable générée lors de la validation. */
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class);
+    }
+
+    /** [AUDIT-ERP-C] Mouvements de stock liés à cette facture (via polymorphisme). */
+    public function stockMovements(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(StockMovement::class, 'reference_id')
+                    ->where('reference_type', 'invoice');
+    }
+
     // ── Accessors ─────────────────────────────────────────────────────────────
 
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
             'brouillon'             => 'Brouillon',
-            'validee'               => 'Validée',
+            'emise'                 => 'Émise',      // [AUDIT-ERP-B] statut réel
+            'validee'               => 'Validée',    // rétrocompat si anciennes données
             'envoyee'               => 'Envoyée',
             'partiellement_payee'   => 'Part. payée',
             'payee'                 => 'Payée',
@@ -188,7 +205,8 @@ class Invoice extends Model
     {
         return match ($this->status) {
             'brouillon'           => 'gray',
-            'validee'             => 'blue',
+            'emise'               => 'blue',    // [AUDIT-ERP-B]
+            'validee'             => 'blue',    // rétrocompat
             'envoyee'             => 'indigo',
             'partiellement_payee' => 'amber',
             'payee'               => 'green',

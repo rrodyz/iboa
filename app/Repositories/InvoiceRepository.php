@@ -86,6 +86,7 @@ class InvoiceRepository extends BaseRepository
             'items.unit',
             'creditNotes',
             'payments.paymentMethod',
+            'paymentSchedules',
             'createdBy',
             'validatedBy',
             'order.quote',

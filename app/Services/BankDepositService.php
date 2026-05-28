@@ -12,6 +12,7 @@ class BankDepositService
     public function __construct(
         private DocumentSequenceService $seq,
         private CashAccountService $cashAccountService,
+        private AccountingService $accountingService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ class BankDepositService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company            = Company::firstOrFail();
+            $company            = Company::findOrFail(Auth::user()->company_id);
             $data['company_id'] = $company->id;
             $data['number']     = $this->seq->nextNumber($company, 'remise_banque');
             $data['created_by'] = Auth::id();
@@ -52,7 +53,7 @@ class BankDepositService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Validate — update balances + mark effects as remis_banque
+    // Validate — update balances + GL entry + mark effects as remis_banque
     // ─────────────────────────────────────────────────────────────────────────
     public function validateDeposit(BankDeposit $deposit): BankDeposit
     {
@@ -63,7 +64,7 @@ class BankDepositService
         return DB::transaction(function () use ($deposit) {
             $deposit->load(['items', 'cashAccount', 'sourceCashAccount']);
 
-            // Credit bank account
+            // Credit bank account (trésorerie)
             $this->cashAccountService->recordTransaction($deposit->cashAccount, [
                 'type'             => 'credit',
                 'amount'           => $deposit->total_amount,
@@ -106,6 +107,10 @@ class BankDepositService
                 'validated_by' => Auth::id(),
                 'validated_at' => now(),
             ]);
+
+            // [COMPTA-BANQUE] Post GL entry — DR 521 Banque / CR 571 Caisse (ou 585 transit)
+            // Must be called after status update so the fresh deposit is 'valide'
+            $this->accountingService->postBankDeposit($deposit->fresh(['cashAccount', 'sourceCashAccount']));
 
             return $deposit->fresh();
         });

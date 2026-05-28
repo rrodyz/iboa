@@ -26,3 +26,6 @@ Schedule::command('automation:daily')->dailyAt('05:45');
 // [AUDIT-SYNC] Audit synchronisation inter-modules — détecte les ruptures de
 // chaîne entre devis/commandes/factures/paiements/réceptions/écritures.
 Schedule::command('audit:sync')->dailyAt('05:50');
+
+// [CRM] Notifier chaque matin les responsables des activités en retard
+Schedule::command('crm:notify-overdue-activities')->dailyAt('08:00');

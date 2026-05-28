@@ -27,7 +27,24 @@ class PurchaseOrderController extends Controller
         $purchaseOrders = $this->service->search($filters, 15);
         $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
 
-        return view('achats.commandes.index', compact('purchaseOrders', 'filters', 'suppliers'));
+        // ── Totaux agrégés sur l'ensemble des filtres ──
+        $company = Company::firstOrFail();
+        $totalsQuery = PurchaseOrder::where('company_id', $company->id)
+            ->when(!empty($filters['supplier_id']), fn($q) => $q->where('supplier_id', $filters['supplier_id']))
+            ->when(!empty($filters['status']),      fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['search']),      fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('supplier', fn($s) => $s->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'       => (int) $totalsQuery->sum('total_ttc'),
+            'total_ht'        => (int) (clone $totalsQuery)->sum('subtotal_ht'),
+            'count_confirmed' => (int) (clone $totalsQuery)->whereIn('status', ['confirme', 'envoye', 'partiellement_recu'])->count(),
+            'count_received'  => (int) (clone $totalsQuery)->where('status', 'recu')->count(),
+        ];
+
+        return view('achats.commandes.index', compact('purchaseOrders', 'filters', 'suppliers', 'summary'));
     }
 
     public function create()

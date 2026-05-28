@@ -72,4 +72,11 @@ class Reception extends Model
     {
         return $this->belongsTo(\App\Models\User::class, 'validated_by');
     }
+
+    /** [AUDIT-ERP-C] Mouvements de stock générés par cette réception fournisseur. */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class, 'reference_id')
+                    ->where('reference_type', 'reception');
+    }
 }

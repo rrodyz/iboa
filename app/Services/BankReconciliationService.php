@@ -23,7 +23,7 @@ class BankReconciliationService
             $lines = $data['lines'] ?? [];
             unset($data['lines']);
 
-            $company             = Company::firstOrFail();
+            $company             = Company::findOrFail(Auth::user()->company_id);
             $data['company_id']  = $company->id;
             $data['number']      = $this->sequenceService->nextNumber($company, 'rapprochement');
             $data['created_by']  = Auth::id();

@@ -21,7 +21,24 @@ class CreditNoteController extends Controller
         $filters    = $request->only(['search', 'status', 'client_id']);
         $creditNotes = $this->service->repository->search($filters, 15);
 
-        return view('ventes.avoirs.index', compact('creditNotes', 'filters'));
+        // ── Totaux agrégés ──
+        $company = Company::firstOrFail();
+        $totalsQuery = CreditNote::where('company_id', $company->id)
+            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['search']),    fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('client', fn($c) => $c->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'        => (int) $totalsQuery->sum('total_ttc'),
+            'remaining_credit' => (int) (clone $totalsQuery)->sum('remaining_credit'),
+            'count_used'       => (int) (clone $totalsQuery)->where('status', 'utilise')->count(),
+            'count_pending'    => (int) (clone $totalsQuery)->whereIn('status', ['emis', 'partiel'])->count(),
+        ];
+
+        return view('ventes.avoirs.index', compact('creditNotes', 'filters', 'summary'));
     }
 
     /**

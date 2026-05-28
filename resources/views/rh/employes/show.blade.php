@@ -13,7 +13,17 @@
         <h1 class="text-2xl font-bold text-gray-900">{{ $employe->full_name }}</h1>
         <p class="text-sm text-gray-500 mt-1">Matricule <span class="font-mono">{{ $employe->matricule }}</span> · {{ $employe->category_label }}</p>
     </div>
-    <div class="flex gap-2">
+    <div class="flex items-center gap-2">
+        @if($employe->user_id)
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+            Portail actif
+        </span>
+        @else
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-400 rounded-full text-xs font-medium">
+            Sans portail
+        </span>
+        @endif
         <a href="{{ route('rh.employes.edit', $employe) }}"
            class="inline-flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
             Modifier
@@ -234,14 +244,14 @@
                 <span class="font-mono font-semibold">{{ number_format($employe->activeContract->base_salary, 0, ',', ' ') }} F</span>
             </div>
             @php
-                $base = $employe->activeContract->base_salary;
-                $cnssEmp = round($base * 5.5 / 100);
-                $cnssEmp = min($cnssEmp, round(650000 * 5.5 / 100));
+                $base    = $employe->activeContract->base_salary;
+                $cnssBase = min($base, $payroll->cnss_ceiling);
+                $cnssEmp  = round($cnssBase * $payroll->cnss_employee_rate / 100);
                 $imposable = $base - $cnssEmp;
                 $parts = $employe->nb_parts;
             @endphp
             <div class="flex justify-between text-red-600">
-                <span>CNSS (5,5%)</span>
+                <span>CNSS ({{ $payroll->cnss_employee_rate }}%)</span>
                 <span class="font-mono">- {{ number_format($cnssEmp, 0, ',', ' ') }} F</span>
             </div>
             <div class="flex justify-between text-blue-600 border-t pt-2">

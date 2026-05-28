@@ -8,6 +8,26 @@
 @endsection
 
 @section('content')
+{{-- KPI summary bar --}}
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <p class="text-xs text-gray-500">Total employés</p>
+        <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $summary['total'] }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <p class="text-xs text-gray-500">Actifs</p>
+        <p class="text-lg font-bold text-emerald-600 tabular-nums">{{ $summary['actif'] }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <p class="text-xs text-gray-500">Suspendus</p>
+        <p class="text-lg font-bold {{ $summary['suspendu'] > 0 ? 'text-amber-600' : 'text-gray-400' }} tabular-nums">{{ $summary['suspendu'] }}</p>
+    </div>
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <p class="text-xs text-gray-500">Quittés</p>
+        <p class="text-lg font-bold text-gray-500 tabular-nums">{{ $summary['quitte'] }}</p>
+    </div>
+</div>
+
 <div class="flex items-center justify-between mb-6">
     <div>
         <h1 class="text-2xl font-bold text-gray-900">Gestion des Employés</h1>

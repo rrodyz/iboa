@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\CrmContact;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\Product;
@@ -130,6 +131,24 @@ class SearchController extends Controller
                 ])->all();
             array_push($results, ...$items);
         }
+
+        // CRM — Contacts & Prospects
+        $items = CrmContact::where('company_id', $user?->company_id)
+            ->where(fn($q) => $q->where('name', 'like', $like)
+                                ->orWhere('company_name', 'like', $like)
+                                ->orWhere('email', 'like', $like)
+                                ->orWhere('phone', 'like', $like))
+            ->limit(self::MAX_PER_TYPE)
+            ->get(['id', 'name', 'company_name', 'type', 'status'])
+            ->map(fn($c) => [
+                'type'     => 'CRM',
+                'icon'     => 'user-circle',
+                'color'    => 'cyan',
+                'label'    => $c->name,
+                'sublabel' => implode(' · ', array_filter([$c->company_name, $c->typeLabel()])),
+                'url'      => route('crm.contacts.show', $c),
+            ])->all();
+        array_push($results, ...$items);
 
         return response()->json([
             'results' => $results,

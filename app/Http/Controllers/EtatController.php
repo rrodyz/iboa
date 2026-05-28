@@ -39,16 +39,22 @@ class EtatController extends Controller
 
     public function journalVentes(Request $request): mixed
     {
-        $from = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
-        $to   = $request->input('to',   now()->format('Y-m-d'));
+        $from     = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
+        $to       = $request->input('to',   now()->format('Y-m-d'));
+        $clientId = $request->input('client_id');
 
-        $rows = Invoice::whereIn('status', $this->salesStatuses)
+        $query = Invoice::whereIn('status', $this->salesStatuses)
             ->whereBetween('issued_at', [$from, $to . ' 23:59:59'])
             ->with('client:id,name')
             ->orderBy('issued_at')
-            ->orderBy('number')
-            ->get(['id', 'number', 'issued_at', 'client_id', 'status',
-                   'subtotal_ht', 'total_discount', 'total_tax', 'total_ttc']);
+            ->orderBy('number');
+
+        if ($clientId) {
+            $query->where('client_id', $clientId);
+        }
+
+        $rows = $query->get(['id', 'number', 'issued_at', 'client_id', 'status',
+                             'subtotal_ht', 'total_discount', 'total_tax', 'total_ttc']);
 
         $totals = [
             'ht'  => $rows->sum('subtotal_ht'),
@@ -56,6 +62,15 @@ class EtatController extends Controller
             'tva' => $rows->sum('total_tax'),
             'ttc' => $rows->sum('total_ttc'),
         ];
+
+        // Nom du client filtré (pour le titre PDF/Excel)
+        $clientName = $clientId
+            ? optional(Client::find($clientId))->name
+            : null;
+
+        $sheetTitle = $clientName
+            ? 'Journal des ventes — ' . $clientName
+            : 'Journal des ventes';
 
         if ($request->input('export') === 'excel') {
             $data = $rows->map(fn($r) => [
@@ -70,7 +85,7 @@ class EtatController extends Controller
             ])->toArray();
 
             return Excel::download(new GenericTableExport(
-                sheetTitle: 'Journal des ventes',
+                sheetTitle: $sheetTitle,
                 headers:    ['N° Facture', 'Date', 'Client', 'Statut', 'HT', 'Remise', 'TVA', 'TTC'],
                 data:       $data,
                 from:       $from,
@@ -82,7 +97,7 @@ class EtatController extends Controller
         }
 
         if ($request->input('export') === 'pdf') {
-            return $this->exportPdf('Journal des ventes', $from, $to,
+            return $this->exportPdf($sheetTitle, $from, $to,
                 headers: [
                     ['label' => 'N° Facture', 'align' => 'l'],
                     ['label' => 'Date',       'align' => 'c'],
@@ -116,7 +131,7 @@ class EtatController extends Controller
 
         $clients = Client::orderBy('name')->get(['id', 'name']);
 
-        return view('reports.journal-ventes', compact('from', 'to', 'rows', 'totals', 'clients'));
+        return view('reports.journal-ventes', compact('from', 'to', 'clientId', 'clientName', 'rows', 'totals', 'clients'));
     }
 
     // =========================================================================

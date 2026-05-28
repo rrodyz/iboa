@@ -125,8 +125,8 @@ $grandEff    = max($grandEff, $run->employee_count);
         @php
         $rows = [
             ['Masse salariale brute', 'total_brut'],
-            ['CNSS salarié (5,5%)',   'total_cnss_employee'],
-            ['CNSS patronal (16%)',   'total_cnss_employer'],
+            ['CNSS salarié (' . $payroll->cnss_employee_rate . '%)',  'total_cnss_employee'],
+            ['CNSS patronal (' . $payroll->cnss_employer_rate . '%)', 'total_cnss_employer'],
             ['IUTS',                  'total_iuts'],
             ['Net à payer',           'total_net'],
         ];

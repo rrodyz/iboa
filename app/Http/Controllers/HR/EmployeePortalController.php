@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\HR;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\PayrollItem;
 use App\Models\PayrollRun;
+use App\Models\PayrollSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -88,9 +91,18 @@ class EmployeePortalController extends Controller
         abort_if(! in_array($run->status, ['valide', 'paye']), 403);
 
         $item->load(['employee.department', 'employee.activeContract', 'payrollRun.company']);
-        $company = $run->company;
+        $company  = $run->company;
+        $settings = Company::first()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.bulletin', compact('item', 'run', 'company'))
+        // [P2] Soldes de congés de l'employé pour l'année du bulletin
+        $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)
+            ->where('year', $run->period_year)
+            ->with(['leaveType' => fn($q) => $q->where('is_active', true)])
+            ->get()
+            ->filter(fn($b) => $b->leaveType !== null);
+
+        $pdf = Pdf::loadView('rh.pdf.bulletin', compact('item', 'run', 'company', 'settings', 'payroll', 'leaveBalances'))
                   ->setPaper('a4');
 
         $filename = "bulletin-{$run->period_year}-{$run->period_month}-{$employee->matricule}.pdf";

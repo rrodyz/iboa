@@ -7,8 +7,13 @@ use App\Models\PayRubric;
 use Illuminate\Database\Seeder;
 
 /**
- * [RH-PRO] Rubriques de paie standard — inspiré Sage Paie & RH.
+ * [P1] Rubriques de paie standard — inspiré Sage Paie & RH.
  * Contexte Burkina Faso / Afrique francophone.
+ *
+ * Champ is_iuts_base ajouté (distinct de is_taxable et is_cnss_base) :
+ *   - is_cnss_base  : inclus dans la base cotisable CNSS
+ *   - is_iuts_base  : inclus dans la base imposable IUTS/ITS
+ *   - is_taxable    : alias lisible, doit rester = is_iuts_base pour les gains
  */
 class PayRubricSeeder extends Seeder
 {
@@ -31,6 +36,7 @@ class PayRubricSeeder extends Seeder
                 'calc_type'     => 'manuel',
                 'is_taxable'    => true,
                 'is_cnss_base'  => true,
+                'is_iuts_base'  => true,
                 'is_in_brut'    => true,
                 'display_order' => 10,
                 'description'   => 'Rémunération mensuelle de base selon le contrat de travail.',
@@ -42,6 +48,7 @@ class PayRubricSeeder extends Seeder
                 'calc_type'     => 'manuel',
                 'is_taxable'    => true,
                 'is_cnss_base'  => true,
+                'is_iuts_base'  => true,
                 'is_in_brut'    => true,
                 'display_order' => 15,
                 'description'   => 'Complément ponctuel de salaire.',
@@ -56,6 +63,7 @@ class PayRubricSeeder extends Seeder
                 'calc_type'     => 'manuel',
                 'is_taxable'    => true,
                 'is_cnss_base'  => true,
+                'is_iuts_base'  => true,
                 'is_in_brut'    => true,
                 'display_order' => 20,
                 'description'   => 'HS effectuées en semaine (majoration 25 %).',
@@ -294,9 +302,43 @@ class PayRubricSeeder extends Seeder
             ],
         ];
 
+        // Ajouter les rubriques manquantes dans le catalogue existant
+        $additional = [
+            [
+                'code'             => 'AT_MP',
+                'libelle'          => 'Cotisation AT/MP patronale',
+                'description'      => 'Accidents du travail & maladies professionnelles — 3,5 % du brut',
+                'type'             => 'cotisation_pat',
+                'calc_type'        => 'taux',
+                'base_ref'         => 'salaire_brut',
+                'rate'             => 3.50,
+                'is_taxable'       => false,
+                'is_cnss_base'     => false,
+                'is_iuts_base'     => false,
+                'is_in_brut'       => false,
+                'show_on_bulletin' => false,
+                'display_order'    => 81,
+            ],
+            [
+                'code'          => 'RET_PRET',
+                'libelle'       => 'Remboursement prêt salarié',
+                'description'   => 'Mensualité déduite automatiquement par le moteur de paie',
+                'type'          => 'retenue',
+                'calc_type'     => 'manuel',
+                'is_taxable'    => false,
+                'is_cnss_base'  => false,
+                'is_iuts_base'  => false,
+                'is_in_brut'    => false,
+                'display_order' => 72,
+            ],
+        ];
+
         $created = 0;
-        foreach ($rubrics as $data) {
+        foreach (array_merge($rubrics, $additional) as $data) {
+            // Défaut is_iuts_base = is_taxable si non fourni (compatibilité)
+            $data['is_iuts_base'] ??= $data['is_taxable'];
             $data['company_id'] = $company->id;
+
             PayRubric::updateOrCreate(
                 ['company_id' => $company->id, 'code' => $data['code']],
                 $data

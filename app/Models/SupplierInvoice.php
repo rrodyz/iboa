@@ -43,6 +43,7 @@ class SupplierInvoice extends Model
         'created_by',
         'validated_at',
         'validated_by',
+        'journal_entry_id',   // [AUDIT-ERP-A]
     ];
 
     protected $casts = [
@@ -125,6 +126,19 @@ class SupplierInvoice extends Model
     public function validatedBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'validated_by');
+    }
+
+    /** [AUDIT-ERP-B] Écriture comptable générée lors de la validation. */
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class);
+    }
+
+    /** [AUDIT-ERP-C] Mouvements de stock liés à cette facture fournisseur. */
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class, 'reference_id')
+                    ->where('reference_type', 'supplier_invoice');
     }
 
     // -------------------------------------------------------------------------

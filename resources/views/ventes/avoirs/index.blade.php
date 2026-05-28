@@ -8,7 +8,28 @@
 @endsection
 
 @section('content')
+@php $fmt = fn($n) => number_format((int)$n, 0, ',', ' '); @endphp
 <div class="space-y-5">
+
+    {{-- KPI summary bar --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Total avoirs TTC</p>
+            <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $fmt($summary['total_ttc']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Crédit restant</p>
+            <p class="text-lg font-bold text-purple-600 tabular-nums">{{ $fmt($summary['remaining_credit']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">En attente</p>
+            <p class="text-lg font-bold text-blue-600 tabular-nums">{{ $summary['count_pending'] }} <span class="text-xs font-normal text-gray-400">avoir(s)</span></p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Utilisés</p>
+            <p class="text-lg font-bold text-emerald-600 tabular-nums">{{ $summary['count_used'] }} <span class="text-xs font-normal text-gray-400">avoir(s)</span></p>
+        </div>
+    </div>
 
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

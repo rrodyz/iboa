@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class EmployeeContract extends Model
 {
     protected $fillable = [
-        'employee_id', 'type', 'start_date', 'end_date', 'base_salary', 'status', 'notes',
+        'employee_id', 'type', 'start_date', 'end_date', 'base_salary',
+        'payroll_profile_id', 'status', 'notes',
     ];
 
     protected $casts = [
@@ -17,7 +18,8 @@ class EmployeeContract extends Model
         'base_salary' => 'integer',
     ];
 
-    public function employee(): BelongsTo { return $this->belongsTo(Employee::class); }
+    public function employee(): BelongsTo       { return $this->belongsTo(Employee::class); }
+    public function payrollProfile(): BelongsTo { return $this->belongsTo(PayrollProfile::class, 'payroll_profile_id'); }
 
     public function getTypeLabelAttribute(): string
     {

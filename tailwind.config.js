@@ -60,5 +60,29 @@ export default {
         },
     },
 
+    // ── Safelist — classes assemblées dynamiquement en PHP (Blade/PHP variables) ──
+    // Tailwind JIT ne peut pas détecter les classes comme `bg-${color}-50` dans
+    // les templates Blade quand la couleur est une variable PHP.
+    // Ces patterns couvrent : CRM kanban, badges de statuts, composants ui.stat/badge.
+    safelist: [
+        // CRM kanban stages : sky, blue, violet, amber, emerald, red
+        { pattern: /^(bg|text|border|ring)-(sky|blue|violet|amber|emerald|red|indigo|gray|orange|teal|cyan)-(50|100|200|400|500|600|700|800)$/ },
+
+        // Badges statuts dynamiques
+        'bg-blue-100',   'text-blue-700',
+        'bg-green-100',  'text-green-700',
+        'bg-emerald-100','text-emerald-700',
+        'bg-amber-100',  'text-amber-700',
+        'bg-red-100',    'text-red-700',
+        'bg-orange-100', 'text-orange-700',
+        'bg-purple-100', 'text-purple-700',
+        'bg-sky-100',    'text-sky-700',
+        'bg-violet-100', 'text-violet-700',
+        'bg-teal-100',   'text-teal-700',
+        'bg-cyan-100',   'text-cyan-700',
+        'bg-indigo-100', 'text-indigo-700',
+        'bg-gray-100',   'text-gray-700',
+    ],
+
     plugins: [forms],
 };

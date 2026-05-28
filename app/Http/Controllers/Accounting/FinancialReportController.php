@@ -6,10 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\FiscalYear;
+use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
+use App\Models\JournalType;
+use App\Services\JournalEntryService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FinancialReportController extends Controller
@@ -37,7 +42,10 @@ class FinancialReportController extends Controller
 
         $accounts->each(fn ($a) => $a->net = $a->debit_balance - $a->credit_balance);
 
-        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts);
+        // [BILAN-FIX] Résultat net calculé dynamiquement depuis classes 6 & 7
+        $netResult = $this->computeNetResult($selectedFy);
+
+        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts, $netResult);
 
         // [COMPTA-PRO-04] Comparatif N vs N-1
         $prevFy = null; $prevTotals = null;
@@ -50,12 +58,13 @@ class FinancialReportController extends Controller
                     $prevFy->ends_at->toDateString()
                 );
                 $prevAccounts->each(fn ($a) => $a->net = $a->debit_balance - $a->credit_balance);
-                $prevTotals = $this->sectionTotalsForBilan($prevAccounts);
+                $prevNetResult = $this->computeNetResult($prevFy);
+                $prevTotals = $this->sectionTotalsForBilan($prevAccounts, $prevNetResult);
             }
         }
 
         return view('comptabilite.rapports.bilan', compact(
-            'actif', 'passif', 'totalActif', 'totalPassif',
+            'actif', 'passif', 'totalActif', 'totalPassif', 'netResult',
             'fiscalYears', 'selectedFy',
             'compare', 'prevFy', 'prevTotals'
         ));
@@ -78,14 +87,15 @@ class FinancialReportController extends Controller
         }
 
         $accounts->each(fn ($a) => $a->net = $a->debit_balance - $a->credit_balance);
-        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts);
+        $netResult = $this->computeNetResult($selectedFy);
+        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts, $netResult);
 
         $company   = Company::first();
         $printedAt = now()->format('d/m/Y à H:i');
 
         $pdf = Pdf::loadView(
             'comptabilite.rapports.pdf.bilan',
-            compact('actif', 'passif', 'totalActif', 'totalPassif', 'company', 'printedAt', 'selectedFy')
+            compact('actif', 'passif', 'totalActif', 'totalPassif', 'netResult', 'company', 'printedAt', 'selectedFy')
         )->setPaper('a4', 'portrait');
 
         $suffix   = $selectedFy ? '_' . $selectedFy->label : '';
@@ -174,6 +184,148 @@ class FinancialReportController extends Controller
         return $request->boolean('preview')
             ? $pdf->stream($filename)
             : $pdf->download($filename);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AFFECTATION DU RÉSULTAT — OD vers compte 13
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** GET comptabilite/affectation-resultat */
+    public function affectationResultat(Request $request): View
+    {
+        $companyId   = Auth::user()->company_id;
+        $fiscalYears = FiscalYear::orderByDesc('starts_at')->get();
+        $selectedFy  = $this->resolveSelectedFiscalYear($request, $fiscalYears);
+
+        $netResult = $this->computeNetResult($selectedFy);
+
+        // Comptes disponibles pour l'affectation (classe 1 : réserves, RAN, dividendes 4612)
+        $comptes = Account::where('company_id', $companyId)
+            ->where('is_detail', true)
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->where('code', 'like', '1%')
+                  ->orWhere('code', 'like', '4612%');
+            })
+            ->orderBy('code')
+            ->get(['id', 'code', 'name']);
+
+        // Compte 13 — Résultat net (destination de clôture des 6/7)
+        $compte13 = Account::where('company_id', $companyId)->where('code', '13')->first();
+
+        return view('comptabilite.rapports.affectation-resultat', compact(
+            'netResult', 'selectedFy', 'fiscalYears', 'comptes', 'compte13'
+        ));
+    }
+
+    /** POST comptabilite/affectation-resultat */
+    public function storeAffectation(Request $request)
+    {
+        $request->validate([
+            'fiscal_year_id'    => ['required', 'exists:fiscal_years,id'],
+            'date_affectation'  => ['required', 'date'],
+            'lignes'            => ['required', 'array', 'min:1'],
+            'lignes.*.account_id' => ['required', 'exists:accounts,id'],
+            'lignes.*.montant'    => ['required', 'numeric', 'min:1'],
+            'lignes.*.label'      => ['required', 'string', 'max:255'],
+        ]);
+
+        $companyId = Auth::user()->company_id;
+        $fy        = FiscalYear::findOrFail($request->fiscal_year_id);
+        $netResult = $this->computeNetResult($fy);
+
+        // Vérifier que la somme des affectations = résultat net
+        $totalAffecte = collect($request->lignes)->sum(fn($l) => (int) $l['montant']);
+        if (abs($totalAffecte) !== abs($netResult)) {
+            return back()->withInput()->with('error',
+                "Le total des affectations ({$totalAffecte} FCFA) ne correspond pas au résultat net (" .
+                abs($netResult) . " FCFA). Corrigez avant de valider."
+            );
+        }
+
+        // Compte 13 — Résultat net de l'exercice
+        $compte13 = Account::where('company_id', $companyId)->where('code', '13')->first();
+        if (!$compte13) {
+            return back()->with('error', 'Compte 13 (Résultat net) introuvable dans le plan comptable.');
+        }
+
+        DB::transaction(function () use ($request, $fy, $netResult, $compte13, $companyId) {
+            // Générer le numéro d'écriture
+            $lastNum = JournalEntry::where('company_id', $companyId)
+                ->where('number', 'like', 'OD-%')
+                ->orderByDesc('number')
+                ->value('number');
+            $seq = $lastNum ? (int) explode('-', $lastNum)[2] + 1 : 1;
+            $number = 'OD-' . now()->year . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
+            $journalType = JournalType::where('company_id', $companyId)
+                ->where('type', 'operations_diverses')
+                ->first();
+
+            $entry = JournalEntry::create([
+                'company_id'      => $companyId,
+                'journal_type_id' => $journalType->id,
+                'fiscal_year_id'  => $fy->id,
+                'number'          => $number,
+                'entry_date'      => $request->date_affectation,
+                'reference'       => 'AFFECT-' . $fy->label,
+                'description'     => 'Affectation du résultat — ' . $fy->label,
+                'status'          => 'brouillon',
+                'total_debit'     => abs($netResult),
+                'total_credit'    => abs($netResult),
+                'created_by'      => Auth::id(),
+            ]);
+
+            $sort = 0;
+
+            if ($netResult < 0) {
+                // PERTE : Dr 12 (Report à nouveau) / Cr 13 (Résultat net)
+                // On laisse l'utilisateur décider où affecter la perte
+                // Ligne 1 : Débit = comptes d'affectation
+                foreach ($request->lignes as $ligne) {
+                    JournalEntryLine::create([
+                        'journal_entry_id'   => $entry->id,
+                        'account_id'         => $ligne['account_id'],
+                        'label'              => $ligne['label'],
+                        'debit'              => (int) $ligne['montant'],
+                        'credit'             => 0,
+                        'sort_order'         => $sort++,
+                    ]);
+                }
+                // Ligne contrepartie : Crédit = compte 13
+                JournalEntryLine::create([
+                    'journal_entry_id'   => $entry->id,
+                    'account_id'         => $compte13->id,
+                    'label'              => 'Résultat net — perte exercice ' . $fy->label,
+                    'debit'              => 0,
+                    'credit'             => abs($netResult),
+                    'sort_order'         => $sort++,
+                ]);
+            } else {
+                // BÉNÉFICE : Dr 13 (Résultat net) / Cr comptes d'affectation
+                JournalEntryLine::create([
+                    'journal_entry_id'   => $entry->id,
+                    'account_id'         => $compte13->id,
+                    'label'              => 'Résultat net — bénéfice exercice ' . $fy->label,
+                    'debit'              => abs($netResult),
+                    'credit'             => 0,
+                    'sort_order'         => $sort++,
+                ]);
+                foreach ($request->lignes as $ligne) {
+                    JournalEntryLine::create([
+                        'journal_entry_id'   => $entry->id,
+                        'account_id'         => $ligne['account_id'],
+                        'label'              => $ligne['label'],
+                        'debit'              => 0,
+                        'credit'             => (int) $ligne['montant'],
+                        'sort_order'         => $sort++,
+                    ]);
+                }
+            }
+        });
+
+        return redirect()->route('comptabilite.bilan', ['fiscal_year_id' => $request->fiscal_year_id])
+            ->with('success', '✅ OD d\'affectation du résultat créée en brouillon. Validez-la dans le journal pour l\'enregistrer définitivement.');
     }
 
     /**
@@ -280,9 +432,9 @@ class FinancialReportController extends Controller
      * [COMPTA-PRO-04] Calcule les totaux par section du bilan pour un set de comptes.
      * Renvoie un tableau plat label => montant (pour comparaison avec l'année N).
      */
-    private function sectionTotalsForBilan(Collection $accounts): array
+    private function sectionTotalsForBilan(Collection $accounts, int $netResult = 0): array
     {
-        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts);
+        [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts, $netResult);
         $totals = ['__totalActif' => $totalActif, '__totalPassif' => $totalPassif];
         foreach ($actif as $label => $coll) {
             $totals['ACTIF::' . $label] = (int) $coll->sum('net');
@@ -291,6 +443,32 @@ class FinancialReportController extends Controller
             $totals['PASSIF::' . $label] = (int) $coll->sum(fn($a) => abs($a->net));
         }
         return $totals;
+    }
+
+    /**
+     * Calcule le résultat net de l'exercice (Produits – Charges, classes 6 & 7).
+     * Si aucun exercice sélectionné, utilise les soldes cumulés.
+     *
+     * @return int  Positif = bénéfice, négatif = perte
+     */
+    private function computeNetResult(?FiscalYear $fy): int
+    {
+        if ($fy) {
+            $accounts67 = $this->loadAccountsWithMovements(
+                ['6%', '7%'],
+                $fy->starts_at->toDateString(),
+                $fy->ends_at->toDateString()
+            );
+        } else {
+            $accounts67 = $this->loadCumulativeAccounts(['6%', '7%']);
+        }
+
+        $totalCharges  = $accounts67->filter(fn($a) => str_starts_with($a->code, '6'))
+                                    ->sum(fn($a) => $a->debit_balance - $a->credit_balance);
+        $totalProduits = $accounts67->filter(fn($a) => str_starts_with($a->code, '7'))
+                                    ->sum(fn($a) => $a->credit_balance - $a->debit_balance);
+
+        return (int) ($totalProduits - $totalCharges);
     }
 
     /**
@@ -402,8 +580,10 @@ class FinancialReportController extends Controller
     /**
      * Build actif / passif sections from an $accounts collection that already
      * has debit_balance, credit_balance and net set.
+     *
+     * @param int $netResult Résultat net calculé depuis classes 6/7 (positif = bénéfice, négatif = perte)
      */
-    private function buildBilanSections(Collection $accounts): array
+    private function buildBilanSections(Collection $accounts, int $netResult = 0): array
     {
         // ACTIF sections
         $actif = [
@@ -423,9 +603,30 @@ class FinancialReportController extends Controller
             'Trésorerie active'       => $accounts->filter(fn ($a) => str_starts_with($a->code, '5') && $a->net >= 0),
         ];
 
+        // [BILAN-FIX] Injecter le résultat net comme compte virtuel dans Capitaux propres
+        // Il n'est PAS dans la DB (comptes 6/7 ne font pas partie des classes 1-5 du bilan),
+        // mais il doit figurer en capitaux propres conformément à la norme SYSCOHADA.
+        $resultatVirtual = (object)[
+            'id'             => 0,
+            'code'           => '13',
+            'name'           => $netResult >= 0
+                                    ? 'Résultat net de l\'exercice — Bénéfice'
+                                    : 'Résultat net de l\'exercice — Perte',
+            'debit_balance'  => $netResult < 0 ? abs($netResult) : 0,
+            'credit_balance' => $netResult >= 0 ? $netResult : 0,
+            'net'            => $netResult,   // signé : positif = bénéfice, négatif = perte
+            '_virtual'       => true,         // flag pour la vue
+            '_is_loss'       => $netResult < 0,
+        ];
+
+        $capitauxPropres = $accounts->filter(fn ($a) => str_starts_with($a->code, '1'));
+        if ($netResult !== 0) {
+            $capitauxPropres = $capitauxPropres->push($resultatVirtual);
+        }
+
         // PASSIF sections
         $passif = [
-            'Capitaux propres'        => $accounts->filter(fn ($a) => str_starts_with($a->code, '1')),
+            'Capitaux propres'        => $capitauxPropres,
             'Dettes fournisseurs'     => $accounts->filter(fn ($a) => str_starts_with($a->code, '401') || str_starts_with($a->code, '408')),
             'Dettes fiscales & soc.'  => $accounts->filter(fn ($a) => str_starts_with($a->code, '44') || str_starts_with($a->code, '45')),
             'Autres dettes'           => $accounts->filter(fn ($a) =>
@@ -446,11 +647,13 @@ class FinancialReportController extends Controller
             || (str_starts_with($a->code, '5') && $a->net >= 0)
         )->sum('net');
 
+        // [BILAN-FIX] totalPassif inclut le résultat net (algébrique)
+        // Bénéfice (+) augmente le passif, Perte (-) le réduit → bilan toujours équilibré
         $totalPassif = $accounts->filter(fn ($a) =>
             str_starts_with($a->code, '1')
             || (str_starts_with($a->code, '4') && $a->net <= 0)
             || (str_starts_with($a->code, '5') && $a->net < 0)
-        )->sum(fn ($a) => abs($a->net));
+        )->sum(fn ($a) => abs($a->net)) + $netResult;
 
         return [$actif, $passif, $totalActif, $totalPassif];
     }

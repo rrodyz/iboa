@@ -112,8 +112,8 @@
                     <tbody class="divide-y divide-gray-100">
                         @forelse($products as $product)
                         @php
-                            $totalQty       = $product->stocks->sum('quantity');
-                            $totalReserved  = $product->stocks->sum('reserved_quantity');
+                            $totalQty       = $product->productStocks->sum('quantity');
+                            $totalReserved  = $product->productStocks->sum('reserved_quantity');
                             $available      = $totalQty - $totalReserved;
                             $min            = $product->stock_min;
                             $max            = $product->stock_max;

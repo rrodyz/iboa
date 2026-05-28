@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Stock;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Stock\StoreWarehouseRequest;
 use App\Http\Requests\Stock\UpdateWarehouseRequest;
+use App\Models\Company;
 use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,10 @@ class WarehouseController extends Controller
     {
         $search = $request->input('search');
 
+        $company = Company::firstOrFail();
+
         $warehouses = Warehouse::withCount(['productStocks', 'stockMovements'])
+            ->where('company_id', $company->id)
             ->when($search, fn($q) =>
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('code', 'like', "%{$search}%")
@@ -49,6 +53,7 @@ class WarehouseController extends Controller
     {
         $data = $request->validated();
 
+        $data['company_id'] = Company::firstOrFail()->id;
         $data['is_default'] = $request->boolean('is_default');
         $data['is_active']  = $request->boolean('is_active', true);
 

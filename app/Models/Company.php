@@ -134,4 +134,37 @@ class Company extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    // -------------------------------------------------------------------------
+    // Accessors
+    // -------------------------------------------------------------------------
+
+    /**
+     * [P3.D] Retourne le logo encodé en base64 (data URI) pour DomPDF.
+     * DomPDF ne peut pas résoudre les URLs HTTP — on lit le fichier depuis le
+     * disque et on l'encode en base64 pour l'intégrer directement dans le HTML.
+     *
+     * @return string|null  "data:image/png;base64,..." ou null si aucun logo.
+     */
+    public function getLogoBase64Attribute(): ?string
+    {
+        if (empty($this->logo)) {
+            return null;
+        }
+
+        $path = storage_path('app/public/' . ltrim($this->logo, '/'));
+
+        if (! file_exists($path) || ! is_readable($path)) {
+            return null;
+        }
+
+        $content = @file_get_contents($path);
+        if ($content === false || $content === '') {
+            return null;
+        }
+
+        $mime = mime_content_type($path) ?: 'image/png';
+
+        return 'data:' . $mime . ';base64,' . base64_encode($content);
+    }
 }

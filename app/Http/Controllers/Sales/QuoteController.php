@@ -26,7 +26,28 @@ class QuoteController extends Controller
         $filters = $request->only(['client_id', 'status', 'date_from', 'date_to', 'search']);
         $quotes  = $this->service->search($filters, 15);
 
-        return view('ventes.devis.index', compact('quotes', 'filters'));
+        // ── Totaux agrégés sur l'ensemble des filtres (pas seulement la page courante) ──
+        $company = Company::firstOrFail();
+        $totalsQuery = Quote::where('company_id', $company->id)
+            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['date_from']), fn($q) => $q->whereDate('issued_at', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']),   fn($q) => $q->whereDate('issued_at', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']),    fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('client', fn($c) => $c->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'      => (int) $totalsQuery->sum('total_ttc'),
+            'total_ht'       => (int) (clone $totalsQuery)->sum('subtotal_ht'),
+            'count_accepted' => (int) (clone $totalsQuery)->where('status', 'accepte')->count(),
+            'count_pending'  => (int) (clone $totalsQuery)->whereIn('status', ['brouillon', 'envoye'])->count(),
+            'count_expired'  => (int) (clone $totalsQuery)->where('status', 'expire')->count(),
+            'total_accepted' => (int) (clone $totalsQuery)->where('status', 'accepte')->sum('total_ttc'),
+        ];
+
+        return view('ventes.devis.index', compact('quotes', 'filters', 'summary'));
     }
 
     /**
@@ -46,7 +67,8 @@ class QuoteController extends Controller
     {
         $this->authorize('create', Quote::class);
 
-        $clients        = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
+        $clients        = Client::active()->orderBy('name')
+            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days']);
         $products       = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
         $selectedClient = $request->query('client_id');
 
@@ -76,7 +98,8 @@ class QuoteController extends Controller
     public function edit(Quote $devis)
     {
         $quote    = $this->service->repository->findWithDetails($devis->id);
-        $clients  = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
+        $clients  = Client::active()->orderBy('name')
+            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days']);
         $products = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
 
         return view('ventes.devis.edit', compact('quote', 'clients', 'products'));

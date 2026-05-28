@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Sale\StoreOrderRequest;
 use App\Http\Requests\Sale\UpdateOrderRequest;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\Order;
 use App\Models\Product;
 use App\Services\OrderService;
@@ -21,7 +22,25 @@ class OrderController extends Controller
         $filters = $request->only(['client_id', 'status', 'search']);
         $orders  = $this->service->search($filters, 15);
 
-        return view('ventes.commandes.index', compact('orders', 'filters'));
+        // ── Totaux agrégés sur l'ensemble des filtres ──
+        $company = Company::firstOrFail();
+        $totalsQuery = Order::where('company_id', $company->id)
+            ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['search']),    fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('client', fn($c) => $c->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'         => (int) $totalsQuery->sum('total_ttc'),
+            'total_ht'          => (int) (clone $totalsQuery)->sum('subtotal_ht'),
+            'count_confirmed'   => (int) (clone $totalsQuery)->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre'])->count(),
+            'count_delivered'   => (int) (clone $totalsQuery)->where('status', 'livre')->count(),
+            'count_invoiced'    => (int) (clone $totalsQuery)->where('status', 'facture')->count(),
+        ];
+
+        return view('ventes.commandes.index', compact('orders', 'filters', 'summary'));
     }
 
     public function create(Request $request)

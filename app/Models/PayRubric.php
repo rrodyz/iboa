@@ -14,29 +14,38 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PayRubric extends Model
 {
     protected $fillable = [
-        'company_id', 'code', 'libelle', 'description',
-        'type', 'calc_type',
+        'company_id', 'plan_id', 'code', 'libelle', 'description',
+        'type', 'categorie', 'sens', 'calc_type',
         'base_ref', 'rate', 'fixed_amount', 'formula',
-        'is_taxable', 'is_cnss_base', 'is_in_brut',
+        'plafond', 'arrondi', 'account_code',
+        'is_taxable', 'is_cnss_base', 'is_iuts_base', 'is_in_brut',
+        'is_in_net', 'is_employer_charged',
         'display_order', 'show_on_bulletin', 'is_active',
-        'created_by',
+        'valid_from', 'valid_until', 'notes', 'created_by',
     ];
 
     protected $casts = [
-        'rate'             => 'float',
-        'fixed_amount'     => 'integer',
-        'is_taxable'       => 'boolean',
-        'is_cnss_base'     => 'boolean',
-        'is_in_brut'       => 'boolean',
-        'show_on_bulletin' => 'boolean',
-        'is_active'        => 'boolean',
-        'display_order'    => 'integer',
+        'rate'               => 'float',
+        'fixed_amount'       => 'integer',
+        'plafond'            => 'integer',
+        'is_taxable'         => 'boolean',
+        'is_cnss_base'       => 'boolean',
+        'is_iuts_base'       => 'boolean',
+        'is_in_brut'         => 'boolean',
+        'is_in_net'          => 'boolean',
+        'is_employer_charged'=> 'boolean',
+        'show_on_bulletin'   => 'boolean',
+        'is_active'          => 'boolean',
+        'display_order'      => 'integer',
+        'valid_from'         => 'date',
+        'valid_until'        => 'date',
     ];
 
     // ─── Relations ────────────────────────────────────────────────────────────
 
-    public function company(): BelongsTo   { return $this->belongsTo(Company::class); }
-    public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function company(): BelongsTo    { return $this->belongsTo(Company::class); }
+    public function plan(): BelongsTo       { return $this->belongsTo(PayrollPlan::class, 'plan_id'); }
+    public function createdBy(): BelongsTo  { return $this->belongsTo(User::class, 'created_by'); }
 
     // ─── Scopes ───────────────────────────────────────────────────────────────
 

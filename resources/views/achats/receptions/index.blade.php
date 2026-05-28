@@ -12,6 +12,26 @@
 @section('content')
 <div class="space-y-5">
 
+    {{-- KPI summary bar --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Total réceptions</p>
+            <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $summary['total'] }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">En attente</p>
+            <p class="text-lg font-bold text-gray-500 tabular-nums">{{ $summary['pending'] }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Validées</p>
+            <p class="text-lg font-bold text-emerald-600 tabular-nums">{{ $summary['validated'] }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p class="text-xs text-gray-500">Partielles</p>
+            <p class="text-lg font-bold text-amber-600 tabular-nums">{{ $summary['partial'] }}</p>
+        </div>
+    </div>
+
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

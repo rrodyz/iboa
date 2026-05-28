@@ -10,6 +10,12 @@
       - DataTables CDN (CSS + JS)
       - @stack('styles') et @stack('head_scripts') pour extensions par vue
 --}}
+{{-- Dark mode: appliqué immédiatement en inline pour éviter le flash (avant Vite).
+     data-turbo-eval="false" → Turbo ne réexécute PAS ce script lors des navigations
+     (la classe 'dark' sur <html> persiste entre pages car <html> n'est jamais remplacé). --}}
+<script data-turbo-eval="false">
+(function(){var d=localStorage.getItem('erp_dark');if(d==='true'||(d===null&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark');})();
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">

@@ -18,13 +18,16 @@ class ClientPaymentScheduleService
             // Delete existing schedule
             ClientPaymentSchedule::where('invoice_id', $invoice->id)->delete();
 
-            $base   = $invoice->issued_at ?? today();
-            $number = 1;
+            // [FIX-WITHHOLDING-SCH] Use net_to_pay for schedule amounts, not total_ttc.
+            // When there is a retenue à la source, the client only pays the net amount.
+            $base     = $invoice->issued_at ?? today();
+            $netBasis = (int) ($invoice->net_to_pay ?: $invoice->total_ttc);
+            $number   = 1;
 
             foreach ($installments as $inst) {
                 $percent  = (float) ($inst['percent'] ?? 0);
                 $days     = (int)   ($inst['days_after'] ?? 0);
-                $amount   = (int) round($invoice->total_ttc * $percent / 100);
+                $amount   = (int) round($netBasis * $percent / 100);
 
                 ClientPaymentSchedule::create([
                     'invoice_id'          => $invoice->id,
@@ -46,11 +49,12 @@ class ClientPaymentScheduleService
     public function createCustom(Invoice $invoice, array $rows): void
     {
         DB::transaction(function () use ($invoice, $rows) {
+            $netBasis    = (int) ($invoice->net_to_pay ?: $invoice->total_ttc);
             $totalAmount = array_sum(array_column($rows, 'amount'));
-            if (abs($totalAmount - $invoice->total_ttc) > 1) {
+            if (abs($totalAmount - $netBasis) > 1) {
                 throw new \RuntimeException(
                     'Le total des échéances (' . number_format($totalAmount, 0, ',', ' ') . ' FCFA) '
-                    . 'ne correspond pas au montant TTC de la facture (' . number_format($invoice->total_ttc, 0, ',', ' ') . ' FCFA).'
+                    . 'ne correspond pas au net à payer de la facture (' . number_format($netBasis, 0, ',', ' ') . ' FCFA).'
                 );
             }
 

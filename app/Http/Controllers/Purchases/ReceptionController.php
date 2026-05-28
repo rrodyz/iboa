@@ -44,7 +44,14 @@ class ReceptionController extends Controller
         $filters    = $request->only(['search', 'status', 'supplier_id']);
         $suppliers  = Supplier::active()->orderBy('name')->get(['id', 'name']);
 
-        return view('achats.receptions.index', compact('receptions', 'filters', 'suppliers'));
+        $summary = [
+            'total'     => Reception::count(),
+            'pending'   => Reception::where('status', 'brouillon')->count(),
+            'validated' => Reception::where('status', 'valide')->count(),
+            'partial'   => Reception::where('status', 'partielle')->count(),
+        ];
+
+        return view('achats.receptions.index', compact('receptions', 'filters', 'suppliers', 'summary'));
     }
 
     /**

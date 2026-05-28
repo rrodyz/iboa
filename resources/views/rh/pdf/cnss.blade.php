@@ -27,8 +27,8 @@
             <th>Nom & Prénom</th>
             <th class="text-right">Salaire brut</th>
             <th class="text-right">Base CNSS plafonnée</th>
-            <th class="text-right">Cotis. salariale (5,5%)</th>
-            <th class="text-right">Cotis. patronale (16%)</th>
+            <th class="text-right">Cotis. salariale ({{ $payroll->cnss_employee_rate }}%)</th>
+            <th class="text-right">Cotis. patronale ({{ $payroll->cnss_employer_rate }}%)</th>
             <th class="text-right">Total CNSS</th>
         </tr>
     </thead>
@@ -55,7 +55,7 @@
     </tfoot>
 </table>
 <p style="margin-top:10px; font-size:8px; color:#6b7280;">
-    Taux employé : 5,5% | Taux patronal : 16% | Plafond mensuel : 650 000 FCFA<br>
+    Taux employé : {{ $payroll->cnss_employee_rate }}% | Taux patronal : {{ $payroll->cnss_employer_rate }}% | Plafond mensuel : {{ number_format($payroll->cnss_ceiling, 0, ',', ' ') }} {{ $payroll->currency_code }}<br>
     {{ $settings?->company_name ?? '' }} — {{ $settings?->tax_id ? 'NINEA : '.$settings->tax_id : '' }}
 </p>
 </div>

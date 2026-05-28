@@ -403,32 +403,77 @@
 
     {{-- Paiements reçus --}}
     @if($invoice->payments->isNotEmpty())
+    @php
+        $totalPaye = $invoice->payments->sum(fn($p) => $p->pivot->amount ?? 0);
+    @endphp
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200">
-            <h2 class="text-base font-semibold text-gray-900">Paiements reçus</h2>
+        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                Paiements reçus
+                <span class="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">
+                    {{ $invoice->payments->count() }} encaissement(s)
+                </span>
+            </h2>
+            <span class="text-sm font-semibold text-green-700 tabular-nums">
+                {{ number_format($totalPaye, 0, ',', ' ') }} FCFA encaissés
+            </span>
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N° encaissement</th>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mode</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Mode</th>
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Montant alloué</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Référence</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Référence</th>
+                        <th class="px-4 py-3"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                    @foreach($invoice->payments as $payment)
+                    @foreach($invoice->payments as $pmt)
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-3 text-gray-700">{{ $payment->payment_date?->format('d/m/Y') ?? '—' }}</td>
-                        <td class="px-4 py-3 text-gray-700">{{ $payment->paymentMethod?->name ?? '—' }}</td>
-                        <td class="px-4 py-3 text-right font-semibold tabular-nums text-green-600">
-                            {{ number_format($payment->pivot->amount ?? $payment->amount, 0, ',', ' ') }} FCFA
+                        <td class="px-4 py-3">
+                            <span class="font-mono font-semibold text-green-700 text-xs">{{ $pmt->number }}</span>
                         </td>
-                        <td class="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{{ $payment->reference ?? '—' }}</td>
+                        <td class="px-4 py-3 text-gray-700">{{ $pmt->payment_date?->format('d/m/Y') ?? '—' }}</td>
+                        <td class="px-4 py-3 text-gray-600 hidden md:table-cell">{{ $pmt->paymentMethod?->name ?? '—' }}</td>
+                        <td class="px-4 py-3 text-right font-semibold tabular-nums text-green-600">
+                            {{ number_format($pmt->pivot->amount ?? $pmt->amount, 0, ',', ' ') }} FCFA
+                        </td>
+                        <td class="px-4 py-3 text-gray-400 text-xs hidden lg:table-cell">
+                            {{ $pmt->reference ?: '—' }}
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                            <a href="{{ route('tresorerie.encaissements.show', $pmt) }}"
+                               class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Voir →
+                            </a>
+                        </td>
                     </tr>
                     @endforeach
                 </tbody>
+                <tfoot class="bg-gray-50">
+                    <tr>
+                        <td colspan="3" class="px-4 py-2.5 text-xs font-semibold text-gray-600 text-right hidden md:table-cell">Total encaissé :</td>
+                        <td colspan="3" class="px-4 py-2.5 text-xs font-semibold text-gray-600 text-right md:hidden">Total :</td>
+                        <td class="px-4 py-2.5 text-right font-bold tabular-nums text-green-700">
+                            {{ number_format($totalPaye, 0, ',', ' ') }} FCFA
+                        </td>
+                        <td colspan="2" class="px-4 py-2.5">
+                            @if($invoice->remaining_amount > 0)
+                                <span class="text-xs font-medium text-red-600">
+                                    Reste : {{ number_format($invoice->remaining_amount, 0, ',', ' ') }} FCFA
+                                </span>
+                            @else
+                                <span class="text-xs font-medium text-green-600 flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                                    Soldée
+                                </span>
+                            @endif
+                        </td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -795,8 +840,9 @@
             <div x-show="mode === 'custom'">
                 <form action="{{ route('ventes.factures.schedules.store-custom', $invoice) }}" method="POST" class="space-y-3">
                     @csrf
+                    @php $schedBasis = (int) ($invoice->net_to_pay ?: $invoice->total_ttc); @endphp
                     <p class="text-xs text-gray-500">
-                        Total facture : <strong class="tabular-nums">{{ number_format($invoice->total_ttc, 0, ',', ' ') }} FCFA</strong>
+                        Net à payer : <strong class="tabular-nums">{{ number_format($schedBasis, 0, ',', ' ') }} FCFA</strong>
                         — la somme des montants doit être exactement égale.
                     </p>
                     <div class="space-y-2">
@@ -832,7 +878,7 @@
                                 Ajouter une ligne
                             </button>
                             <span class="text-xs"
-                                  :class="customRows.reduce((s,r)=>s+parseInt(r.amount||0),0)==={{ (int) $invoice->total_ttc }} ? 'text-green-600 font-medium' : 'text-orange-500'">
+                                  :class="customRows.reduce((s,r)=>s+parseInt(r.amount||0),0)==={{ $schedBasis }} ? 'text-green-600 font-medium' : 'text-orange-500'">
                                 Saisi : <strong class="tabular-nums" x-text="customRows.reduce((s,r)=>s+parseInt(r.amount||0),0).toLocaleString('fr-FR')"></strong> FCFA
                             </span>
                         </div>

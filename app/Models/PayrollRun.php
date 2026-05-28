@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PayrollRun extends Model
 {
     protected $fillable = [
-        'company_id', 'fiscal_year_id',
+        'company_id', 'fiscal_year_id', 'journal_entry_id',
         'period_month', 'period_year', 'status',
         'total_brut', 'total_cnss_employee', 'total_cnss_employer',
         'total_iuts', 'total_net', 'employee_count',
@@ -33,6 +33,7 @@ class PayrollRun extends Model
 
     public function company(): BelongsTo   { return $this->belongsTo(Company::class); }
     public function fiscalYear(): BelongsTo{ return $this->belongsTo(FiscalYear::class); }
+    public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
     public function validatedBy(): BelongsTo { return $this->belongsTo(User::class, 'validated_by'); }
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function items(): HasMany       { return $this->hasMany(PayrollItem::class); }

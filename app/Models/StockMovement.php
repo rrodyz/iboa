@@ -6,6 +6,7 @@ use App\Models\Traits\HasCreator;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class StockMovement extends Model
 {
@@ -62,7 +63,7 @@ class StockMovement extends Model
         return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
-public function fromWarehouse(): BelongsTo
+    public function fromWarehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'from_warehouse_id');
     }
@@ -70,6 +71,19 @@ public function fromWarehouse(): BelongsTo
     public function toWarehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'to_warehouse_id');
+    }
+
+    /**
+     * [AUDIT-ERP-D] Relation polymorphique vers le document source.
+     * Usage : $movement->referenceable → le modèle source (DeliveryNote, Reception, Invoice…).
+     *
+     * Valeurs de reference_type reconnues :
+     *   delivery_note | reception | invoice | supplier_invoice
+     *   credit_note   | inventory_session | stock_transfer | adjustment
+     */
+    public function referenceable(): MorphTo
+    {
+        return $this->morphTo('referenceable', 'reference_type', 'reference_id');
     }
 
     // -------------------------------------------------------------------------

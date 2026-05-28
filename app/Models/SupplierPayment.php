@@ -34,6 +34,7 @@ class SupplierPayment extends Model
         'allocated_amount',
         'unallocated_amount',
         'created_by',
+        'journal_entry_id',   // [AUDIT-ERP-A]
     ];
 
     protected $casts = [
@@ -76,5 +77,11 @@ class SupplierPayment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** [AUDIT-ERP-B] Écriture comptable générée lors du paiement fournisseur. */
+    public function journalEntry(): BelongsTo
+    {
+        return $this->belongsTo(JournalEntry::class);
     }
 }

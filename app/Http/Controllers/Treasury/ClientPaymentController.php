@@ -51,7 +51,24 @@ class ClientPaymentController extends Controller
         $clients        = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
         $paymentMethods = PaymentMethod::where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'type']);
 
-        return view('tresorerie.encaissements.index', compact('payments', 'filters', 'clients', 'paymentMethods'));
+        // ── Totaux agrégés sur l'ensemble des filtres ──
+        $totalsQuery = ClientPayment::query()
+            ->when(!empty($filters['client_id']),         fn($q) => $q->where('client_id', $filters['client_id']))
+            ->when(!empty($filters['payment_method_id']), fn($q) => $q->where('payment_method_id', $filters['payment_method_id']))
+            ->when(!empty($filters['date_from']),          fn($q) => $q->whereDate('paid_at', '>=', $filters['date_from']))
+            ->when(!empty($filters['date_to']),            fn($q) => $q->whereDate('paid_at', '<=', $filters['date_to']))
+            ->when(!empty($filters['search']),             fn($q) => $q->where(fn($sq) =>
+                $sq->where('reference', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('client', fn($c) => $c->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_amount'  => (int) $totalsQuery->sum('amount'),
+            'count'         => (int) (clone $totalsQuery)->count(),
+            'this_month'    => (int) (clone $totalsQuery)->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->sum('amount'),
+        ];
+
+        return view('tresorerie.encaissements.index', compact('payments', 'filters', 'clients', 'paymentMethods', 'summary'));
     }
 
     /**

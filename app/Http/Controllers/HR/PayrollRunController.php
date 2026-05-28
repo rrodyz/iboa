@@ -8,8 +8,11 @@ use App\Exports\HR\LivreDepaieExport;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\LeaveBalance;
 use App\Models\PayrollRun;
+use App\Models\PayrollSetting;
 use App\Models\PayrollVariable;
+use App\Services\PayrollAccountingService;
 use App\Services\PayrollService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -40,7 +43,21 @@ class PayrollRunController extends Controller
         $years = PayrollRun::where('company_id', $company->id)
             ->distinct()->orderByDesc('period_year')->pluck('period_year');
 
-        return view('rh.paie.index', compact('runs', 'filters', 'years'));
+        // ── Totaux agrégés sur l'ensemble des filtres ──
+        $summaryQuery = PayrollRun::where('company_id', $company->id)
+            ->when($filters['year']   ?? null, fn($q) => $q->where('period_year', $filters['year']))
+            ->when($filters['status'] ?? null, fn($q) => $q->where('status', $filters['status']));
+
+        $summary = [
+            'total_brut'          => (int) $summaryQuery->sum('total_brut'),
+            'total_net'           => (int) (clone $summaryQuery)->sum('total_net'),
+            'total_cnss_employee' => (int) (clone $summaryQuery)->sum('total_cnss_employee'),
+            'total_iuts'          => (int) (clone $summaryQuery)->sum('total_iuts'),
+            'count_valide'        => (int) (clone $summaryQuery)->where('status', 'valide')->count(),
+            'count_paye'          => (int) (clone $summaryQuery)->where('status', 'paye')->count(),
+        ];
+
+        return view('rh.paie.index', compact('runs', 'filters', 'years', 'summary'));
     }
 
     public function create()
@@ -143,8 +160,16 @@ class PayrollRunController extends Controller
     {
         $run->load('company');
         $settings = Company::first()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.bulletin', compact('run', 'item', 'settings'))
+        // [P2] Soldes de congés de l'employé pour l'année du bulletin
+        $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)
+            ->where('year', $run->period_year)
+            ->with(['leaveType' => fn($q) => $q->where('is_active', true)])
+            ->get()
+            ->filter(fn($b) => $b->leaveType !== null);
+
+        $pdf = Pdf::loadView('rh.pdf.bulletin', compact('run', 'item', 'settings', 'payroll', 'leaveBalances'))
             ->setPaper('a4', 'portrait');
 
         $filename = "Bulletin_{$run->period_year}_{$run->period_month}_{$item->employee_matricule}.pdf";
@@ -173,8 +198,9 @@ class PayrollRunController extends Controller
     {
         $run->load('items');
         $settings = Company::first()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.cnss', compact('run', 'settings'))
+        $pdf = Pdf::loadView('rh.pdf.cnss', compact('run', 'settings', 'payroll'))
             ->setPaper('a4', 'portrait');
 
         $filename = "Bordereau_CNSS_{$run->period_year}_{$run->period_month}.pdf";
@@ -188,8 +214,9 @@ class PayrollRunController extends Controller
     {
         $run->load('items');
         $settings = Company::first()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.iuts', compact('run', 'settings'))
+        $pdf = Pdf::loadView('rh.pdf.iuts', compact('run', 'settings', 'payroll'))
             ->setPaper('a4', 'landscape');
 
         $filename = "Etat_IUTS_{$run->period_year}_{$run->period_month}.pdf";
@@ -212,8 +239,9 @@ class PayrollRunController extends Controller
             ->get();
 
         $settings = Company::first()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($company->id);
 
-        $pdf = Pdf::loadView('rh.pdf.livre-paie', compact('runs', 'year', 'settings', 'company'))
+        $pdf = Pdf::loadView('rh.pdf.livre-paie', compact('runs', 'year', 'settings', 'company', 'payroll'))
             ->setPaper('a4', 'landscape');
 
         return $pdf->download("Livre_Paie_{$year}.pdf");
@@ -284,6 +312,109 @@ class PayrollRunController extends Controller
         $run->load(['items', 'company']);
         $filename = "iuts-{$run->period_year}-{$run->period_month}.xlsx";
         return Excel::download(new IutsExport($run), $filename);
+    }
+
+    /**
+     * PDF : état des avances récupérées sur ce bulletin.
+     */
+    public function avancesPdf(PayrollRun $run)
+    {
+        $company  = Company::firstOrFail();
+        $settings = $company->documentSetting;
+
+        $avances = \App\Models\SalaryAdvance::with('employee')
+            ->where('recovered_in_run_id', $run->id)
+            ->orderBy('employee_id')
+            ->get();
+
+        $pdf = Pdf::loadView('rh.pdf.avances', compact('run', 'avances', 'settings', 'company'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download("Etat_Avances_{$run->period_year}_{$run->period_month}.pdf");
+    }
+
+    /**
+     * PDF : état des remboursements de prêts sur ce bulletin.
+     */
+    public function pretsPdf(PayrollRun $run)
+    {
+        $company  = Company::firstOrFail();
+        $settings = $company->documentSetting;
+
+        $payments = \App\Models\EmployeeLoanPayment::with(['loan.employee'])
+            ->where('payroll_run_id', $run->id)
+            ->orderBy('employee_loan_id')
+            ->get();
+
+        $pdf = Pdf::loadView('rh.pdf.prets', compact('run', 'payments', 'settings', 'company'))
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->download("Etat_Prets_{$run->period_year}_{$run->period_month}.pdf");
+    }
+
+    /**
+     * Index global des variables mensuelles (toutes les runs).
+     */
+    public function variablesIndex(Request $request)
+    {
+        $company = Company::firstOrFail();
+
+        $runs = PayrollRun::where('company_id', $company->id)
+            ->withCount('items')
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('rh.variables.index', compact('runs', 'company'));
+    }
+
+    /**
+     * États de paie — page dédiée avec exports par bulletin.
+     */
+    public function etats(Request $request)
+    {
+        $company = Company::firstOrFail();
+
+        $runs = PayrollRun::where('company_id', $company->id)
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('rh.etats.index', compact('runs', 'company'));
+    }
+
+    /**
+     * Comptabilisation paie — liste des bulletins avec statut comptable.
+     */
+    public function comptabilisation(Request $request)
+    {
+        $company = Company::firstOrFail();
+
+        $runs = PayrollRun::with(['createdBy', 'validatedBy'])
+            ->where('company_id', $company->id)
+            ->orderByDesc('period_year')
+            ->orderByDesc('period_month')
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('rh.comptabilisation.index', compact('runs', 'company'));
+    }
+
+    /**
+     * Comptabilise manuellement un bulletin déjà validé.
+     */
+    public function journalize(PayrollRun $run)
+    {
+        try {
+            $entry = app(PayrollAccountingService::class)->generateForRun($run);
+            return redirect()
+                ->route('rh.paie.show', $run)
+                ->with('success', "Écriture comptable #{$entry->id} générée pour {$run->period_label}.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**

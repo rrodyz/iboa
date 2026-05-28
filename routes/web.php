@@ -600,6 +600,32 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('bilan/pdf',              [\App\Http\Controllers\Accounting\FinancialReportController::class, 'bilanPdf'])->name('bilan.pdf');
             Route::get('compte-de-resultat',     [\App\Http\Controllers\Accounting\FinancialReportController::class, 'compteDeResultat'])->name('compte-de-resultat');
             Route::get('compte-de-resultat/pdf', [\App\Http\Controllers\Accounting\FinancialReportController::class, 'compteDeResultatPdf'])->name('compte-de-resultat.pdf');
+            // Affectation du résultat
+            Route::get('affectation-resultat',   [\App\Http\Controllers\Accounting\FinancialReportController::class, 'affectationResultat'])->name('affectation-resultat');
+        });
+        Route::middleware('permission:accounting.validate')->group(function () {
+            Route::post('affectation-resultat',  [\App\Http\Controllers\Accounting\FinancialReportController::class, 'storeAffectation'])->name('affectation-resultat.store');
+        });
+
+        // ── Immobilisations & Amortissements ──────────────────────────────────
+        // IMPORTANT: literal routes (create, depreciation/*/post) MUST come before {immobilisation} wildcard
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('immobilisations',            [\App\Http\Controllers\Accounting\FixedAssetController::class, 'index'])->name('immobilisations.index');
+        });
+        Route::middleware('permission:accounting.write')->group(function () {
+            // create & store BEFORE {immobilisation} wildcard
+            Route::get('immobilisations/create',     [\App\Http\Controllers\Accounting\FixedAssetController::class, 'create'])->name('immobilisations.create');
+            Route::post('immobilisations',           [\App\Http\Controllers\Accounting\FixedAssetController::class, 'store'])->name('immobilisations.store');
+        });
+        Route::middleware('permission:accounting.validate')->group(function () {
+            // depreciation post BEFORE {immobilisation} wildcard
+            Route::post('immobilisations/depreciation/{depreciation}/post', [\App\Http\Controllers\Accounting\FixedAssetController::class, 'postDepreciation'])->name('immobilisations.post-depreciation');
+        });
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('immobilisations/{immobilisation}', [\App\Http\Controllers\Accounting\FixedAssetController::class, 'show'])->name('immobilisations.show');
+        });
+        Route::middleware('permission:accounting.write')->group(function () {
+            Route::post('immobilisations/{immobilisation}/regenerate', [\App\Http\Controllers\Accounting\FixedAssetController::class, 'regenerateSchedule'])->name('immobilisations.regenerate');
         });
     });
 
@@ -696,127 +722,288 @@ Route::middleware('auth')->group(function () {
 // ── [MODULE RH / PAIE] ───────────────────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(function () {
 
-    // Employés
-    Route::prefix('employes')->name('employes.')->group(function () {
-        Route::get('/',             [\App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('index');
-        Route::get('/creer',        [\App\Http\Controllers\HR\EmployeeController::class, 'create'])->name('create');
-        Route::post('/',            [\App\Http\Controllers\HR\EmployeeController::class, 'store'])->name('store');
-        Route::get('/{employe}',    [\App\Http\Controllers\HR\EmployeeController::class, 'show'])->name('show');
-        Route::get('/{employe}/modifier', [\App\Http\Controllers\HR\EmployeeController::class, 'edit'])->name('edit');
-        Route::put('/{employe}',    [\App\Http\Controllers\HR\EmployeeController::class, 'update'])->name('update');
-        Route::delete('/{employe}', [\App\Http\Controllers\HR\EmployeeController::class, 'destroy'])->name('destroy');
-
-        // Contrats
-        Route::post('/{employe}/contrats', [\App\Http\Controllers\HR\EmployeeController::class, 'storeContract'])->name('contracts.store');
-
-        // Primes
-        Route::post('/{employe}/primes',              [\App\Http\Controllers\HR\EmployeeController::class, 'storeAllowance'])->name('allowances.store');
-        Route::delete('/{employe}/primes/{allowance}',[\App\Http\Controllers\HR\EmployeeController::class, 'destroyAllowance'])->name('allowances.destroy');
-
-        // Documents
-        Route::post('/{employe}/documents',                       [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'store'])->name('documents.store');
-        Route::get( '/{employe}/documents/{document}/dl',         [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'download'])->name('documents.download');
-        Route::delete('/{employe}/documents/{document}',          [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'destroy'])->name('documents.destroy');
-
-        // Photo
-        Route::post('/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'updatePhoto'])->name('photo.update');
-        Route::get( '/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'photo'])->name('photo');
+    // ── Dashboard RH ─────────────────────────────────────────────────────────
+    Route::middleware('permission:rh.view')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\HR\RhDashboardController::class, 'index'])->name('dashboard');
     });
 
-    // Départements
-    Route::prefix('departements')->name('departments.')->group(function () {
+    // ── Employés — consultation ───────────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('employes')->name('employes.')->group(function () {
+        Route::get('/',                   [\App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('index');
+        Route::get('/{employe}',          [\App\Http\Controllers\HR\EmployeeController::class, 'show'])->whereNumber('employe')->name('show');
+        // Photo (accessible à tous ceux qui voient les employés)
+        Route::get('/{employe}/photo',    [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'photo'])->whereNumber('employe')->name('photo');
+    });
+
+    // ── Employés — gestion ────────────────────────────────────────────────────
+    Route::middleware('permission:rh.employees.manage')->prefix('employes')->name('employes.')->group(function () {
+        Route::get('/creer',              [\App\Http\Controllers\HR\EmployeeController::class, 'create'])->name('create');
+        Route::post('/',                  [\App\Http\Controllers\HR\EmployeeController::class, 'store'])->name('store');
+        Route::get('/{employe}/modifier', [\App\Http\Controllers\HR\EmployeeController::class, 'edit'])->whereNumber('employe')->name('edit');
+        Route::put('/{employe}',          [\App\Http\Controllers\HR\EmployeeController::class, 'update'])->whereNumber('employe')->name('update');
+        Route::delete('/{employe}',       [\App\Http\Controllers\HR\EmployeeController::class, 'destroy'])->whereNumber('employe')->name('destroy');
+        // Contrats
+        Route::post('/{employe}/contrats', [\App\Http\Controllers\HR\EmployeeController::class, 'storeContract'])->whereNumber('employe')->name('contracts.store');
+        // Primes
+        Route::post('/{employe}/primes',               [\App\Http\Controllers\HR\EmployeeController::class, 'storeAllowance'])->whereNumber('employe')->name('allowances.store');
+        Route::delete('/{employe}/primes/{allowance}', [\App\Http\Controllers\HR\EmployeeController::class, 'destroyAllowance'])->whereNumber('employe')->name('allowances.destroy');
+        // Documents
+        Route::post('/{employe}/documents',                [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'store'])->whereNumber('employe')->name('documents.store');
+        Route::get( '/{employe}/documents/{document}/dl',  [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'download'])->whereNumber('employe')->name('documents.download');
+        Route::delete('/{employe}/documents/{document}',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'destroy'])->whereNumber('employe')->name('documents.destroy');
+        // Photo (mise à jour)
+        Route::post('/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'updatePhoto'])->whereNumber('employe')->name('photo.update');
+    });
+
+    // ── Départements ──────────────────────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('departements')->name('departments.')->group(function () {
         Route::get('/',  [\App\Http\Controllers\HR\EmployeeController::class, 'departments'])->name('index');
+    });
+    Route::middleware('permission:rh.employees.manage')->prefix('departements')->name('departments.')->group(function () {
         Route::post('/', [\App\Http\Controllers\HR\EmployeeController::class, 'storeDepartment'])->name('store');
     });
 
-    // Bulletins de paie
-    Route::prefix('paie')->name('paie.')->group(function () {
+    // ── Bulletins de paie ─────────────────────────────────────────────────────
+    Route::middleware('permission:rh.payroll.view')->prefix('paie')->name('paie.')->group(function () {
         Route::get('/',              [\App\Http\Controllers\HR\PayrollRunController::class, 'index'])->name('index');
-        Route::get('/creer',         [\App\Http\Controllers\HR\PayrollRunController::class, 'create'])->name('create');
-        Route::post('/',             [\App\Http\Controllers\HR\PayrollRunController::class, 'store'])->name('store');
-
-        // Livre de paie (must be BEFORE /{run} wildcard to avoid conflict)
         Route::get('/livre-paie',    [\App\Http\Controllers\HR\PayrollRunController::class, 'livrePaiePdf'])->name('livre-paie');
-
-        Route::get('/{run}',         [\App\Http\Controllers\HR\PayrollRunController::class, 'show'])->name('show');
-        Route::post('/{run}/calculer',   [\App\Http\Controllers\HR\PayrollRunController::class, 'calculate'])->name('calculate');
-        Route::post('/{run}/valider',    [\App\Http\Controllers\HR\PayrollRunController::class, 'approuver'])->name('validate');
-        Route::post('/{run}/payer',      [\App\Http\Controllers\HR\PayrollRunController::class, 'markPaid'])->name('mark-paid');
-
-        // Variables mensuelles (AJAX)
-        Route::get( '/{run}/variables',             [\App\Http\Controllers\HR\PayrollRunController::class, 'variables'])->name('variables');
-        Route::post('/{run}/variables',             [\App\Http\Controllers\HR\PayrollVariableController::class, 'store'])->name('variables.store');
-        Route::delete('/{run}/variables/{variable}',[\App\Http\Controllers\HR\PayrollVariableController::class, 'destroy'])->name('variables.destroy');
-
-        // PDF & Exports
-        Route::get('/{run}/bulletin/{item}/pdf', [\App\Http\Controllers\HR\PayrollRunController::class, 'bulletinPdf'])->name('bulletin-pdf');
-        Route::get('/{run}/recap-pdf',           [\App\Http\Controllers\HR\PayrollRunController::class, 'recapPdf'])->name('recap-pdf');
-        Route::get('/{run}/cnss-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssPdf'])->name('cnss-pdf');
-        Route::get('/{run}/iuts-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsPdf'])->name('iuts-pdf');
-        Route::get('/{run}/virement-csv',        [\App\Http\Controllers\HR\PayrollRunController::class, 'virementCsv'])->name('virement-csv');
-        // Exports Excel
-        Route::get('/{run}/livre-paie-xlsx',     [\App\Http\Controllers\HR\PayrollRunController::class, 'livreDepaieXlsx'])->name('livre-paie-xlsx');
-        Route::get('/{run}/cnss-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssXlsx'])->name('cnss-xlsx');
-        Route::get('/{run}/iuts-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsXlsx'])->name('iuts-xlsx');
+        Route::get('/{run}',         [\App\Http\Controllers\HR\PayrollRunController::class, 'show'])->whereNumber('run')->name('show');
+        Route::get('/{run}/variables',              [\App\Http\Controllers\HR\PayrollRunController::class, 'variables'])->whereNumber('run')->name('variables');
+        // PDF & Exports (lecture)
+        Route::get('/{run}/bulletin/{item}/pdf', [\App\Http\Controllers\HR\PayrollRunController::class, 'bulletinPdf'])->whereNumber('run')->name('bulletin-pdf');
+        Route::get('/{run}/recap-pdf',           [\App\Http\Controllers\HR\PayrollRunController::class, 'recapPdf'])->whereNumber('run')->name('recap-pdf');
+        Route::get('/{run}/cnss-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssPdf'])->whereNumber('run')->name('cnss-pdf');
+        Route::get('/{run}/iuts-pdf',            [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsPdf'])->whereNumber('run')->name('iuts-pdf');
+        Route::get('/{run}/virement-csv',        [\App\Http\Controllers\HR\PayrollRunController::class, 'virementCsv'])->whereNumber('run')->name('virement-csv');
+        Route::get('/{run}/livre-paie-xlsx',     [\App\Http\Controllers\HR\PayrollRunController::class, 'livreDepaieXlsx'])->whereNumber('run')->name('livre-paie-xlsx');
+        Route::get('/{run}/cnss-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'cnssXlsx'])->whereNumber('run')->name('cnss-xlsx');
+        Route::get('/{run}/iuts-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsXlsx'])->whereNumber('run')->name('iuts-xlsx');
+        Route::get('/{run}/avances-pdf',         [\App\Http\Controllers\HR\PayrollRunController::class, 'avancesPdf'])->whereNumber('run')->name('avances-pdf');
+        Route::get('/{run}/prets-pdf',           [\App\Http\Controllers\HR\PayrollRunController::class, 'pretsPdf'])->whereNumber('run')->name('prets-pdf');
+    });
+    Route::middleware('permission:rh.payroll.manage')->prefix('paie')->name('paie.')->group(function () {
+        Route::get('/creer',                         [\App\Http\Controllers\HR\PayrollRunController::class, 'create'])->name('create');
+        Route::post('/',                             [\App\Http\Controllers\HR\PayrollRunController::class, 'store'])->name('store');
+        Route::post('/{run}/calculer',               [\App\Http\Controllers\HR\PayrollRunController::class, 'calculate'])->whereNumber('run')->name('calculate');
+        Route::post('/{run}/variables',              [\App\Http\Controllers\HR\PayrollVariableController::class, 'store'])->whereNumber('run')->name('variables.store');
+        Route::delete('/{run}/variables/{variable}', [\App\Http\Controllers\HR\PayrollVariableController::class, 'destroy'])->whereNumber('run')->name('variables.destroy');
+    });
+    Route::middleware('permission:rh.payroll.validate')->prefix('paie')->name('paie.')->group(function () {
+        Route::post('/{run}/valider',      [\App\Http\Controllers\HR\PayrollRunController::class, 'approuver'])->whereNumber('run')->name('validate');
+        Route::post('/{run}/payer',        [\App\Http\Controllers\HR\PayrollRunController::class, 'markPaid'])->whereNumber('run')->name('mark-paid');
+        Route::post('/{run}/comptabiliser',[\App\Http\Controllers\HR\PayrollRunController::class, 'journalize'])->whereNumber('run')->name('journalize');
     });
 
-    // ── Dashboard RH ──────────────────────────────────────────────────────────
-    Route::get('/dashboard', [\App\Http\Controllers\HR\RhDashboardController::class, 'index'])->name('dashboard');
-
     // ── Avances sur salaire ───────────────────────────────────────────────────
-    Route::prefix('avances')->name('avances.')->group(function () {
-        Route::get('/',                    [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'index'])->name('index');
-        Route::post('/',                   [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'store'])->name('store');
-        Route::post('/{advance}/approuver',[\App\Http\Controllers\HR\SalaryAdvanceController::class, 'approve'])->name('approve');
-        Route::post('/{advance}/annuler',  [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'cancel'])->name('cancel');
+    Route::middleware('permission:rh.loans.view')->prefix('avances')->name('avances.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'index'])->name('index');
+    });
+    Route::middleware('permission:rh.loans.manage')->prefix('avances')->name('avances.')->group(function () {
+        Route::post('/',                    [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'store'])->name('store');
+        Route::post('/{advance}/approuver', [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'approve'])->name('approve');
+        Route::post('/{advance}/annuler',   [\App\Http\Controllers\HR\SalaryAdvanceController::class, 'cancel'])->name('cancel');
     });
 
     // ── Congés & Absences ─────────────────────────────────────────────────────
-    Route::prefix('conges')->name('conges.')->group(function () {
-        Route::get('/',                        [\App\Http\Controllers\HR\LeaveController::class, 'index'])->name('index');
-        Route::post('/',                       [\App\Http\Controllers\HR\LeaveController::class, 'store'])->name('store');
-        Route::post('/{leave}/approuver',      [\App\Http\Controllers\HR\LeaveController::class, 'approve'])->name('approve');
-        Route::post('/{leave}/refuser',        [\App\Http\Controllers\HR\LeaveController::class, 'refuse'])->name('refuse');
-        Route::get('/soldes',                  [\App\Http\Controllers\HR\LeaveController::class, 'balances'])->name('balances');
-        Route::get('/types',                   [\App\Http\Controllers\HR\LeaveController::class, 'indexTypes'])->name('types.index');
-        Route::post('/types',                  [\App\Http\Controllers\HR\LeaveController::class, 'storeType'])->name('types.store');
+    Route::middleware('permission:rh.leaves.view')->prefix('conges')->name('conges.')->group(function () {
+        Route::get('/',       [\App\Http\Controllers\HR\LeaveController::class, 'index'])->name('index');
+        Route::get('/soldes', [\App\Http\Controllers\HR\LeaveController::class, 'balances'])->name('balances');
+        Route::get('/types',  [\App\Http\Controllers\HR\LeaveController::class, 'indexTypes'])->name('types.index');
+    });
+    Route::middleware('permission:rh.leaves.manage')->prefix('conges')->name('conges.')->group(function () {
+        Route::post('/',                  [\App\Http\Controllers\HR\LeaveController::class, 'store'])->name('store');
+        Route::post('/{leave}/approuver', [\App\Http\Controllers\HR\LeaveController::class, 'approve'])->name('approve');
+        Route::post('/{leave}/refuser',   [\App\Http\Controllers\HR\LeaveController::class, 'refuse'])->name('refuse');
+        Route::post('/types',             [\App\Http\Controllers\HR\LeaveController::class, 'storeType'])->name('types.store');
     });
 
-    // Portail self-service employé
-    Route::prefix('portail')->name('portail.')->group(function () {
-        Route::get('/',                          [\App\Http\Controllers\HR\EmployeePortalController::class, 'dashboard'])->name('dashboard');
-        Route::get('/bulletins',                 [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletins'])->name('bulletins');
-        Route::get('/bulletins/{item}/pdf',      [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletinPdf'])->name('bulletin-pdf');
-        Route::get('/conges',                    [\App\Http\Controllers\HR\EmployeePortalController::class, 'conges'])->name('conges');
-        Route::post('/conges',                   [\App\Http\Controllers\HR\EmployeePortalController::class, 'storeConge'])->name('conges.store');
-        Route::get('/documents',                 [\App\Http\Controllers\HR\EmployeePortalController::class, 'documents'])->name('documents');
+    // ── Prêts salariés ────────────────────────────────────────────────────────
+    Route::middleware('permission:rh.loans.view')->prefix('prets')->name('prets.')->group(function () {
+        Route::get('/',        [\App\Http\Controllers\HR\EmployeeLoanController::class, 'index'])->name('index');
+        Route::get('/{pret}',  [\App\Http\Controllers\HR\EmployeeLoanController::class, 'show'])->whereNumber('pret')->name('show');
     });
-
-    // Prêts salariés
-    Route::prefix('prets')->name('prets.')->group(function () {
-        Route::get('/',                      [\App\Http\Controllers\HR\EmployeeLoanController::class, 'index'])->name('index');
+    Route::middleware('permission:rh.loans.manage')->prefix('prets')->name('prets.')->group(function () {
         Route::post('/',                     [\App\Http\Controllers\HR\EmployeeLoanController::class, 'store'])->name('store');
-        Route::get('/{pret}',                [\App\Http\Controllers\HR\EmployeeLoanController::class, 'show'])->name('show');
         Route::post('/{pret}/approuver',     [\App\Http\Controllers\HR\EmployeeLoanController::class, 'approve'])->name('approve');
         Route::post('/{pret}/annuler',       [\App\Http\Controllers\HR\EmployeeLoanController::class, 'cancel'])->name('cancel');
         Route::post('/{pret}/remboursement', [\App\Http\Controllers\HR\EmployeeLoanController::class, 'recordPayment'])->name('payment');
     });
 
-    // Paramétrage de la paie
-    Route::prefix('parametrage')->name('parametrage.')->group(function () {
-        Route::get('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'edit'])->name('edit');
-        Route::put('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'update'])->name('update');
+    // ── Paramétrage & Rubriques ───────────────────────────────────────────────
+    Route::middleware('permission:rh.settings')->group(function () {
+        Route::prefix('parametrage')->name('parametrage.')->group(function () {
+            Route::get('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'edit'])->name('edit');
+            Route::put('/',  [\App\Http\Controllers\HR\PayrollSettingController::class, 'update'])->name('update');
+        });
+        Route::prefix('rubriques')->name('rubriques.')->group(function () {
+            Route::get('/',            [\App\Http\Controllers\HR\PayRubricController::class, 'index'])->name('index');
+            Route::get('/creer',       [\App\Http\Controllers\HR\PayRubricController::class, 'create'])->name('create');
+            Route::post('/',           [\App\Http\Controllers\HR\PayRubricController::class, 'store'])->name('store');
+            Route::get('/{rubric}',    [\App\Http\Controllers\HR\PayRubricController::class, 'edit'])->name('edit');
+            Route::put('/{rubric}',    [\App\Http\Controllers\HR\PayRubricController::class, 'update'])->name('update');
+            Route::delete('/{rubric}', [\App\Http\Controllers\HR\PayRubricController::class, 'destroy'])->name('destroy');
+        });
+        Route::prefix('plans')->name('plans.')->group(function () {
+            Route::get('/',                  [\App\Http\Controllers\HR\PayrollPlanController::class, 'index'])->name('index');
+            Route::get('/creer',             [\App\Http\Controllers\HR\PayrollPlanController::class, 'create'])->name('create');
+            Route::post('/',                 [\App\Http\Controllers\HR\PayrollPlanController::class, 'store'])->name('store');
+            Route::get('/{plan}',            [\App\Http\Controllers\HR\PayrollPlanController::class, 'show'])->name('show');
+            Route::get('/{plan}/modifier',   [\App\Http\Controllers\HR\PayrollPlanController::class, 'edit'])->name('edit');
+            Route::put('/{plan}',            [\App\Http\Controllers\HR\PayrollPlanController::class, 'update'])->name('update');
+            Route::post('/{plan}/dupliquer', [\App\Http\Controllers\HR\PayrollPlanController::class, 'duplicate'])->name('duplicate');
+            Route::delete('/{plan}',         [\App\Http\Controllers\HR\PayrollPlanController::class, 'destroy'])->name('destroy');
+        });
+        Route::prefix('constantes')->name('constantes.')->group(function () {
+            Route::get('/',                    [\App\Http\Controllers\HR\PayrollConstantController::class, 'index'])->name('index');
+            Route::get('/creer',               [\App\Http\Controllers\HR\PayrollConstantController::class, 'create'])->name('create');
+            Route::post('/',                   [\App\Http\Controllers\HR\PayrollConstantController::class, 'store'])->name('store');
+            Route::get('/{constant}/modifier', [\App\Http\Controllers\HR\PayrollConstantController::class, 'edit'])->name('edit');
+            Route::put('/{constant}',          [\App\Http\Controllers\HR\PayrollConstantController::class, 'update'])->name('update');
+            Route::delete('/{constant}',       [\App\Http\Controllers\HR\PayrollConstantController::class, 'destroy'])->name('destroy');
+            Route::get('/{code}/historique',   [\App\Http\Controllers\HR\PayrollConstantController::class, 'history'])->name('history')->where('code', '[A-Z0-9_]+');
+        });
+        Route::prefix('baremes')->name('baremes.')->group(function () {
+            Route::get('/',             [\App\Http\Controllers\HR\IutsBracketController::class, 'index'])->name('index');
+            Route::post('/',            [\App\Http\Controllers\HR\IutsBracketController::class, 'store'])->name('store');
+            Route::put('/{bracket}',    [\App\Http\Controllers\HR\IutsBracketController::class, 'update'])->name('update');
+            Route::delete('/{bracket}', [\App\Http\Controllers\HR\IutsBracketController::class, 'destroy'])->name('destroy');
+            Route::post('/simuler',     [\App\Http\Controllers\HR\IutsBracketController::class, 'simulate'])->name('simulate');
+        });
+        Route::prefix('cotisations')->name('cotisations.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\HR\SocialContributionController::class, 'index'])->name('index');
+            Route::get('/creer',                   [\App\Http\Controllers\HR\SocialContributionController::class, 'create'])->name('create');
+            Route::post('/',                       [\App\Http\Controllers\HR\SocialContributionController::class, 'store'])->name('store');
+            Route::get('/{contribution}/modifier', [\App\Http\Controllers\HR\SocialContributionController::class, 'edit'])->name('edit');
+            Route::put('/{contribution}',          [\App\Http\Controllers\HR\SocialContributionController::class, 'update'])->name('update');
+            Route::delete('/{contribution}',       [\App\Http\Controllers\HR\SocialContributionController::class, 'destroy'])->name('destroy');
+        });
+        Route::prefix('profils')->name('profils.')->group(function () {
+            Route::get('/',                          [\App\Http\Controllers\HR\PayrollProfileController::class, 'index'])->name('index');
+            Route::get('/creer',                     [\App\Http\Controllers\HR\PayrollProfileController::class, 'create'])->name('create');
+            Route::post('/',                         [\App\Http\Controllers\HR\PayrollProfileController::class, 'store'])->name('store');
+            Route::get('/{profil}',                  [\App\Http\Controllers\HR\PayrollProfileController::class, 'show'])->name('show');
+            Route::get('/{profil}/modifier',         [\App\Http\Controllers\HR\PayrollProfileController::class, 'edit'])->name('edit');
+            Route::put('/{profil}',                  [\App\Http\Controllers\HR\PayrollProfileController::class, 'update'])->name('update');
+            Route::delete('/{profil}',               [\App\Http\Controllers\HR\PayrollProfileController::class, 'destroy'])->name('destroy');
+            // Gestion des rubriques du profil
+            Route::post('/{profil}/rubriques',                    [\App\Http\Controllers\HR\PayrollProfileController::class, 'addRubric'])->name('rubrics.add');
+            Route::put('/{profil}/rubriques/{rubric}',            [\App\Http\Controllers\HR\PayrollProfileController::class, 'updateRubric'])->name('rubrics.update');
+            Route::delete('/{profil}/rubriques/{rubric}',         [\App\Http\Controllers\HR\PayrollProfileController::class, 'removeRubric'])->name('rubrics.remove');
+            Route::post('/{profil}/sync-plan',                    [\App\Http\Controllers\HR\PayrollProfileController::class, 'syncFromPlan'])->name('sync-plan');
+        });
+        // ── Numérotation des bulletins ───────────────────────────────────────────
+        Route::prefix('numerotation')->name('numerotation.')->group(function () {
+            Route::get('/',                               [\App\Http\Controllers\HR\PayrollNumberingController::class, 'index'])->name('index');
+            Route::get('/creer',                          [\App\Http\Controllers\HR\PayrollNumberingController::class, 'create'])->name('create');
+            Route::post('/',                              [\App\Http\Controllers\HR\PayrollNumberingController::class, 'store'])->name('store');
+            Route::get('/{numerotation}/modifier',        [\App\Http\Controllers\HR\PayrollNumberingController::class, 'edit'])->name('edit');
+            Route::put('/{numerotation}',                 [\App\Http\Controllers\HR\PayrollNumberingController::class, 'update'])->name('update');
+            Route::delete('/{numerotation}',              [\App\Http\Controllers\HR\PayrollNumberingController::class, 'destroy'])->name('destroy');
+            Route::get('/apercu',                         [\App\Http\Controllers\HR\PayrollNumberingController::class, 'preview'])->name('preview');
+            Route::post('/{numerotation}/reset-sequence', [\App\Http\Controllers\HR\PayrollNumberingController::class, 'resetSequence'])->name('reset-sequence');
+        });
+        // ── Modèles de bulletins ─────────────────────────────────────────────────
+        Route::prefix('modeles-bulletins')->name('modeles-bulletins.')->group(function () {
+            Route::get('/',                    [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'index'])->name('index');
+            Route::get('/creer',               [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'create'])->name('create');
+            Route::post('/',                   [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'store'])->name('store');
+            Route::get('/{modele}/modifier',   [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'edit'])->name('edit');
+            Route::put('/{modele}',            [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'update'])->name('update');
+            Route::delete('/{modele}',         [\App\Http\Controllers\HR\PayrollBulletinTemplateController::class, 'destroy'])->name('destroy');
+        });
+        // ── Périodes de paie ─────────────────────────────────────────────────────
+        Route::prefix('periodes')->name('periodes.')->group(function () {
+            Route::get('/',                          [\App\Http\Controllers\HR\PayrollPeriodController::class, 'index'])->name('index');
+            Route::post('/',                         [\App\Http\Controllers\HR\PayrollPeriodController::class, 'store'])->name('store');
+            Route::delete('/{periode}',              [\App\Http\Controllers\HR\PayrollPeriodController::class, 'destroy'])->name('destroy');
+            // Transitions de statut
+            Route::post('/{periode}/cloturer',       [\App\Http\Controllers\HR\PayrollPeriodController::class, 'close'])->name('close');
+            Route::post('/{periode}/rouvrir',        [\App\Http\Controllers\HR\PayrollPeriodController::class, 'reopen'])->name('reopen');
+            Route::post('/{periode}/verrouiller',    [\App\Http\Controllers\HR\PayrollPeriodController::class, 'lock'])->name('lock');
+            Route::post('/{periode}/deverrouiller',  [\App\Http\Controllers\HR\PayrollPeriodController::class, 'unlock'])->name('unlock');
+            Route::post('/{periode}/archiver',       [\App\Http\Controllers\HR\PayrollPeriodController::class, 'archive'])->name('archive');
+            // AJAX
+            Route::get('/{periode}/statut',          [\App\Http\Controllers\HR\PayrollPeriodController::class, 'status'])->name('status');
+        });
     });
 
-    // Rubriques de paie
-    Route::prefix('rubriques')->name('rubriques.')->group(function () {
-        Route::get('/',              [\App\Http\Controllers\HR\PayRubricController::class, 'index'])->name('index');
-        Route::get('/creer',         [\App\Http\Controllers\HR\PayRubricController::class, 'create'])->name('create');
-        Route::post('/',             [\App\Http\Controllers\HR\PayRubricController::class, 'store'])->name('store');
-        Route::get('/{rubric}',      [\App\Http\Controllers\HR\PayRubricController::class, 'edit'])->name('edit');
-        Route::put('/{rubric}',      [\App\Http\Controllers\HR\PayRubricController::class, 'update'])->name('update');
-        Route::delete('/{rubric}',   [\App\Http\Controllers\HR\PayRubricController::class, 'destroy'])->name('destroy');
+    // ── Contrats (liste globale) ──────────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->group(function () {
+        Route::get('/contrats', [\App\Http\Controllers\HR\EmployeeController::class, 'contracts'])->name('contrats.index');
     });
+
+    // ── Présences & absences (stub) ───────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->group(function () {
+        Route::get('/presences', fn() => view('rh.presences.index'))->name('presences.index');
+    });
+
+    // ── Variables mensuelles (index global) ───────────────────────────────────
+    Route::middleware('permission:rh.payroll.view')->group(function () {
+        Route::get('/variables', [\App\Http\Controllers\HR\PayrollRunController::class, 'variablesIndex'])->name('variables.index');
+    });
+
+    // ── États de paie ─────────────────────────────────────────────────────────
+    Route::middleware('permission:rh.payroll.view')->group(function () {
+        Route::get('/etats', [\App\Http\Controllers\HR\PayrollRunController::class, 'etats'])->name('etats.index');
+    });
+
+    // ── Comptabilisation paie ─────────────────────────────────────────────────
+    Route::middleware('permission:rh.payroll.view')->group(function () {
+        Route::get('/comptabilisation', [\App\Http\Controllers\HR\PayrollRunController::class, 'comptabilisation'])->name('comptabilisation.index');
+    });
+
+    // ── Portail self-service employé ──────────────────────────────────────────
+    Route::middleware('permission:rh.portail')->prefix('portail')->name('portail.')->group(function () {
+        Route::get('/',                      [\App\Http\Controllers\HR\EmployeePortalController::class, 'dashboard'])->name('dashboard');
+        Route::get('/bulletins',             [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletins'])->name('bulletins');
+        Route::get('/bulletins/{item}/pdf',  [\App\Http\Controllers\HR\EmployeePortalController::class, 'bulletinPdf'])->name('bulletin-pdf');
+        Route::get('/conges',                [\App\Http\Controllers\HR\EmployeePortalController::class, 'conges'])->name('conges');
+        Route::post('/conges',               [\App\Http\Controllers\HR\EmployeePortalController::class, 'storeConge'])->name('conges.store');
+        Route::get('/documents',             [\App\Http\Controllers\HR\EmployeePortalController::class, 'documents'])->name('documents');
+    });
+});
+
+// ── [MODULE INTÉGRATIONS EXTERNES] ───────────────────────────────────────────
+// Webhooks publics (pas d'auth — reçoivent les callbacks des providers)
+Route::prefix('integrations/webhooks')->name('integrations.webhooks.')->group(function () {
+    Route::post('/orange-money', [\App\Http\Controllers\Integrations\WebhookController::class, 'orangeMoney'])->name('orange-money');
+    Route::post('/moov-money',   [\App\Http\Controllers\Integrations\WebhookController::class, 'moovMoney'])->name('moov-money');
+});
+
+Route::middleware(['auth', 'verified'])->prefix('integrations')->name('integrations.')->group(function () {
+    $ctrl = \App\Http\Controllers\Integrations\IntegrationController::class;
+
+    // ── Listings
+    Route::get('/',              [$ctrl, 'index'])->name('index');
+    Route::get('/dashboard',     [$ctrl, 'dashboard'])->name('dashboard');
+    Route::get('/transactions',  [$ctrl, 'transactions'])->name('transactions');
+    Route::get('/logs',          [$ctrl, 'allLogs'])->name('logs');
+
+    // ── CRUD
+    Route::get('/create',        [$ctrl, 'create'])->name('create');
+    Route::post('/',             [$ctrl, 'store'])->name('store');
+    Route::get('/{integration}',      [$ctrl, 'show'])->name('show');
+    Route::get('/{integration}/edit', [$ctrl, 'edit'])->name('edit');
+    Route::put('/{integration}',      [$ctrl, 'update'])->name('update');
+    Route::delete('/{integration}',   [$ctrl, 'destroy'])->name('destroy');
+
+    // ── Actions
+    Route::post('/{integration}/toggle',       [$ctrl, 'toggle'])->name('toggle');
+    Route::post('/{integration}/test',         [$ctrl, 'test'])->name('test');
+    Route::post('/{integration}/ping',         [$ctrl, 'ping'])->name('ping');       // AJAX → JSON
+    Route::get('/{integration}/simulate',      [$ctrl, 'simulate'])->name('simulate');
+    Route::post('/{integration}/simulate',     [$ctrl, 'simulateSend'])->name('simulate.send');
+
+    // ── Transaction actions
+    Route::post('/transactions/{transaction}/retry', [$ctrl, 'retryTransaction'])->name('transactions.retry');
+
+    // ── Export fiscal DGI Burkina Faso
+    $fctrl = \App\Http\Controllers\Integrations\FiscalExportController::class;
+    Route::get( '/{integration}/fiscal',                [$fctrl, 'index'])->name('fiscal.index');
+    Route::post('/{integration}/fiscal/tva',            [$fctrl, 'exportTva'])->name('fiscal.tva');
+    Route::post('/{integration}/fiscal/factures',       [$fctrl, 'exportInvoices'])->name('fiscal.factures');
+    Route::post('/{integration}/fiscal/journal',        [$fctrl, 'exportJournal'])->name('fiscal.journal');
+    Route::post('/{integration}/fiscal/declarer',       [$fctrl, 'declareTva'])->name('fiscal.declarer');
 });
 
 // ── [CONCURRENCE-MULTI-USER] Edit Locks ──────────────────────────────────────
@@ -864,5 +1051,27 @@ Route::middleware(['auth', 'verified'])->prefix('exports')->name('exports.')->gr
 
 // ── Recherche globale ─────────────────────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->get('/search', [\App\Http\Controllers\SearchController::class, 'search'])->name('search');
+
+// ── CRM ───────────────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified'])->prefix('crm')->name('crm.')->group(function () {
+
+    // Dashboard
+    Route::get('/', [\App\Http\Controllers\Crm\DashboardController::class, 'index'])->name('dashboard');
+
+    // Contacts / Prospects
+    Route::resource('contacts', \App\Http\Controllers\Crm\ContactController::class);
+    Route::post('contacts/{contact}/convert', [\App\Http\Controllers\Crm\ContactController::class, 'convert'])
+        ->name('contacts.convert');
+
+    // Opportunités (pipeline Kanban)
+    Route::resource('opportunities', \App\Http\Controllers\Crm\OpportunityController::class);
+    Route::patch('opportunities/{opportunity}/move-stage', [\App\Http\Controllers\Crm\OpportunityController::class, 'moveStage'])
+        ->name('opportunities.move-stage');
+
+    // Activités (pas de page show — affichées inline dans contact/opportunité)
+    Route::resource('activities', \App\Http\Controllers\Crm\ActivityController::class)->except(['show']);
+    Route::patch('activities/{activity}/toggle-done', [\App\Http\Controllers\Crm\ActivityController::class, 'toggleDone'])
+        ->name('activities.toggle-done');
+});
 
 require __DIR__.'/auth.php';

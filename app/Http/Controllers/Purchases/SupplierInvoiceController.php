@@ -24,7 +24,26 @@ class SupplierInvoiceController extends Controller
         $invoices = $this->service->search($filters, 15);
         $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
 
-        return view('achats.factures-fournisseurs.index', compact('invoices', 'filters', 'suppliers'));
+        // ── Totaux agrégés sur l'ensemble des filtres ──
+        $totalsQuery = SupplierInvoice::query()
+            ->when(!empty($filters['supplier_id']), fn($q) => $q->where('supplier_id', $filters['supplier_id']))
+            ->when(!empty($filters['status']),       fn($q) => $q->where('status', $filters['status']))
+            ->when(!empty($filters['overdue']),      fn($q) => $q->where('due_at', '<', now()->toDateString())
+                ->whereNotIn('status', ['payee', 'annulee']))
+            ->when(!empty($filters['search']),       fn($q) => $q->where(fn($sq) =>
+                $sq->where('number', 'like', '%'.$filters['search'].'%')
+                    ->orWhereHas('supplier', fn($s) => $s->where('name', 'like', '%'.$filters['search'].'%'))
+            ));
+
+        $summary = [
+            'total_ttc'       => (int) $totalsQuery->sum('total_ttc'),
+            'total_remaining' => (int) (clone $totalsQuery)->sum('remaining_amount'),
+            'count_overdue'   => (int) (clone $totalsQuery)->where('due_at', '<', now()->toDateString())
+                                    ->whereNotIn('status', ['payee', 'annulee'])->count(),
+            'count_paid'      => (int) (clone $totalsQuery)->where('status', 'payee')->count(),
+        ];
+
+        return view('achats.factures-fournisseurs.index', compact('invoices', 'filters', 'suppliers', 'summary'));
     }
 
     public function create()

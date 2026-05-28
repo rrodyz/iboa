@@ -1,0 +1,286 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Account;
+use App\Models\FiscalYear;
+use App\Models\JournalEntry;
+use App\Models\JournalType;
+use App\Models\PayrollRun;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * [RH-COMPTA] Génère l'écriture comptable de paie selon le plan SYSCOHADA.
+ *
+ * Écriture type lors de la validation d'un bulletin :
+ *
+ *   D 661 — Appointements et salaires          = Σ bruts
+ *   D 664 — Charges sociales patronales         = Σ CNSS patronal
+ *   ─────────────────────────────────────────────────────────────────
+ *   C 422 — Personnel, rémunérations dues       = Σ nets à payer
+ *   C 451 — CNSS (salarié + patronal)           = Σ CNSS total
+ *   C 447 — État, impôts retenus à la source    = Σ IUTS
+ *
+ * Vérification : D661 + D664 = C422 + C451 + C447
+ */
+class PayrollAccountingService
+{
+    // ─── Correspondance code → libellé par défaut ────────────────────────────
+    private const ACCOUNT_DEFAULTS = [
+        '661' => ['name' => 'Appointements et salaires',           'type' => 'charge'],
+        '664' => ['name' => 'Charges sociales patronales',         'type' => 'charge'],
+        '422' => ['name' => 'Personnel, rémunérations dues',       'type' => 'passif'],
+        '451' => ['name' => 'Caisse nationale de sécurité sociale','type' => 'passif'],
+        '447' => ['name' => 'État — impôts retenus à la source',   'type' => 'passif'],
+    ];
+
+    /**
+     * Génère ou régénère l'écriture de paie pour un PayrollRun validé.
+     *
+     * @throws \RuntimeException si le run n'est pas validé
+     */
+    public function generateForRun(PayrollRun $run): JournalEntry
+    {
+        if (! in_array($run->status, ['valide', 'paye'])) {
+            throw new \RuntimeException('Seuls les bulletins validés peuvent être journalisés.');
+        }
+
+        return DB::transaction(function () use ($run) {
+
+            // ── 1. Retrouver les totaux ───────────────────────────────────────
+            $totalBrut       = (int) ($run->total_brut          ?? 0);
+            $totalCnssEmp    = (int) ($run->total_cnss_employee  ?? 0);
+            $totalCnssPat    = (int) ($run->total_cnss_employer  ?? 0);
+            $totalIuts       = (int) ($run->total_iuts           ?? 0);
+            $totalNet        = (int) ($run->total_net            ?? 0);
+
+            // Vérification interne (tolérance ±1 FCFA pour arrondis)
+            $debitTotal  = $totalBrut + $totalCnssPat;
+            $creditTotal = $totalNet + ($totalCnssEmp + $totalCnssPat) + $totalIuts;
+            if (abs($debitTotal - $creditTotal) > 1) {
+                Log::warning("[PayrollAccounting] Run #{$run->id} — déséquilibre: D={$debitTotal} C={$creditTotal}");
+            }
+
+            // ── 2. Charger / créer les comptes ────────────────────────────────
+            $accounts = $this->resolveAccounts($run->company_id);
+
+            // ── 3. Journal OD et exercice ─────────────────────────────────────
+            $journalType = JournalType::where('company_id', $run->company_id)
+                ->where(fn($q) => $q->where('code','OD')
+                    ->orWhere('type','operations_diverses'))
+                ->first();
+
+            if (! $journalType) {
+                // Créer un journal OD si inexistant
+                $journalType = JournalType::create([
+                    'company_id' => $run->company_id,
+                    'code'       => 'OD',
+                    'name'       => 'Opérations Diverses',
+                    'type'       => 'operations_diverses',
+                    'is_active'  => true,
+                ]);
+            }
+
+            $fiscalYear = FiscalYear::where('is_current', true)->first()
+                ?? FiscalYear::orderByDesc('id')->first();
+
+            // ── 4. Supprimer une écriture existante (re-journalisation) ───────
+            if ($run->journal_entry_id) {
+                $old = JournalEntry::find($run->journal_entry_id);
+                if ($old && $old->status === 'brouillon') {
+                    $old->lines()->delete();
+                    $old->delete();
+                }
+            }
+
+            // ── 5. Numéro d'écriture ──────────────────────────────────────────
+            $number = $this->nextNumber($run->company_id, $journalType->id);
+
+            // ── 6. Créer l'écriture ───────────────────────────────────────────
+            $entryDate = now()->setDay(min(
+                now()->daysInMonth,
+                $run->period_month == now()->month ? now()->day : 28
+            ))->setMonth($run->period_month)->setYear($run->period_year)->toDateString();
+
+            $entry = JournalEntry::create([
+                'company_id'      => $run->company_id,
+                'journal_type_id' => $journalType->id,
+                'fiscal_year_id'  => $fiscalYear?->id,
+                'number'          => $number,
+                'entry_date'      => $entryDate,
+                'value_date'      => $entryDate,
+                'reference'       => "PAIE-{$run->period_year}-{$run->period_month}",
+                'description'     => "Paie du mois de {$run->period_label} — {$run->employee_count} employé(s)",
+                'status'          => 'brouillon',
+                'total_debit'     => $debitTotal,
+                'total_credit'    => $creditTotal,
+                'created_by'      => Auth::id(),
+            ]);
+
+            // ── 7. Lignes de l'écriture ───────────────────────────────────────
+            $lines = [];
+            $sort  = 1;
+
+            // Débits
+            if ($totalBrut > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['661']->id,
+                    'label'             => "Salaires bruts — {$run->period_label}",
+                    'debit'             => $totalBrut,
+                    'credit'            => 0,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+            if ($totalCnssPat > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['664']->id,
+                    'label'             => "CNSS patronal — {$run->period_label}",
+                    'debit'             => $totalCnssPat,
+                    'credit'            => 0,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+
+            // Crédits
+            if ($totalNet > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['422']->id,
+                    'label'             => "Nets à payer — {$run->period_label}",
+                    'debit'             => 0,
+                    'credit'            => $totalNet,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+            $totalCnssAll = $totalCnssEmp + $totalCnssPat;
+            if ($totalCnssAll > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['451']->id,
+                    'label'             => "CNSS (salarié + patronal) — {$run->period_label}",
+                    'debit'             => 0,
+                    'credit'            => $totalCnssAll,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+            if ($totalIuts > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['447']->id,
+                    'label'             => "IUTS retenu — {$run->period_label}",
+                    'debit'             => 0,
+                    'credit'            => $totalIuts,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+
+            // Ajustement d'arrondis sur le dernier crédit si déséquilibre de ±1
+            $diff = $debitTotal - $creditTotal;
+            if ($diff !== 0 && count($lines) > 0) {
+                // Ajuster le crédit 422 (net à payer)
+                foreach ($lines as &$line) {
+                    if ($line['account_id'] === $accounts['422']->id && $line['credit'] > 0) {
+                        $line['credit'] += $diff; // diff peut être +1 ou -1
+                        $entry->update(['total_credit' => $debitTotal]);
+                        break;
+                    }
+                }
+                unset($line);
+            }
+
+            \Illuminate\Support\Facades\DB::table('journal_entry_lines')->insert($lines);
+
+            // ── 8. Lier l'écriture au run ─────────────────────────────────────
+            $run->update(['journal_entry_id' => $entry->id]);
+
+            return $entry->fresh('lines.account');
+        });
+    }
+
+    // ─── Privé ───────────────────────────────────────────────────────────────
+
+    /**
+     * Résout (ou crée) les 5 comptes nécessaires pour la paie.
+     * Retourne un tableau [code => Account].
+     */
+    private function resolveAccounts(int $companyId): array
+    {
+        $codes    = array_keys(self::ACCOUNT_DEFAULTS);
+        $existing = Account::where('company_id', $companyId)
+            ->whereIn('code', $codes)
+            ->get()
+            ->keyBy('code');
+
+        // Pré-charger les classes de comptes pour cette société (keyed par numéro de classe)
+        $accountClasses = DB::table('account_classes')
+            ->where('company_id', $companyId)
+            ->pluck('id', 'number');  // ['4' => 9, '6' => 15, ...]
+
+        $result = [];
+        foreach ($codes as $code) {
+            if ($existing->has($code)) {
+                $result[$code] = $existing[$code];
+                continue;
+            }
+
+            // Auto-créer le compte manquant
+            $defaults  = self::ACCOUNT_DEFAULTS[$code];
+            $classNum  = (int) substr((string) $code, 0, 1); // premier chiffre = numéro de classe
+            $classId   = $accountClasses->get($classNum);
+
+            if (! $classId) {
+                throw new \RuntimeException(
+                    "Classe de comptes #{$classNum} introuvable pour la société #{$companyId}. "
+                    . "Créez d'abord la classe dans le plan comptable."
+                );
+            }
+
+            $result[$code] = Account::create([
+                'company_id'       => $companyId,
+                'account_class_id' => $classId,
+                'code'             => $code,
+                'name'             => $defaults['name'],
+                'type'             => $defaults['type'],
+                'is_detail'        => true,
+                'is_active'        => true,
+                'debit_balance'    => 0,
+                'credit_balance'   => 0,
+            ]);
+
+            Log::info("[PayrollAccounting] Compte {$code} créé automatiquement pour company #{$companyId}.");
+        }
+
+        return $result;
+    }
+
+    /**
+     * Numéro d'écriture séquentiel : OD-YYYY-NNN.
+     */
+    private function nextNumber(int $companyId, int $journalTypeId): string
+    {
+        $year  = now()->year;
+        $prefix = "OD-{$year}-";
+        $last  = JournalEntry::where('company_id', $companyId)
+            ->where('journal_type_id', $journalTypeId)
+            ->where('number', 'like', $prefix . '%')
+            ->orderByDesc('id')
+            ->value('number');
+
+        $seq = $last ? ((int) substr($last, strlen($prefix))) + 1 : 1;
+        return $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+    }
+}

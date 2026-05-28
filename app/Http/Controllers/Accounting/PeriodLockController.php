@@ -29,7 +29,7 @@ class PeriodLockController extends Controller
 
     public function index(Request $request): View
     {
-        $company  = Company::firstOrFail();
+        $company  = Company::findOrFail(Auth::user()->company_id);
         $fyId     = $request->integer('fiscal_year_id')
             ?: optional(FiscalYear::where('is_current', true)->first())->id
             ?: optional(FiscalYear::orderByDesc('starts_at')->first())->id;
@@ -86,7 +86,7 @@ class PeriodLockController extends Controller
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $company = Company::firstOrFail();
+        $company = Company::findOrFail(Auth::user()->company_id);
 
         // Sanity : pas de brouillons restants dans le mois — sinon ils seraient
         // figés inutilement. On bloque tant qu'ils ne sont pas validés ou supprimés.

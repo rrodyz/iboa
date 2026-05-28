@@ -406,6 +406,7 @@ class DocumentSequenceService
             'rapprochement'       => ['prefix' => 'RBQ-', 'padding' => 3],
             'declaration_tva'     => ['prefix' => 'TVA-', 'padding' => 3],
             'prevision_tresorerie'=> ['prefix' => 'PT-',  'padding' => 3],
+            'immobilisation'      => ['prefix' => 'IMB-', 'padding' => 3],
         ];
 
         $specific = $configs[$type] ?? ['prefix' => strtoupper(substr($type, 0, 3)) . '-', 'padding' => 3];

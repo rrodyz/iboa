@@ -180,8 +180,15 @@ Alpine.data('toastManager', () => ({
     _toastHandler: null,   // référence gardée pour le cleanup dans destroy()
 
     init() {
-        // Flash server-side (vars posées dans <body> au début, relues ici)
+        // Flash server-side — lus depuis les <meta name="flash-*"> posées dans le body.
+        // Cette approche évite les scripts inline réactivés par Turbo (source d'erreurs).
         ['success', 'error', 'warning', 'info'].forEach(type => {
+            const meta = document.querySelector(`meta[name="flash-${type}"]`);
+            if (meta?.content) {
+                this.add(meta.content, type);
+                meta.remove(); // Supprime après lecture pour ne pas re-afficher
+            }
+            // Compatibilité ascendante : vieille API window.__flash_* (si jamais présente)
             const key = `__flash_${type}`;
             if (window[key]) { this.add(window[key], type); window[key] = null; }
         });
@@ -256,10 +263,47 @@ window.toast = (message, type = 'success') => {
 };
 
 // ── Sidebar global state — store persistant entre les navigations Turbo ───────
-// Utiliser $store.sidebar.open / $store.sidebar.collapsed dans les templates.
 Alpine.store('sidebar', {
     open:      false,
     collapsed: false,
+});
+
+// ── Dark mode — store Alpine global ──────────────────────────────────────────
+// La classe 'dark' sur <html> est appliquée AVANT Alpine (inline script dans <head>)
+// pour éviter le flash. Le store synchronise l'état réactif avec le DOM.
+Alpine.store('darkMode', {
+    dark: document.documentElement.classList.contains('dark'),
+    toggle() {
+        this.dark = !this.dark;
+        document.documentElement.classList.toggle('dark', this.dark);
+        localStorage.setItem('erp_dark', this.dark);
+    },
+});
+
+// ── Recently visited — tracked via localStorage ────────────────────────────────
+// Enregistre la page courante à chaque navigation Turbo
+document.addEventListener('turbo:load', function () {
+    try {
+        const title   = document.title.split('—').slice(-1)[0]?.trim() || document.title;
+        const url     = window.location.pathname;
+        const skip    = ['login', 'register', 'logout', 'password'];
+        if (skip.some(s => url.includes(s))) return;
+
+        // Détecter le module pour l'icône
+        const icons = {
+            '/factures': '🧾', '/devis': '📋', '/commandes': '🛒',
+            '/clients': '🏢', '/fournisseurs': '🏭', '/produits': '📦',
+            '/crm': '👤', '/stocks': '📊', '/tresorerie': '💰',
+            '/comptabilite': '📒', '/rh': '👥', '/reports': '📈',
+        };
+        const icon = Object.entries(icons).find(([k]) => url.includes(k))?.[1] || '📄';
+
+        let visits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]');
+        visits = visits.filter(v => v.url !== url);
+        visits.unshift({ url, label: title, icon });
+        if (visits.length > 10) visits.pop();
+        localStorage.setItem('erp_recent_visits', JSON.stringify(visits));
+    } catch(e) {}
 });
 
 Alpine.start();

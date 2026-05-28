@@ -129,6 +129,19 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\ClientPayment::observe(\App\Observers\PaymentObserver::class);
         \App\Models\SupplierPayment::observe(\App\Observers\PaymentObserver::class);
 
+        // [AUDIT-ERP-D] Morph map pour StockMovement::referenceable()
+        // Permet la résolution polymorphique sans utiliser le FQCN comme discriminant.
+        \Illuminate\Database\Eloquent\Relations\Relation::morphMap([
+            'delivery_note'     => \App\Models\DeliveryNote::class,
+            'reception'         => \App\Models\Reception::class,
+            'invoice'           => \App\Models\Invoice::class,
+            'supplier_invoice'  => \App\Models\SupplierInvoice::class,
+            'credit_note'       => \App\Models\CreditNote::class,
+            'inventory_session' => \App\Models\InventorySession::class,
+            'stock_transfer'    => \App\Models\StockTransfer::class,
+            'adjustment'        => \App\Models\StockMovement::class,
+        ]);
+
         // [TRACE] Observers étendus — traçabilité complète des entités métier critiques.
         \App\Models\Quote::observe(\App\Observers\QuoteObserver::class);
         \App\Models\Order::observe(\App\Observers\OrderObserver::class);

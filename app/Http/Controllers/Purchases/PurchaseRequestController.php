@@ -23,7 +23,14 @@ class PurchaseRequestController extends Controller
         $filters  = $request->only(['status', 'department', 'search']);
         $requests = $this->service->search($filters, 15);
 
-        return view('achats.demandes-achat.index', compact('requests', 'filters'));
+        $summary = [
+            'total'    => PurchaseRequest::count(),
+            'pending'  => PurchaseRequest::where('status', 'soumis')->count(),
+            'approved' => PurchaseRequest::where('status', 'approuve')->count(),
+            'draft'    => PurchaseRequest::where('status', 'brouillon')->count(),
+        ];
+
+        return view('achats.demandes-achat.index', compact('requests', 'filters', 'summary'));
     }
 
     public function create(): View

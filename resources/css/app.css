@@ -370,4 +370,78 @@
 
     /* Numbers : alignement et lisibilité */
     .tabular-nums { font-variant-numeric: tabular-nums; }
+
+    /* Fade-in-down (alert/toast) */
+    @keyframes fade-in-down {
+        from { opacity: 0; transform: translateY(-8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-down { animation: fade-in-down 240ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+    /* Sticky table headers */
+    .tbl-sticky thead th { position: sticky; top: 0; z-index: 1; }
+
+    /* Table row wrappé dans une card */
+    .tbl-rx { @apply overflow-x-auto rounded-xl border border-gray-200 shadow-card; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — Toggle via classe .dark sur <html>
+   Les tokens CSS sont remappés : pas besoin de modifier les composants.
+═══════════════════════════════════════════════════════════════════════════ */
+html.dark {
+    --surface-base:    #0F1117;
+    --surface-card:    #1A1D27;
+    --surface-muted:   #1F2233;
+    --surface-elevated:#242738;
+
+    --border-soft:     #2A2E42;
+    --border:          #333750;
+    --border-strong:   #4B5275;
+
+    --text-primary:    #F1F5F9;
+    --text-secondary:  #94A3B8;
+    --text-muted:      #64748B;
+    --text-disabled:   #475569;
+
+    --brand-soft:      #1E1B4B;
+    --success-soft:    #064E3B;
+    --warning-soft:    #451A03;
+    --danger-soft:     #450A0A;
+    --info-soft:       #0C1E3C;
+}
+
+html.dark body { background-color: var(--surface-base); color: var(--text-primary); }
+html.dark .card { background: var(--surface-card); border-color: var(--border-soft); }
+html.dark .tbl thead { background: var(--surface-muted); }
+html.dark .tbl thead th { color: var(--text-secondary); border-color: var(--border); }
+html.dark .tbl tbody td { border-color: var(--border-soft); color: var(--text-primary); }
+html.dark .tbl tbody tr:hover { background: var(--surface-muted); }
+html.dark .btn-secondary { background: var(--surface-card); color: var(--text-secondary); border-color: var(--border); }
+html.dark .btn-secondary:hover { background: var(--surface-muted); color: var(--text-primary); }
+html.dark .btn-ghost { color: var(--text-secondary); }
+html.dark .btn-ghost:hover { background: var(--surface-muted); color: var(--text-primary); }
+html.dark .input, html.dark .select, html.dark .textarea {
+    background: var(--surface-muted);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+html.dark .input:focus, html.dark .select:focus, html.dark .textarea:focus {
+    border-color: var(--brand);
+}
+html.dark header {
+    background: rgba(26, 29, 39, 0.88) !important;
+    border-bottom-color: rgba(79, 70, 229, .15) !important;
+}
+html.dark .badge-gray   { background: #1F2937; color: #9CA3AF; }
+html.dark .badge-blue   { background: #1E3A5F; color: #60A5FA; }
+html.dark .badge-green,
+html.dark .badge-emerald { background: #064E3B; color: #34D399; }
+html.dark .badge-red    { background: #450A0A; color: #F87171; }
+html.dark .badge-indigo { background: #1E1B4B; color: #A5B4FC; }
+html.dark .badge-amber  { background: #451A03; color: #FCD34D; }
+html.dark .badge-yellow { background: #422006; color: #FDE68A; }
+html.dark .badge-orange { background: #431407; color: #FB923C; }
+html.dark .badge-purple { background: #3B0764; color: #C4B5FD; }
+html.dark .badge-teal   { background: #134E4A; color: #2DD4BF; }
+html.dark .badge-sky    { background: #0C1E3C; color: #38BDF8; }

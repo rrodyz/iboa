@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EmployeeLoan;
+use App\Models\EmployeeLoanPayment;
 use App\Models\PayrollItem;
 use App\Models\PayrollRun;
 use App\Models\PayrollSetting;
 use App\Models\PayrollVariable;
 use App\Models\SalaryAdvance;
+use App\Services\PayrollAccountingService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,44 +19,46 @@ use Illuminate\Support\Facades\DB;
 /**
  * [RH-PAIE] Service de calcul de paie — normes Burkina Faso (CNSS + IUTS).
  *
- * Les taux (CNSS, IUTS) sont désormais lus depuis la table payroll_settings
- * pour rendre le moteur entièrement paramétrable via l'interface.
- * Les constantes ci-dessous restent comme FALLBACK si la table est vide.
+ * [NO-HARDCODE] Tous les taux, plafonds et barèmes sont lus depuis
+ * la table payroll_settings via PayrollSetting::forCompany().
+ * Aucune constante numérique ne sert de fallback silencieux.
+ * Si un paramètre est manquant, PayrollSetting::assertComplete()
+ * lève une RuntimeException explicite avec la liste des champs manquants.
  *
- * ─── Cotisations CNSS ─────────────────────────────────────────────────────────
- *   Employé  :  5,5 % du salaire brut plafonné à 650 000 FCFA/mois
- *   Patronal : 16,0 % du salaire brut plafonné à 650 000 FCFA/mois
- *
- * ─── IUTS ────────────────────────────────────────────────────────────────────
- *   Base : Salaire brut - CNSS employé
- *   Méthode : quotient familial (base / nb_parts → barème × nb_parts)
+ * ─── Configurable dans RH → Paramètres de paie ──────────────────────────────
+ *   CNSS salarié  : cnss_employee_rate (%)   + cnss_ceiling (FCFA)
+ *   CNSS patronal : cnss_employer_rate (%)
+ *   IUTS          : iuts_brackets (JSON) + iuts_abattement_rate (%)
+ *   Ancienneté    : anc_rate_per_year (%/an) + anc_rate_max_pct (% max)
+ *   HS            : hs_rate_25 / hs_rate_50 / hs_rate_nuit (%)
+ *   Effort de paix: effort_paix_enabled + effort_paix_rate (%)
+ *   Quotient fam. : parts_base_single/married/widowed + parts_per_child + nb_parts_max
  */
 class PayrollService
 {
-    // ─── Constantes de fallback (si payroll_settings non configuré) ───────────
-    const CNSS_EMPLOYEE_RATE = 5.5;
-    const CNSS_EMPLOYER_RATE = 16.0;
-    const CNSS_CEILING       = 650_000;
-    const WORK_DAYS_MONTH    = 26;
-    const WORK_HOURS_DAY     = 8;
-    const IUTS_BRACKETS = [
-        [25_000,       0],
-        [40_000,      12],
-        [60_000,      17],
-        [80_000,      22],
-        [120_000,     27],
-        [PHP_INT_MAX, 33],
-    ];
 
     /** Paramètres chargés depuis la DB pour la session de calcul. */
     private ?PayrollSetting $settings = null;
 
+    /**
+     * Buffer des remboursements de prêts à persister après le calcul de tous les employés.
+     * Format : [['loan_id' => int, 'employee_id' => int, 'amount' => int], ...]
+     */
+    private array $pendingLoanPayments = [];
+
     // ─── Chargement des paramètres ───────────────────────────────────────────
+    /**
+     * [NO-HARDCODE] Charge les paramètres de paie et vérifie qu'ils sont complets.
+     * Lance une RuntimeException si un paramètre requis est null en DB,
+     * ce qui évite tout calcul silencieux avec une valeur par défaut codée en dur.
+     */
     private function loadSettings(int $companyId): PayrollSetting
     {
         if (! $this->settings || $this->settings->company_id !== $companyId) {
             $this->settings = PayrollSetting::forCompany($companyId);
         }
+        // Bloc si un paramètre est manquant — aucun fallback silencieux
+        $this->settings->assertComplete();
         return $this->settings;
     }
 
@@ -64,7 +69,7 @@ class PayrollService
     /** Crée un bulletin vide (brouillon). */
     public function createRun(array $data): PayrollRun
     {
-        $company = Company::firstOrFail();
+        $company = Company::findOrFail(Auth::user()->company_id);
 
         if (PayrollRun::where('company_id', $company->id)
             ->where('period_month', $data['period_month'])
@@ -103,12 +108,17 @@ class PayrollService
 
             // Supprimer les anciens calculs
             $run->items()->delete();
+            $this->pendingLoanPayments = [];
 
             // Charger les employés + leurs données
             $employees = Employee::with([
                     'activeContract',
                     'allowances.type',
+                    'allowances.rubric',  // [P1] flags rubriques paramétrables
                     'department',
+                    // [P1] prêts actifs avec solde restant > 0
+                    'loans' => fn($q) => $q->where('status', 'actif')
+                                           ->where('remaining_balance', '>', 0),
                 ])
                 ->where('company_id', $run->company_id)
                 ->where('status', 'actif')
@@ -151,12 +161,15 @@ class PayrollService
             // Marquer les avances approuvées comme récupérées
             $this->recoverAdvances($run);
 
+            // [P1] Créer les lignes de remboursement de prêts et MAJ des soldes
+            $this->processLoanPayments($run);
+
             $run->update(array_merge($totals, ['status' => 'calcule']));
             return $run->fresh('items.employee');
         });
     }
 
-    /** Valide le bulletin (statut : valide). */
+    /** Valide le bulletin (statut : valide) + génère l'écriture comptable. */
     public function validate(PayrollRun $run): PayrollRun
     {
         return DB::transaction(function () use ($run) {
@@ -171,6 +184,16 @@ class PayrollService
                 'validated_by' => Auth::id(),
                 'validated_at' => now(),
             ]);
+
+            // Génération automatique de l'écriture comptable
+            try {
+                app(PayrollAccountingService::class)->generateForRun($run->fresh());
+            } catch (\Throwable $e) {
+                // Ne jamais bloquer la validation pour un problème comptable
+                \Illuminate\Support\Facades\Log::error(
+                    "[PayrollService] Échec comptabilisation paie run#{$run->id}: " . $e->getMessage()
+                );
+            }
 
             return $run->fresh();
         });
@@ -212,9 +235,9 @@ class PayrollService
         foreach ($absenceVars as $v) {
             $absenceDays += $v->qty;
         }
-        // Utiliser les paramètres de la DB (avec fallback aux constantes)
-        $workDays  = $this->settings?->work_days_month ?? self::WORK_DAYS_MONTH;
-        $workHours = $this->settings?->work_hours_day  ?? self::WORK_HOURS_DAY;
+        // [NO-HARDCODE] Paramètres lus depuis la DB — assertComplete() garantit qu'ils sont non-null
+        $workDays  = $this->settings->work_days_month;
+        $workHours = $this->settings->work_hours_day;
 
         $workedDays = max(0, $workDays - $absenceDays);
         $totalDays  = $workDays;
@@ -238,9 +261,10 @@ class PayrollService
         $hs50Hours = $hs50Amount = 0;
         $hsNuitHours = $hsNuitAmount = 0;
 
-        $hsRate25   = 1 + (($this->settings?->hs_rate_25   ?? 25.0)  / 100);
-        $hsRate50   = 1 + (($this->settings?->hs_rate_50   ?? 50.0)  / 100);
-        $hsRateNuit = 1 + (($this->settings?->hs_rate_nuit ?? 75.0)  / 100);
+        // [NO-HARDCODE] Majorations HS depuis la DB
+        $hsRate25   = 1 + ($this->settings->hs_rate_25   / 100);
+        $hsRate50   = 1 + ($this->settings->hs_rate_50   / 100);
+        $hsRateNuit = 1 + ($this->settings->hs_rate_nuit / 100);
 
         foreach ($variables->filter(fn($v) => $v->type === 'hs_25') as $v) {
             $hs25Hours  += $v->qty;
@@ -255,11 +279,73 @@ class PayrollService
             $hsNuitAmount += $v->amount ?: (int) round($hourlyRate * $v->qty * $hsRateNuit);
         }
 
-        // ─── Primes et indemnités FIXES ───────────────────────────────────────
-        $activeAllowances = $employee->allowances->filter(fn($a) => $a->is_active);
+        // ─── Ancienneté automatique ──────────────────────────────────────────
+        // [NO-HARDCODE] Taux et plafond lus depuis payroll_settings :
+        //   anc_rate_per_year : % par année complète de service (BF: 2 %)
+        //   anc_rate_max_pct  : plafond cumulé (BF: 25 %)
+        // Toujours imposable (inclus dans brut, base CNSS et base IUTS).
+        // Calculé automatiquement pour TOUS les employés avec une date d'embauche.
+        $ancRate   = 0;
+        $ancAmount = 0;
 
-        $taxableAllowances    = (int) $activeAllowances->filter(fn($a) =>  ($a->type?->is_taxable ?? true))->sum('amount');
-        $nonTaxableAllowances = (int) $activeAllowances->filter(fn($a) => !($a->type?->is_taxable ?? true))->sum('amount');
+        if ($employee->hiring_date && $run !== null) {
+            $periodDate     = \Carbon\Carbon::createFromDate($run->period_year, $run->period_month, 1);
+            $yearsOfService = (int) $employee->hiring_date->diffInYears($periodDate);
+            $ancRate        = min($yearsOfService * $this->settings->anc_rate_per_year, $this->settings->anc_rate_max_pct);
+            $ancAmount      = $ancRate > 0 ? (int) round($baseSalary * $ancRate / 100) : 0;
+        }
+
+        // ─── Primes et indemnités FIXES ──────────────────────────────────────
+        // [P1] Support rubriques : si l'allocation a un pay_rubric_id actif,
+        // ses flags (is_in_brut, is_cnss_base, is_iuts_base) remplacent ceux de
+        // payroll_allowance_type. Comportement identique pour allowances sans rubrique.
+        // Les allocations de type ANCIENNETE sont exclues : gérées ci-dessus.
+        $activeAllowances = $employee->allowances->filter(
+            fn($a) => $a->is_active && $a->type?->code !== 'ANCIENNETE'
+        );
+
+        $taxableAllowances    = $ancAmount; // ancienneté incluse d'emblée (toujours taxable)
+        $nonTaxableAllowances = 0;
+        $cnssExclusions       = 0; // montants dans brut mais exclus de la base CNSS
+        $iutsExclusions       = 0; // montants dans brut mais exclus de la base IUTS
+
+        // Contexte partiel pour formules basées sur salaire_base uniquement
+        $baseContext = ['salaire_base' => $proratedBase];
+
+        foreach ($activeAllowances as $allowance) {
+            $rubric    = $allowance->rubric;
+            $amount    = (int) $allowance->amount;
+
+            if ($rubric && $rubric->is_active) {
+                // ── Rubrique paramétrée : ses flags font foi ─────────────────
+                $isInBrut   = $rubric->is_in_brut;
+                $isCnssBase = $rubric->is_cnss_base;
+                $isIutsBase = $rubric->is_iuts_base ?? $rubric->is_taxable;
+
+                // Si montant non saisi sur l'allocation et rubrique auto-calculable
+                if ($amount === 0 && $rubric->calc_type !== 'manuel') {
+                    $amount = $rubric->compute($baseContext);
+                }
+            } else {
+                // ── Pas de rubrique → comportement historique inchangé ───────
+                $isTaxable  = $allowance->type?->is_taxable ?? true;
+                $isInBrut   = $isTaxable;          // taxable = dans le brut
+                $isCnssBase = $allowance->type?->is_social_charged ?? $isTaxable;
+                $isIutsBase = $isTaxable;
+            }
+
+            if ($isInBrut) {
+                $taxableAllowances += $amount;
+                if (! $isCnssBase) {
+                    $cnssExclusions += $amount;
+                }
+                if (! $isIutsBase) {
+                    $iutsExclusions += $amount;
+                }
+            } else {
+                $nonTaxableAllowances += $amount;
+            }
+        }
 
         // ─── Primes/gains ponctuels (variables) ──────────────────────────────
         $primesExcept  = 0;
@@ -294,37 +380,80 @@ class PayrollService
             + $taxableAllowances
             + $primesExcept;
 
-        // ─── CNSS ─────────────────────────────────────────────────────────────
-        $cnssPlafond  = $this->settings?->cnss_ceiling       ?? self::CNSS_CEILING;
-        $cnssEmpRate  = $this->settings?->cnss_employee_rate ?? self::CNSS_EMPLOYEE_RATE;
-        $cnssPatRate  = $this->settings?->cnss_employer_rate ?? self::CNSS_EMPLOYER_RATE;
+        // ─── CNSS ────────────────────────────────────────────────────────────
+        // [NO-HARDCODE] Taux et plafond lus depuis la DB — jamais depuis des constantes
+        $cnssPlafond  = $this->settings->cnss_ceiling;
+        $cnssEmpRate  = $this->settings->cnss_employee_rate;
+        $cnssPatRate  = $this->settings->cnss_employer_rate;
 
-        $cnssBase     = min($salaireBrut, $cnssPlafond);
+        // [P1] Exclure les éléments is_cnss_base=false de la base cotisable
+        $cnssBase     = min(max(0, $salaireBrut - $cnssExclusions), $cnssPlafond);
         $cnssEmployee = (int) round($cnssBase * $cnssEmpRate / 100);
         $cnssEmployer = (int) round($cnssBase * $cnssPatRate / 100);
 
-        // ─── IUTS ─────────────────────────────────────────────────────────────
-        $salaireImposable = max(0, $salaireBrut - $cnssEmployee);
-        $nbParts          = $this->settings
-            ? $this->settings->computeNbParts($employee->family_status ?? 'celibataire', $employee->nb_children ?? 0)
-            : $employee->nb_parts;
-        $iuts             = $this->settings
-            ? $this->settings->computeIuts($salaireImposable, $nbParts)
-            : $this->computeIuts($salaireImposable, $nbParts);
+        // ─── IUTS ────────────────────────────────────────────────────────────
+        // [P1] Exclure les éléments is_iuts_base=false de la base imposable
+        // [P3.C] Appliquer l'abattement forfaitaire pour frais professionnels
+        //         (BF CGI Art. 130 : 20 % par défaut, configurable dans PayrollSetting).
+        $salaireImposableBrut = max(0, $salaireBrut - $iutsExclusions - $cnssEmployee);
+        // [NO-HARDCODE] Abattement IUTS depuis la DB (BF CGI Art. 130 : 20 % configurable)
+        $abattementRate       = $this->settings->iuts_abattement_rate;
+        $salaireImposable     = (int) round($salaireImposableBrut * (1 - $abattementRate / 100));
 
-        // ─── Net à payer ───────────────────────────────────────────────────────
+        // [NO-HARDCODE] Quotient familial et barème IUTS lus depuis la DB
+        $nbParts = $this->settings->computeNbParts($employee->family_status ?? 'celibataire', $employee->nb_children ?? 0);
+        $iuts    = $this->settings->computeIuts($salaireImposable, $nbParts);
+
+        // ─── Effort de paix ──────────────────────────────────────────────────
+        // [NO-HARDCODE] Taux et activation lus depuis la DB
+        // Base légale BF : brut total (incl. non-imposables) − CNSS salarié − IUTS
+        $effortPaix = 0;
+        if ($this->settings->effort_paix_enabled) {
+            $effortPaixBase = max(0, $salaireBrut + $nonTaxableAllowances + $autresGains
+                                     - $cnssEmployee - $iuts);
+            $effortPaix     = (int) round($effortPaixBase * $this->settings->effort_paix_rate / 100);
+        }
+
+        // ─── Prêts salariés — déduction automatique ──────────────────────────
+        // [P1] Calcule et bufferise les remboursements mensuels des prêts actifs.
+        // Ne s'applique pas en mode simulation ($run === null).
+        $loanDeductions = 0;
+        if ($run !== null) {
+            $activeLoans = $employee->relationLoaded('loans')
+                ? $employee->loans->where('status', 'actif')->where('remaining_balance', '>', 0)
+                : EmployeeLoan::where('employee_id', $employee->id)
+                              ->where('status', 'actif')
+                              ->where('remaining_balance', '>', 0)
+                              ->get();
+
+            foreach ($activeLoans as $loan) {
+                $deductible = min((int) $loan->monthly_deduction, (int) $loan->remaining_balance);
+                if ($deductible > 0) {
+                    $loanDeductions += $deductible;
+                    $this->pendingLoanPayments[] = [
+                        'loan_id'     => $loan->id,
+                        'employee_id' => $employee->id,
+                        'amount'      => $deductible,
+                    ];
+                }
+            }
+        }
+
+        // ─── Net à payer ──────────────────────────────────────────────────────
         $salaireNet = $salaireBrut
             + $nonTaxableAllowances
             + $autresGains
             - $cnssEmployee
             - $iuts
+            - $effortPaix        // [P3.B]
             - $avancesDeductions
+            - $loanDeductions
             - $autresRetenues;
 
         $coutEmployeur = $salaireBrut + $cnssEmployer;
 
         // ─── Cumuls YTD ───────────────────────────────────────────────────────
-        $cumulBrutYtd = $ytd['brut'] + $salaireBrut;
+        $cumulBrutYtd = $ytd['brut'] + $salaireBrut + $nonTaxableAllowances;
         $cumulCnssYtd = $ytd['cnss'] + $cnssEmployee;
         $cumulIutsYtd = $ytd['iuts'] + $iuts;
         $cumulNetYtd  = $ytd['net']  + max(0, $salaireNet);
@@ -340,6 +469,9 @@ class PayrollService
             'base_salary'                  => $proratedBase,
             'worked_days'                  => $workedDays,
             'total_days'                   => $totalDays,
+            // ─ Ancienneté automatique (BF Art. 109)
+            'anc_rate'                     => $ancRate,
+            'anc_amount'                   => $ancAmount,
             // ─ Primes fixes
             'total_allowances_taxable'     => $taxableAllowances,
             'total_allowances_non_taxable' => $nonTaxableAllowances,
@@ -357,6 +489,7 @@ class PayrollService
             'primes_exceptionnelles'       => $primesExcept,
             'autres_gains'                 => $autresGains,
             'avances_deductions'           => $avancesDeductions,
+            'loan_deductions'              => $loanDeductions,
             'autres_retenues'              => $autresRetenues,
             // ─ Cotisations
             'salaire_brut'                 => $salaireBrut,
@@ -366,6 +499,7 @@ class PayrollService
             'salaire_imposable'            => $salaireImposable,
             'nb_parts'                     => $nbParts,
             'iuts_amount'                  => $iuts,
+            'effort_paix_amount'           => $effortPaix,   // [P3.B]
             'salaire_net'                  => max(0, $salaireNet),
             'cout_employeur'               => $coutEmployeur,
             // ─ YTD
@@ -374,28 +508,6 @@ class PayrollService
             'cumul_iuts_ytd'               => $cumulIutsYtd,
             'cumul_net_ytd'                => $cumulNetYtd,
         ];
-    }
-
-    /**
-     * Calcule l'IUTS par la méthode du quotient familial.
-     */
-    private function computeIuts(int $imposable, float $parts): int
-    {
-        if ($imposable <= 0 || $parts <= 0) return 0;
-
-        $quotient = $imposable / $parts;
-        $tax      = 0.0;
-        $prev     = 0;
-
-        foreach (self::IUTS_BRACKETS as [$limit, $rate]) {
-            if ($quotient <= $prev) break;
-            $tranche = min($quotient, $limit) - $prev;
-            $tax    += $tranche * $rate / 100;
-            $prev    = $limit;
-            if ($quotient <= $limit) break;
-        }
-
-        return (int) round($tax * $parts);
     }
 
     /**
@@ -412,7 +524,7 @@ class PayrollService
             ->whereIn('payroll_runs.status', ['valide', 'paye'])
             ->select(
                 'payroll_items.employee_id',
-                DB::raw('SUM(salaire_brut)   as brut'),
+                DB::raw('SUM(salaire_brut + COALESCE(total_allowances_non_taxable, 0)) as brut'),
                 DB::raw('SUM(cnss_employee)  as cnss'),
                 DB::raw('SUM(iuts_amount)    as iuts'),
                 DB::raw('SUM(salaire_net)    as net')
@@ -435,6 +547,49 @@ class PayrollService
     /**
      * Marque les avances approuvées comme récupérées dans ce bulletin.
      */
+    /**
+     * [P1] Crée les lignes EmployeeLoanPayment et met à jour le solde/statut
+     * de chaque prêt à partir du buffer rempli par calculateItem().
+     * Appelée dans une transaction DB (héritée de calculate()).
+     */
+    private function processLoanPayments(PayrollRun $run): void
+    {
+        if (empty($this->pendingLoanPayments)) {
+            return;
+        }
+
+        foreach ($this->pendingLoanPayments as $entry) {
+            // Verrouillage pour éviter les doubles traitements (recalcul concurrent)
+            $loan = EmployeeLoan::lockForUpdate()->find($entry['loan_id']);
+            if (! $loan || $loan->status !== 'actif' || $loan->remaining_balance <= 0) {
+                continue;
+            }
+
+            $actualAmount = min((int) $entry['amount'], (int) $loan->remaining_balance);
+            $balanceAfter = max(0, (int) $loan->remaining_balance - $actualAmount);
+
+            EmployeeLoanPayment::create([
+                'employee_loan_id' => $loan->id,
+                'payroll_run_id'   => $run->id,
+                'period_month'     => $run->period_month,
+                'period_year'      => $run->period_year,
+                'amount'           => $actualAmount,
+                'balance_after'    => $balanceAfter,
+                'notes'            => "Déduction automatique — paie {$run->period_label}",
+                'created_by'       => Auth::id(),
+            ]);
+
+            $loan->remaining_balance = $balanceAfter;
+            if ($balanceAfter <= 0) {
+                $loan->status   = 'rembourse';
+                $loan->end_date = now()->toDateString();
+            }
+            $loan->save();
+        }
+
+        $this->pendingLoanPayments = [];
+    }
+
     private function recoverAdvances(PayrollRun $run): void
     {
         // Les avances récupérées sont saisies manuellement via PayrollVariable (avance_deduction).
