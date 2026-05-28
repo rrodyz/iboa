@@ -422,6 +422,7 @@ function simulateur() {
         selectedCat:  '',
         selectedLabel:'',
         selectedIcon: '',
+        _abortCtrl:   null,
 
         init() {},
 
@@ -454,10 +455,17 @@ function simulateur() {
 
         async simulate() {
             if (!this.form.net_souhaite || this.form.net_souhaite <= 0) { this.result = null; return; }
+
+            // Annule la requete precedente si elle est encore en vol
+            if (this._abortCtrl) this._abortCtrl.abort();
+            this._abortCtrl = new AbortController();
+            const signal = this._abortCtrl.signal;
+
             this.loading = true; this.error = null;
             try {
                 const resp = await fetch('{{ route("rh.paie.simulateur.calculate") }}', {
                     method: 'POST',
+                    signal,
                     headers: {
                         'Content-Type':     'application/json',
                         'Accept':           'application/json',
@@ -468,8 +476,12 @@ function simulateur() {
                 });
                 if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.message ?? 'Erreur serveur'); }
                 this.result = await resp.json();
-            } catch(e) { this.error = e.message; this.result = null; }
-            finally { this.loading = false; }
+            } catch(e) {
+                if (e.name !== 'AbortError') { this.error = e.message; this.result = null; }
+                // AbortError = requete annulee volontairement, on l'ignore silencieusement
+            } finally {
+                this.loading = false;
+            }
         },
 
         exportPdf() {
