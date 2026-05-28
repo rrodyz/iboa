@@ -765,8 +765,9 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
 
     // ── Simulateur de salaire inverse ────────────────────────────────────────
     Route::middleware('permission:rh.payroll.view')->prefix('paie')->name('paie.')->group(function () {
-        Route::get('/simulateur',          [\App\Http\Controllers\HR\PayrollSimulatorController::class, 'index'])->name('simulateur.index');
-        Route::post('/simulateur/calculer',[\App\Http\Controllers\HR\PayrollSimulatorController::class, 'calculate'])->name('simulateur.calculate');
+        Route::get('/simulateur',             [\App\Http\Controllers\HR\PayrollSimulatorController::class, 'index'])->name('simulateur.index');
+        Route::post('/simulateur/calculer',   [\App\Http\Controllers\HR\PayrollSimulatorController::class, 'calculate'])->name('simulateur.calculate');
+        Route::post('/simulateur/export-pdf', [\App\Http\Controllers\HR\PayrollSimulatorController::class, 'exportPdf'])->name('simulateur.pdf');
     });
 
     // ── Bulletins de paie ─────────────────────────────────────────────────────
