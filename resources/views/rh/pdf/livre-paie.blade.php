@@ -23,7 +23,7 @@
 <body>
 <div class="page">
 
-<h2>LIVRE DE PAIE — EXERCICE {{ $year }}</h2>
+<h2>LIVRE DE PAIE — {{ isset($month) && $month > 0 ? $monthLabel : 'EXERCICE ' . $year }}</h2>
 <p class="sub">
     {{ $settings?->company_name ?? $company->name }} ·
     Édité le {{ now()->format('d/m/Y à H:i') }} ·

@@ -35,9 +35,9 @@
         <p class="text-sm text-gray-500 mt-1">Gestion mensuelle de la paie CNSS + IUTS</p>
     </div>
     <div class="flex gap-2">
-        {{-- Livre de paie annuel PDF --}}
-        <div x-data="{open:false}" class="relative">
-            <button @click="open=!open"
+        {{-- Livre de paie : annuel ou mensuel --}}
+        <div x-data="{ open: false, mode: 'annual' }" class="relative">
+            <button @click="open = !open"
                     class="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -45,14 +45,65 @@
                 Livre de paie
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div x-show="open" @click.away="open=false"
-                 class="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
-                @foreach($years->isEmpty() ? [now()->year] : $years as $y)
-                <a href="{{ route('rh.paie.livre-paie') }}?year={{ $y }}"
-                   class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    📄 Livre de paie {{ $y }} PDF
-                </a>
-                @endforeach
+
+            <div x-show="open" @click.away="open = false" x-cloak
+                 class="absolute right-0 mt-1 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
+
+                {{-- Onglets Annuel / Mensuel --}}
+                <div class="flex border-b border-gray-100">
+                    <button @click="mode = 'annual'"
+                            :class="mode === 'annual' ? 'border-b-2 border-blue-600 text-blue-700 font-semibold' : 'text-gray-500'"
+                            class="flex-1 px-4 py-2.5 text-xs hover:bg-gray-50">
+                        📅 Annuel
+                    </button>
+                    <button @click="mode = 'monthly'"
+                            :class="mode === 'monthly' ? 'border-b-2 border-blue-600 text-blue-700 font-semibold' : 'text-gray-500'"
+                            class="flex-1 px-4 py-2.5 text-xs hover:bg-gray-50">
+                        📆 Mensuel
+                    </button>
+                </div>
+
+                {{-- Annuel --}}
+                <div x-show="mode === 'annual'" class="py-1">
+                    <p class="px-4 py-1.5 text-xs text-gray-400 uppercase tracking-wide">Choisir l'année</p>
+                    @foreach($years->isEmpty() ? [now()->year] : $years as $y)
+                    <a href="{{ route('rh.paie.livre-paie') }}?year={{ $y }}"
+                       class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Exercice {{ $y }} — PDF complet
+                    </a>
+                    @endforeach
+                </div>
+
+                {{-- Mensuel --}}
+                <div x-show="mode === 'monthly'" class="p-3">
+                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Choisir le mois</p>
+                    <form method="GET" action="{{ route('rh.paie.livre-paie') }}" class="space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Année</label>
+                                <select name="year" class="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    @foreach($years->isEmpty() ? [now()->year] : $years as $y)
+                                        <option value="{{ $y }}" @selected($y == now()->year)>{{ $y }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">Mois</label>
+                                <select name="month" class="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    @foreach([1=>'Janvier',2=>'Février',3=>'Mars',4=>'Avril',5=>'Mai',6=>'Juin',7=>'Juillet',8=>'Août',9=>'Septembre',10=>'Octobre',11=>'Novembre',12=>'Décembre'] as $m => $label)
+                                        <option value="{{ $m }}" @selected($m == now()->month)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit"
+                                class="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Télécharger PDF mensuel
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
 

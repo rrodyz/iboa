@@ -230,21 +230,36 @@ class PayrollRunController extends Controller
     {
         $company = Company::firstOrFail();
         $year    = $request->integer('year', now()->year);
+        $month   = $request->integer('month', 0); // 0 = tous les mois de l'année
 
-        $runs = PayrollRun::with('items')
+        $query = PayrollRun::with('items')
             ->where('company_id', $company->id)
             ->where('period_year', $year)
-            ->whereIn('status', ['valide', 'paye'])
-            ->orderBy('period_month')
-            ->get();
+            ->whereIn('status', ['valide', 'paye', 'calcule'])
+            ->orderBy('period_month');
+
+        if ($month > 0) {
+            $query->where('period_month', $month);
+        }
+
+        $runs = $query->get();
 
         $settings = Company::first()?->documentSetting;
         $payroll  = PayrollSetting::forCompany($company->id);
 
-        $pdf = Pdf::loadView('rh.pdf.livre-paie', compact('runs', 'year', 'settings', 'company', 'payroll'))
+        // Titre et nom de fichier adaptés selon le filtre
+        $monthLabel = $month > 0
+            ? strtoupper(\Carbon\Carbon::create($year, $month)->translatedFormat('F Y'))
+            : (string) $year;
+
+        $filename = $month > 0
+            ? "Livre_Paie_{$year}_" . str_pad($month, 2, '0', STR_PAD_LEFT) . ".pdf"
+            : "Livre_Paie_{$year}.pdf";
+
+        $pdf = Pdf::loadView('rh.pdf.livre-paie', compact('runs', 'year', 'month', 'monthLabel', 'settings', 'company', 'payroll'))
             ->setPaper('a4', 'landscape');
 
-        return $pdf->download("Livre_Paie_{$year}.pdf");
+        return $pdf->download($filename);
     }
 
     /**
