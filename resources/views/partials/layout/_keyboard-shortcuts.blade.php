@@ -103,7 +103,8 @@ document.addEventListener('keydown', function(e) {
     // Ctrl + B → Toggle sidebar
     if (e.ctrlKey && e.key === 'b') {
         e.preventDefault();
-        window.Alpine?.store('sidebar').collapsed = !window.Alpine?.store('sidebar').collapsed;
+        const sb = window.Alpine?.store('sidebar');
+        if (sb) sb.collapsed = !sb.collapsed;
         return;
     }
 });
