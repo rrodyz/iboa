@@ -500,6 +500,7 @@ request()->routeIs('achats.*')                                                  
                             [route('rh.variables.index'),   'Variables mensuelles','rh.variables*'],
                             [route('rh.paie.create'),       'Préparation de la paie','rh.paie.create'],
                             [route('rh.paie.index'),        'Bulletins de paie',  'rh.paie*'],
+                            [route('rh.paie.simulateur.index'), '🧮 Simulateur salaire','rh.paie.simulateur*'],
                             [route('rh.avances.index'),     'Avances salaire',    'rh.avances*'],
                             [route('rh.prets.index'),       'Prêts salariés',     'rh.prets*'],
                         ] as [$href, $label, $match])
