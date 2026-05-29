@@ -308,20 +308,127 @@ class EmployeeController extends Controller
 
     public function contracts(Request $request)
     {
-        $company   = \App\Models\Company::firstOrFail();
-        $contracts = \App\Models\EmployeeContract::with('employee')
+        $company = \App\Models\Company::firstOrFail();
+
+        $query = \App\Models\EmployeeContract::with('employee')
             ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
             ->when($request->type,   fn($q, $t) => $q->where('type', $t))
-            ->orderByRaw("FIELD(status,'actif','expire','resilie') ASC")
+            ->when($request->search, fn($q, $s) => $q->whereHas('employee', fn($eq) =>
+                $eq->where('first_name', 'like', "%{$s}%")
+                   ->orWhere('last_name',  'like', "%{$s}%")
+                   ->orWhere('matricule',  'like', "%{$s}%")
+            ));
+
+        $contracts = (clone $query)
+            ->orderByRaw("FIELD(status,'actif','termine','resilie') ASC")
             ->orderByDesc('start_date')
             ->paginate(20)
             ->withQueryString();
 
-        $statusOptions = ['actif' => 'Actif', 'expire' => 'Expiré', 'resilie' => 'Résilié'];
+        // Stats globales (non filtrées)
+        $base   = \App\Models\EmployeeContract::whereHas('employee', fn($q) => $q->where('company_id', $company->id));
+        $stats  = [
+            'total'    => $base->count(),
+            'actifs'   => (clone $base)->where('status', 'actif')->count(),
+            'termines' => (clone $base)->where('status', 'termine')->count(),
+            'resilies' => (clone $base)->where('status', 'resilie')->count(),
+        ];
+
+        $statusOptions = ['actif' => 'Actif', 'termine' => 'Terminé', 'resilie' => 'Résilié'];
         $typeOptions   = ['CDI' => 'CDI', 'CDD' => 'CDD', 'stage' => 'Stage', 'consultant' => 'Consultant'];
 
-        return view('rh.contrats.index', compact('contracts', 'company', 'statusOptions', 'typeOptions'));
+        // Liste des employés actifs pour le modal d'ajout
+        $employees = \App\Models\Employee::where('company_id', $company->id)
+            ->where('status', 'actif')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'matricule']);
+
+        return view('rh.contrats.index', compact('contracts', 'company', 'statusOptions', 'typeOptions', 'stats', 'employees'));
+    }
+
+    public function storeContractDirect(Request $request)
+    {
+        $data = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'type'        => ['required', 'in:CDI,CDD,stage,consultant'],
+            'start_date'  => ['required', 'date'],
+            'end_date'    => ['nullable', 'date', 'after:start_date'],
+            'base_salary' => ['required', 'integer', 'min:0'],
+            'notes'       => ['nullable', 'string'],
+        ]);
+
+        $employe = \App\Models\Employee::findOrFail($data['employee_id']);
+
+        // Clôturer l'ancien contrat actif
+        $employe->contracts()->where('status', 'actif')->update(['status' => 'termine']);
+        $employe->contracts()->create(array_merge($data, ['status' => 'actif']));
+
+        return redirect()->route('rh.contrats.index')->with('success', 'Contrat ajouté avec succès.');
+    }
+
+    public function terminateContract(\App\Models\EmployeeContract $contract)
+    {
+        abort_if($contract->status !== 'actif', 422, 'Ce contrat n\'est pas actif.');
+        $contract->update(['status' => 'termine']);
+        return back()->with('success', 'Contrat terminé.');
+    }
+
+    public function resilierContract(\App\Models\EmployeeContract $contract)
+    {
+        abort_if($contract->status !== 'actif', 422, 'Ce contrat n\'est pas actif.');
+        $contract->update(['status' => 'resilie']);
+        return back()->with('success', 'Contrat résilié.');
+    }
+
+    public function exportContracts(Request $request)
+    {
+        $company = \App\Models\Company::firstOrFail();
+
+        $contracts = \App\Models\EmployeeContract::with('employee')
+            ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
+            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            ->when($request->type,   fn($q, $t) => $q->where('type', $t))
+            ->when($request->search, fn($q, $s) => $q->whereHas('employee', fn($eq) =>
+                $eq->where('first_name', 'like', "%{$s}%")
+                   ->orWhere('last_name',  'like', "%{$s}%")
+                   ->orWhere('matricule',  'like', "%{$s}%")
+            ))
+            ->orderByRaw("FIELD(status,'actif','termine','resilie') ASC")
+            ->orderByDesc('start_date')
+            ->get();
+
+        $filename = 'contrats_' . now()->format('Y-m-d') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($contracts) {
+            $out = fopen('php://output', 'w');
+            fputs($out, "\xEF\xBB\xBF"); // BOM UTF-8
+
+            fputcsv($out, ['Matricule', 'Nom', 'Prénom', 'Type', 'Début', 'Fin', 'Salaire base (FCFA)', 'Statut', 'Notes'], ';');
+
+            foreach ($contracts as $c) {
+                fputcsv($out, [
+                    $c->employee?->matricule ?? '',
+                    $c->employee?->last_name ?? '',
+                    $c->employee?->first_name ?? '',
+                    $c->type,
+                    $c->start_date?->format('d/m/Y') ?? '',
+                    $c->end_date?->format('d/m/Y') ?? 'Indéterminée',
+                    $c->base_salary,
+                    match($c->status) { 'actif' => 'Actif', 'termine' => 'Terminé', 'resilie' => 'Résilié', default => $c->status },
+                    $c->notes ?? '',
+                ], ';');
+            }
+
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     // ─── Départements ─────────────────────────────────────────────────────────

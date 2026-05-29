@@ -1,169 +1,361 @@
 @extends('layouts.erp')
 @section('title', 'Contrats — RH')
+
 @section('breadcrumb')
     <a href="{{ route('rh.dashboard') }}" class="hover:text-gray-700">RH</a>
-    <span class="mx-1">/</span><span>Contrats</span>
+    <span class="mx-1">/</span>
+    <span class="text-gray-900 font-medium">Contrats</span>
 @endsection
 
 @section('content')
-<div class="flex items-center justify-between mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-900">Contrats de travail</h1>
-        <p class="text-sm text-gray-500 mt-1">Liste de tous les contrats de l'entreprise</p>
+<div class="space-y-5" x-data="{ modalOpen: false }">
+
+    {{-- ── Header ─────────────────────────────────────────────────────────────── --}}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Contrats de travail</h1>
+            <p class="text-sm text-gray-500 mt-0.5">Liste de tous les contrats de l'entreprise</p>
+        </div>
+        <div class="flex gap-2">
+            {{-- Export CSV --}}
+            <a href="{{ route('rh.contrats.export', request()->query()) }}"
+               class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Exporter CSV
+            </a>
+            {{-- Nouveau contrat --}}
+            <button @click="modalOpen = true"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                Nouveau contrat
+            </button>
+        </div>
     </div>
-    <a href="{{ route('rh.employes.index') }}"
-       class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+
+    {{-- ── Flash ───────────────────────────────────────────────────────────────── --}}
+    @if(session('success'))
+    <div class="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm">
+        <svg class="w-5 h-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
         </svg>
-        Ajouter via Employé
-    </a>
-</div>
-
-{{-- Filtres --}}
-<form method="GET" class="flex flex-wrap gap-3 mb-5">
-    <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="">Tous statuts</option>
-        @foreach($statusOptions as $v => $l)
-            <option value="{{ $v }}" @selected(request('status') === $v)>{{ $l }}</option>
-        @endforeach
-    </select>
-    <select name="type" class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
-        <option value="">Tous types</option>
-        @foreach($typeOptions as $v => $l)
-            <option value="{{ $v }}" @selected(request('type') === $v)>{{ $l }}</option>
-        @endforeach
-    </select>
-    <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-        Filtrer
-    </button>
-    <a href="{{ route('rh.contrats.index') }}" class="px-4 py-2 text-gray-500 rounded-lg text-sm hover:bg-gray-100">
-        Réinitialiser
-    </a>
-</form>
-
-{{-- Stats rapides --}}
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-    @php
-        $all      = $contracts->total();
-        $actifs   = \App\Models\EmployeeContract::whereHas('employee', fn($q) => $q->where('company_id', $company->id))->where('status','actif')->count();
-        $expires  = \App\Models\EmployeeContract::whereHas('employee', fn($q) => $q->where('company_id', $company->id))->where('status','expire')->count();
-        $resilies = \App\Models\EmployeeContract::whereHas('employee', fn($q) => $q->where('company_id', $company->id))->where('status','resilie')->count();
-    @endphp
-    <div class="bg-white rounded-xl border border-gray-200 p-4">
-        <div class="text-xs text-gray-500 mb-1">Total</div>
-        <div class="text-2xl font-bold text-gray-900">{{ $all }}</div>
-    </div>
-    <div class="bg-white rounded-xl border border-gray-200 p-4">
-        <div class="text-xs text-gray-500 mb-1">Actifs</div>
-        <div class="text-2xl font-bold text-emerald-600">{{ $actifs }}</div>
-    </div>
-    <div class="bg-white rounded-xl border border-gray-200 p-4">
-        <div class="text-xs text-gray-500 mb-1">Expirés</div>
-        <div class="text-2xl font-bold text-amber-600">{{ $expires }}</div>
-    </div>
-    <div class="bg-white rounded-xl border border-gray-200 p-4">
-        <div class="text-xs text-gray-500 mb-1">Résiliés</div>
-        <div class="text-2xl font-bold text-red-600">{{ $resilies }}</div>
-    </div>
-</div>
-
-{{-- Tableau --}}
-<div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-                <tr>
-                    <th class="px-4 py-3 text-left font-semibold text-gray-700">Matricule</th>
-                    <th class="px-4 py-3 text-left font-semibold text-gray-700">Employé</th>
-                    <th class="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
-                    <th class="px-4 py-3 text-left font-semibold text-gray-700">Début</th>
-                    <th class="px-4 py-3 text-left font-semibold text-gray-700">Fin</th>
-                    <th class="px-4 py-3 text-right font-semibold text-gray-700">Salaire de base</th>
-                    <th class="px-4 py-3 text-center font-semibold text-gray-700">Statut</th>
-                    <th class="px-4 py-3 text-center font-semibold text-gray-700">Action</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-                @forelse($contracts as $contract)
-                @php
-                    $badgeClass = match($contract->status) {
-                        'actif'   => 'bg-emerald-100 text-emerald-800',
-                        'expire'  => 'bg-amber-100 text-amber-800',
-                        'resilie' => 'bg-red-100 text-red-800',
-                        default   => 'bg-gray-100 text-gray-800',
-                    };
-                    $badgeLabel = match($contract->status) {
-                        'actif'   => 'Actif',
-                        'expire'  => 'Expiré',
-                        'resilie' => 'Résilié',
-                        default   => ucfirst($contract->status),
-                    };
-                @endphp
-                <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-4 py-3 font-mono text-xs text-gray-500">
-                        {{ $contract->employee?->matricule ?? '—' }}
-                    </td>
-                    <td class="px-4 py-3">
-                        <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
-                           class="font-medium text-gray-900 hover:text-indigo-600">
-                            {{ $contract->employee?->full_name ?? '—' }}
-                        </a>
-                        @if($contract->employee?->department)
-                        <div class="text-xs text-gray-400">{{ $contract->employee->department }}</div>
-                        @endif
-                    </td>
-                    <td class="px-4 py-3 text-gray-700">
-                        <span class="font-semibold text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
-                            {{ $contract->type }}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-gray-600">
-                        {{ $contract->start_date?->format('d/m/Y') ?? '—' }}
-                    </td>
-                    <td class="px-4 py-3 text-gray-600">
-                        @if($contract->end_date)
-                            {{ $contract->end_date->format('d/m/Y') }}
-                            @if($contract->status === 'actif' && $contract->end_date->isPast())
-                                <span class="ml-1 text-xs text-amber-600 font-medium">(dépassé)</span>
-                            @elseif($contract->status === 'actif' && $contract->end_date->diffInDays(now()) <= 30)
-                                <span class="ml-1 text-xs text-orange-600 font-medium">(bientôt)</span>
-                            @endif
-                        @else
-                            <span class="text-gray-400">Indéterminée</span>
-                        @endif
-                    </td>
-                    <td class="px-4 py-3 text-right font-mono font-medium text-gray-900">
-                        {{ number_format($contract->base_salary, 0, ',', ' ') }} F
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
-                            {{ $badgeLabel }}
-                        </span>
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                        <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
-                           class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">
-                            Voir employé
-                        </a>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="8" class="px-4 py-10 text-center text-gray-400 italic">
-                        Aucun contrat trouvé avec ces critères.
-                    </td>
-                </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    {{-- Pagination --}}
-    @if($contracts->hasPages())
-    <div class="px-4 py-3 border-t border-gray-200">
-        {{ $contracts->links() }}
+        {{ session('success') }}
     </div>
     @endif
+
+    {{-- ── Stats ───────────────────────────────────────────────────────────────── --}}
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        @foreach([
+            ['label' => 'Total',    'value' => $stats['total'],    'color' => 'text-gray-900'],
+            ['label' => 'Actifs',   'value' => $stats['actifs'],   'color' => 'text-emerald-600'],
+            ['label' => 'Terminés', 'value' => $stats['termines'], 'color' => 'text-amber-600'],
+            ['label' => 'Résiliés', 'value' => $stats['resilies'], 'color' => 'text-red-600'],
+        ] as $s)
+        <div class="bg-white rounded-xl border border-gray-200 p-4">
+            <div class="text-xs text-gray-500 mb-1">{{ $s['label'] }}</div>
+            <div class="text-2xl font-bold {{ $s['color'] }}">{{ $s['value'] }}</div>
+        </div>
+        @endforeach
+    </div>
+
+    {{-- ── Filtres ─────────────────────────────────────────────────────────────── --}}
+    <form method="GET" id="filter-form" class="flex flex-wrap gap-3 bg-white border border-gray-200 rounded-xl p-4">
+        {{-- Recherche --}}
+        <div class="relative flex-1 min-w-[200px]">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+            </svg>
+            <input type="text" name="search" value="{{ request('search') }}"
+                   placeholder="Nom, prénom ou matricule…"
+                   class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        {{-- Statut --}}
+        <select name="status" onchange="document.getElementById('filter-form').submit()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">Tous statuts</option>
+            @foreach($statusOptions as $v => $l)
+                <option value="{{ $v }}" @selected(request('status') === $v)>{{ $l }}</option>
+            @endforeach
+        </select>
+
+        {{-- Type --}}
+        <select name="type" onchange="document.getElementById('filter-form').submit()"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">Tous types</option>
+            @foreach($typeOptions as $v => $l)
+                <option value="{{ $v }}" @selected(request('type') === $v)>{{ $l }}</option>
+            @endforeach
+        </select>
+
+        <button type="submit"
+                class="px-4 py-2 bg-gray-800 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition-colors">
+            Filtrer
+        </button>
+
+        @if(request()->hasAny(['search','status','type']))
+        <a href="{{ route('rh.contrats.index') }}"
+           class="px-4 py-2 text-gray-500 rounded-lg text-sm hover:bg-gray-100 flex items-center gap-1 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Réinitialiser
+        </a>
+        @endif
+    </form>
+
+    {{-- ── Tableau ─────────────────────────────────────────────────────────────── --}}
+    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Matricule</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Employé</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Début</th>
+                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Fin</th>
+                        <th class="px-4 py-3 text-right font-semibold text-gray-700">Salaire base</th>
+                        <th class="px-4 py-3 text-center font-semibold text-gray-700">Statut</th>
+                        <th class="px-4 py-3 text-center font-semibold text-gray-700">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @forelse($contracts as $contract)
+                    @php
+                        $badgeClass = match($contract->status) {
+                            'actif'   => 'bg-emerald-100 text-emerald-800',
+                            'termine' => 'bg-amber-100 text-amber-800',
+                            'resilie' => 'bg-red-100 text-red-800',
+                            default   => 'bg-gray-100 text-gray-800',
+                        };
+                        $badgeLabel = match($contract->status) {
+                            'actif'   => 'Actif',
+                            'termine' => 'Terminé',
+                            'resilie' => 'Résilié',
+                            default   => ucfirst($contract->status),
+                        };
+                    @endphp
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 font-mono text-xs text-gray-500">
+                            {{ $contract->employee?->matricule ?? '—' }}
+                        </td>
+                        <td class="px-4 py-3">
+                            <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
+                               class="font-medium text-gray-900 hover:text-indigo-600 transition-colors">
+                                {{ $contract->employee?->full_name ?? '—' }}
+                            </a>
+                            @if($contract->employee?->department)
+                            <div class="text-xs text-gray-400">{{ $contract->employee->department }}</div>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs px-2 py-0.5 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                                {{ $contract->type }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 tabular-nums">
+                            {{ $contract->start_date?->format('d/m/Y') ?? '—' }}
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 tabular-nums">
+                            @if($contract->end_date)
+                                {{ $contract->end_date->format('d/m/Y') }}
+                                @if($contract->status === 'actif' && $contract->end_date->isPast())
+                                    <span class="ml-1 text-xs text-red-600 font-medium">(dépassé)</span>
+                                @elseif($contract->status === 'actif' && $contract->end_date->diffInDays(now()) <= 30)
+                                    <span class="ml-1 text-xs text-orange-500 font-medium">(bientôt)</span>
+                                @endif
+                            @else
+                                <span class="text-gray-400">Indéterminée</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-3 text-right font-mono font-medium text-gray-900 tabular-nums">
+                            {{ number_format($contract->base_salary, 0, ',', ' ') }} F
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
+                                {{ $badgeLabel }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-center gap-2">
+                                {{-- Voir employé --}}
+                                <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
+                                   class="p-1 rounded text-indigo-500 hover:bg-indigo-50 transition-colors"
+                                   title="Voir l'employé">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                </a>
+                                @if($contract->status === 'actif')
+                                {{-- Terminer --}}
+                                <form method="POST" action="{{ route('rh.contrats.terminate', $contract) }}"
+                                      onsubmit="return confirm('Terminer ce contrat ?')" class="inline">
+                                    @csrf @method('PATCH')
+                                    <button type="submit"
+                                            class="p-1 rounded text-amber-500 hover:bg-amber-50 transition-colors"
+                                            title="Terminer le contrat">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                                {{-- Résilier --}}
+                                <form method="POST" action="{{ route('rh.contrats.resilier', $contract) }}"
+                                      onsubmit="return confirm('Résilier ce contrat ? Cette action est irréversible.')" class="inline">
+                                    @csrf @method('PATCH')
+                                    <button type="submit"
+                                            class="p-1 rounded text-red-500 hover:bg-red-50 transition-colors"
+                                            title="Résilier le contrat">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                    </button>
+                                </form>
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="8" class="px-4 py-12 text-center">
+                            <div class="flex flex-col items-center gap-2 text-gray-400">
+                                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                <span class="text-sm italic">Aucun contrat trouvé avec ces critères.</span>
+                            </div>
+                        </td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        {{-- Pagination --}}
+        @if($contracts->hasPages())
+        <div class="px-4 py-3 border-t border-gray-200">
+            {{ $contracts->links() }}
+        </div>
+        @endif
+    </div>
+
+    {{-- ── Modal Nouveau contrat ────────────────────────────────────────────────── --}}
+    <div x-show="modalOpen"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="modalOpen = false"
+         style="display:none">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg"
+             @click.stop
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100">
+
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Nouveau contrat</h2>
+                <button @click="modalOpen = false" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <form method="POST" action="{{ route('rh.contrats.store') }}" class="px-6 py-5 space-y-4">
+                @csrf
+
+                {{-- Employé --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Employé <span class="text-red-500">*</span>
+                    </label>
+                    <select name="employee_id" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">— Sélectionner un employé —</option>
+                        @foreach($employees as $emp)
+                        <option value="{{ $emp->id }}">
+                            {{ $emp->last_name }} {{ $emp->first_name }} ({{ $emp->matricule }})
+                        </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Type + Salaire --}}
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Type <span class="text-red-500">*</span>
+                        </label>
+                        <select name="type" required
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                            <option value="CDI">CDI</option>
+                            <option value="CDD">CDD</option>
+                            <option value="stage">Stage</option>
+                            <option value="consultant">Consultant</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Salaire base (FCFA) <span class="text-red-500">*</span>
+                        </label>
+                        <input type="number" name="base_salary" min="0" required placeholder="Ex. 150 000"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+
+                {{-- Dates --}}
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Date de début <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" name="start_date" required value="{{ date('Y-m-d') }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Date de fin <span class="text-gray-400 font-normal text-xs">(CDD uniquement)</span>
+                        </label>
+                        <input type="date" name="end_date"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+
+                {{-- Notes --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea name="notes" rows="2" placeholder="Remarques, conditions particulières…"
+                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 resize-none"></textarea>
+                </div>
+
+                <p class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    ⚠️ Si l'employé a déjà un contrat actif, il sera automatiquement clôturé (statut : Terminé).
+                </p>
+
+                <div class="flex justify-end gap-3 pt-1">
+                    <button type="button" @click="modalOpen = false"
+                            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+                        Annuler
+                    </button>
+                    <button type="submit"
+                            class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                        Enregistrer
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </div>
 @endsection
