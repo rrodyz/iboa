@@ -381,6 +381,14 @@ class EmployeeController extends Controller
         return back()->with('success', 'Contrat résilié.');
     }
 
+    public function destroyContract(\App\Models\EmployeeContract $contract)
+    {
+        // Seuls les contrats terminés ou résiliés peuvent être supprimés
+        abort_if($contract->status === 'actif', 403, 'Un contrat actif ne peut pas être supprimé.');
+        $contract->delete();
+        return back()->with('success', 'Contrat supprimé.');
+    }
+
     public function exportContracts(Request $request)
     {
         $company = \App\Models\Company::firstOrFail();

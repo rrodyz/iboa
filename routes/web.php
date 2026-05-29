@@ -1003,6 +1003,7 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::post('/contrats/store',             [\App\Http\Controllers\HR\EmployeeController::class, 'storeContractDirect'])->name('contrats.store');
         Route::patch('/contrats/{contract}/terminate', [\App\Http\Controllers\HR\EmployeeController::class, 'terminateContract'])->name('contrats.terminate');
         Route::patch('/contrats/{contract}/resilier',  [\App\Http\Controllers\HR\EmployeeController::class, 'resilierContract'])->name('contrats.resilier');
+        Route::delete('/contrats/{contract}',          [\App\Http\Controllers\HR\EmployeeController::class, 'destroyContract'])->name('contrats.destroy');
     });
 
     // ── Présences & absences ──────────────────────────────────────────────────
