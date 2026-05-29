@@ -24,7 +24,7 @@ class PayrollRunController extends Controller
 
     public function index(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $filters = $request->only(['year', 'status']);
 
         $query = PayrollRun::with(['createdBy', 'validatedBy'])
@@ -62,7 +62,7 @@ class PayrollRunController extends Controller
 
     public function create()
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $existing = PayrollRun::where('company_id', $company->id)
             ->orderByDesc('period_year')->orderByDesc('period_month')
             ->first();
@@ -160,8 +160,8 @@ class PayrollRunController extends Controller
     {
         try {
             $run->load('company');
-            $settings = Company::first()?->documentSetting;
-            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+            $settings = currentCompany()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? currentCompany()->id);
 
             // [P2] Soldes de congés de l'employé pour l'année du bulletin
             $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)
@@ -188,7 +188,7 @@ class PayrollRunController extends Controller
     {
         try {
             $run->load('items');
-            $settings = Company::first()?->documentSetting;
+            $settings = currentCompany()?->documentSetting;
 
             $pdf = Pdf::loadView('rh.pdf.recap', compact('run', 'settings'))
                 ->setPaper('a4', 'landscape');
@@ -208,8 +208,8 @@ class PayrollRunController extends Controller
     {
         try {
             $run->load('items');
-            $settings = Company::first()?->documentSetting;
-            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+            $settings = currentCompany()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? currentCompany()->id);
 
             $pdf = Pdf::loadView('rh.pdf.cnss', compact('run', 'settings', 'payroll'))
                 ->setPaper('a4', 'portrait');
@@ -229,8 +229,8 @@ class PayrollRunController extends Controller
     {
         try {
             $run->load('items');
-            $settings = Company::first()?->documentSetting;
-            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+            $settings = currentCompany()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? currentCompany()->id);
 
             $pdf = Pdf::loadView('rh.pdf.iuts', compact('run', 'settings', 'payroll'))
                 ->setPaper('a4', 'landscape');
@@ -248,7 +248,7 @@ class PayrollRunController extends Controller
      */
     public function livrePaiePdf(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $year    = $request->integer('year', now()->year);
         $month   = $request->integer('month', 0); // 0 = tous les mois de l'année
 
@@ -264,7 +264,7 @@ class PayrollRunController extends Controller
 
         $runs = $query->get();
 
-        $settings = Company::first()?->documentSetting;
+        $settings = currentCompany()?->documentSetting;
         $payroll  = PayrollSetting::forCompany($company->id);
 
         // Titre et nom de fichier adaptés selon le filtre
@@ -354,7 +354,7 @@ class PayrollRunController extends Controller
      */
     public function avancesPdf(PayrollRun $run)
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $settings = $company->documentSetting;
 
         $avances = \App\Models\SalaryAdvance::with('employee')
@@ -373,7 +373,7 @@ class PayrollRunController extends Controller
      */
     public function pretsPdf(PayrollRun $run)
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $settings = $company->documentSetting;
 
         $payments = \App\Models\EmployeeLoanPayment::with(['loan.employee'])
@@ -392,7 +392,7 @@ class PayrollRunController extends Controller
      */
     public function variablesIndex(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $runs = PayrollRun::where('company_id', $company->id)
             ->withCount('items')
@@ -409,7 +409,7 @@ class PayrollRunController extends Controller
      */
     public function etats(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $runs = PayrollRun::where('company_id', $company->id)
             ->orderByDesc('period_year')
@@ -425,7 +425,7 @@ class PayrollRunController extends Controller
      */
     public function comptabilisation(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $runs = PayrollRun::with(['createdBy', 'validatedBy'])
             ->where('company_id', $company->id)

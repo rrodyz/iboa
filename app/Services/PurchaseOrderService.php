@@ -36,7 +36,7 @@ class PurchaseOrderService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']     = $company->id;
             $data['fiscal_year_id'] = $company->current_fiscal_year_id;
@@ -129,7 +129,7 @@ class PurchaseOrderService
     {
         return DB::transaction(function () use ($po) {
             $po->load('items');
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $new = PurchaseOrder::create([
                 'company_id'      => $company->id,
@@ -178,7 +178,7 @@ class PurchaseOrderService
     public function createReception(PurchaseOrder $po): Reception
     {
         return DB::transaction(function () use ($po) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             // [FIX-MAJEUR] Use DocumentSequenceService for collision-free numbering
             $receptionNumber = $this->sequenceService->nextNumber($company, 'reception');
@@ -236,7 +236,7 @@ class PurchaseOrderService
                 throw new \RuntimeException('Une facture fournisseur a déjà été créée pour ce bon de commande ('.$po->number.').');
             }
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $invoiceNumber = $this->sequenceService->nextNumber($company, 'facture_fournisseur');
 

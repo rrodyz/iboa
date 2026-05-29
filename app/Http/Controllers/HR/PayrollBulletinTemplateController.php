@@ -14,7 +14,7 @@ class PayrollBulletinTemplateController extends Controller
 {
     public function index(): View
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $templates = PayrollBulletinTemplate::where('company_id', $company->id)
             ->withCount('items')
             ->orderByDesc('is_default')
@@ -29,7 +29,7 @@ class PayrollBulletinTemplateController extends Controller
 
     public function create(): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $template = new PayrollBulletinTemplate([
             'show_logo'            => true,
             'show_company_address' => true,
@@ -51,7 +51,7 @@ class PayrollBulletinTemplateController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
 
         $data['company_id'] = $company->id;
@@ -74,7 +74,7 @@ class PayrollBulletinTemplateController extends Controller
 
         return view('rh.parametrage.modeles-bulletins.edit', [
             'template' => $modele,
-            'company'  => Company::firstOrFail(),
+            'company'  => currentCompany(),
         ]);
     }
 
@@ -154,6 +154,6 @@ class PayrollBulletinTemplateController extends Controller
 
     private function authorizeCompany(PayrollBulletinTemplate $template): void
     {
-        abort_if($template->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($template->company_id !== currentCompany()->id, 403);
     }
 }

@@ -12,7 +12,7 @@ class SalaryAdvanceController extends Controller
 {
     public function index(Request $request)
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $filters  = $request->only(['employee_id', 'status']);
 
         $query = SalaryAdvance::with(['employee', 'approvedBy', 'recoveredIn'])
@@ -35,7 +35,7 @@ class SalaryAdvanceController extends Controller
 
     public function store(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $request->validate([
             'employee_id'  => ['required', 'exists:employees,id'],
             'amount'       => ['required', 'integer', 'min:1000'],

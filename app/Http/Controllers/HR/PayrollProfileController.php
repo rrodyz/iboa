@@ -26,7 +26,7 @@ class PayrollProfileController extends Controller
 
     public function index(): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $profiles = PayrollProfile::where('company_id', $company->id)
             ->with(['plan', 'contracts'])
             ->withCount(['rubrics', 'contracts'])
@@ -43,7 +43,7 @@ class PayrollProfileController extends Controller
 
     public function create(): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $profile = new PayrollProfile();
         $plans   = PayrollPlan::where('company_id', $company->id)
                               ->where('is_active', true)
@@ -59,7 +59,7 @@ class PayrollProfileController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
 
         $data['company_id'] = $company->id;
@@ -112,7 +112,7 @@ class PayrollProfileController extends Controller
     public function edit(PayrollProfile $profil): View
     {
         $this->authorizeCompany($profil);
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $plans   = PayrollPlan::where('company_id', $company->id)
                               ->where('is_active', true)
                               ->orderBy('libelle')->get();
@@ -248,6 +248,6 @@ class PayrollProfileController extends Controller
 
     private function authorizeCompany(PayrollProfile $profil): void
     {
-        abort_if($profil->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($profil->company_id !== currentCompany()->id, 403);
     }
 }

@@ -40,7 +40,7 @@ class InvoiceService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']    = $company->id;
             $data['fiscal_year_id'] = $company->current_fiscal_year_id;
@@ -95,7 +95,7 @@ class InvoiceService
                 );
             }
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             // [SEC-PHASE1] Échéance auto : payment_term du client si défini, sinon +30 jours.
             $issuedAt = now();
@@ -193,7 +193,7 @@ class InvoiceService
                 }
             }
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             // Calculate totals from BL items using order item prices
             $subtotal = 0;
@@ -444,7 +444,7 @@ class InvoiceService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             [$subtotal, $taxTotal] = $this->calculateTotals($items);
             $total = $subtotal + $taxTotal;

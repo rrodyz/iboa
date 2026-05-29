@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanySwitchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ClientController;
@@ -28,6 +29,9 @@ Route::get('/verifier/bon-livraison/{number}', \App\Http\Controllers\Sales\Deliv
     ->name('delivery-note.verify');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    // ── Changement de société actif (topbar switcher) ───────────────────────────
+    Route::post('/company/{company}/switch', CompanySwitchController::class)->name('company.switch');
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

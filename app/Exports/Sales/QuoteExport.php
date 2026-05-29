@@ -88,7 +88,7 @@ class QuoteExport implements FromArray, WithTitle, WithColumnWidths, WithEvents
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $cols    = 11;
 
         // ── Document header ──────────────────────────────────────────────────

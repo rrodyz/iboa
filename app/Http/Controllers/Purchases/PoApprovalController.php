@@ -90,7 +90,7 @@ class PoApprovalController extends Controller
             'required_role'       => ['nullable','string','max:100'],
             'required_permission' => ['nullable','string','max:100'],
         ]);
-        $data['company_id'] = Company::firstOrFail()->id;
+        $data['company_id'] = currentCompany()->id;
         $data['is_active']  = true;
         PoApprovalThreshold::create($data);
         return back()->with('success', 'Règle de seuil enregistrée.');

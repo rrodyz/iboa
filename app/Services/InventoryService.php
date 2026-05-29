@@ -32,7 +32,7 @@ class InventoryService
             $data['type']       = $data['type'] ?? 'complet';
 
             // Attach company and generate unique inventory number via sequence service
-            $company            = Company::first();
+            $company            = currentCompany();
             $data['company_id'] = $company?->id ?? 1;
             $data['number']     = $company
                 ? $this->sequenceService->nextNumber($company, 'inventaire')

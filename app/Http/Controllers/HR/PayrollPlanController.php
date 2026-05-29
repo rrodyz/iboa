@@ -14,7 +14,7 @@ class PayrollPlanController extends Controller
 {
     public function index(Request $request): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $plans   = PayrollPlan::where('company_id', $company->id)
             ->withCount('rubrics')
             ->orderByDesc('is_default')
@@ -26,14 +26,14 @@ class PayrollPlanController extends Controller
 
     public function create(): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $plan    = new PayrollPlan();
         return view('rh.parametrage.plans.create', compact('plan', 'company'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $request->validate([
             'code'        => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9\-]+$/'],
             'libelle'     => ['required', 'string', 'max:150'],
@@ -141,7 +141,7 @@ class PayrollPlanController extends Controller
 
     private function authorizeCompany(PayrollPlan $plan): void
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($plan->company_id !== $company->id, 403);
     }
 }

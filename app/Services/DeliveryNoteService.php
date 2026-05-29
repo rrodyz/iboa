@@ -37,7 +37,7 @@ class DeliveryNoteService
     public function createFromOrder(Order $order): DeliveryNote
     {
         return DB::transaction(function () use ($order) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $dn = DeliveryNote::create([
                 'company_id'       => $company->id,

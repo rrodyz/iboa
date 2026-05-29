@@ -43,7 +43,7 @@ class BalanceSupplierExport implements FromArray, WithTitle, WithColumnWidths, W
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $this->push([$this->companyNameCell($company), null, null, 'BALANCE FOURNISSEURS', null, 'Au ' . now()->format('d/m/Y')], self::T_DOC_HEADER);
         $periodText = 'Solde comptable par fournisseur';
         $this->push([$this->companyLegalLine($company, $periodText), null, null, null, null, 'Édition du ' . now()->format('d/m/Y à H\hi')], self::T_PERIOD);

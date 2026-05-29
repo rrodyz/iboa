@@ -52,7 +52,7 @@ class JournalTypeController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data = $request->validate([
             'code' => [
                 'required', 'string', 'max:10',

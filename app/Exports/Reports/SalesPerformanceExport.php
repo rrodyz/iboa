@@ -75,7 +75,7 @@ class SalesPerformanceExport implements FromArray, WithTitle, WithColumnWidths, 
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $totalNbFact   = (int) $this->perUser->sum('nb_factures');
         $totalNbClients = (int) $this->perUser->sum('nb_clients');

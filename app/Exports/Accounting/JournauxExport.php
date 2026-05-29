@@ -79,7 +79,7 @@ class JournauxExport implements FromArray, WithTitle, WithColumnWidths, WithEven
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $cols    = 8;
 
         // ── Document header ──────────────────────────────────────────────────

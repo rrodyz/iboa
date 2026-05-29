@@ -41,7 +41,7 @@ class BalanceAgeeSupplierExport implements FromArray, WithTitle, WithColumnWidth
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $today   = Carbon::today();
 
         $this->push([$this->companyNameCell($company), null, null, 'BALANCE ÂGÉE FOURNISSEURS', null, null, null, 'Au ' . $today->format('d/m/Y')], self::T_DOC_HEADER);

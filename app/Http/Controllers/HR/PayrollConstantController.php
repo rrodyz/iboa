@@ -26,7 +26,7 @@ class PayrollConstantController extends Controller
 
     public function index(Request $request): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $groupe  = $request->input('groupe');
 
         $constants = PayrollConstant::where('company_id', $company->id)
@@ -49,7 +49,7 @@ class PayrollConstantController extends Controller
 
     public function create(): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $constant = new PayrollConstant();
         return view('rh.parametrage.constantes.create', [
             'constant'   => $constant,
@@ -61,7 +61,7 @@ class PayrollConstantController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
 
         $data['company_id'] = $company->id;
@@ -81,7 +81,7 @@ class PayrollConstantController extends Controller
         $this->authorizeCompany($constant);
         return view('rh.parametrage.constantes.edit', [
             'constant'   => $constant,
-            'company'    => Company::firstOrFail(),
+            'company'    => currentCompany(),
             'groupes'    => $this->groupes,
             'valueTypes' => $this->valueTypes,
         ]);
@@ -112,7 +112,7 @@ class PayrollConstantController extends Controller
 
     public function history(string $code): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $history = PayrollConstant::where('company_id', $company->id)
             ->where('code', $code)
             ->orderByDesc('valid_from')
@@ -141,6 +141,6 @@ class PayrollConstantController extends Controller
 
     private function authorizeCompany(PayrollConstant $constant): void
     {
-        abort_if($constant->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($constant->company_id !== currentCompany()->id, 403);
     }
 }

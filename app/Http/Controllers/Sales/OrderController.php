@@ -27,7 +27,7 @@ class OrderController extends Controller
         $orders  = $this->service->search($filters, 15);
 
         // ── Totaux agrégés sur l'ensemble des filtres ──
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $totalsQuery = Order::where('company_id', $company->id)
             ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
             ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))

@@ -42,7 +42,7 @@ class FacturesImpayeesSupplierExport implements FromArray, WithTitle, WithColumn
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $today   = Carbon::today();
 
         $this->push([$this->companyNameCell($company), null, null, 'FACTURES FOURNISSEURS IMPAYÉES', null, null, null, 'Au ' . $today->format('d/m/Y')], self::T_DOC_HEADER);

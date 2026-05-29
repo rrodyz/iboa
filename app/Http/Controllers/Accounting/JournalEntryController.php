@@ -33,7 +33,7 @@ class JournalEntryController extends Controller
     public function exportPdf(Request $request): mixed
     {
         $filters = $request->only(['journal_type_id', 'status', 'date_from', 'date_to', 'search']);
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $query = \App\Models\JournalEntry::with(['journalType'])
             ->where('company_id', $company->id)

@@ -19,7 +19,7 @@ class EmployeeLoanController extends Controller
 {
     public function index(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $query = EmployeeLoan::with(['employee.department'])
             ->where('company_id', $company->id)
@@ -44,7 +44,7 @@ class EmployeeLoanController extends Controller
 
     public function show(EmployeeLoan $pret)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($pret->company_id !== $company->id, 403);
 
         $pret->load(['employee.department', 'payments.createdBy', 'approvedBy', 'createdBy']);
@@ -54,7 +54,7 @@ class EmployeeLoanController extends Controller
 
     public function store(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $validated = $request->validate([
             'employee_id'       => ['required', 'exists:employees,id'],
@@ -109,7 +109,7 @@ class EmployeeLoanController extends Controller
     /** Approuver un prêt */
     public function approve(EmployeeLoan $pret)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($pret->company_id !== $company->id, 403);
 
         $pret->update([
@@ -123,7 +123,7 @@ class EmployeeLoanController extends Controller
     /** Annuler un prêt */
     public function cancel(EmployeeLoan $pret)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($pret->company_id !== $company->id, 403);
 
         if ($pret->status !== 'actif') {
@@ -138,7 +138,7 @@ class EmployeeLoanController extends Controller
     /** Enregistrer un remboursement mensuel */
     public function recordPayment(Request $request, EmployeeLoan $pret)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($pret->company_id !== $company->id, 403);
 
         if ($pret->status !== 'actif') {

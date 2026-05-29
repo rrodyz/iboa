@@ -32,7 +32,7 @@ class DashboardController extends Controller
 
     public function index(Request $request): View
     {
-        $company    = Company::firstOrFail();
+        $company    = currentCompany();
         $fiscalYear = FiscalYear::where('is_current', true)->first();
 
         $kpis        = $this->buildKpis($company, $fiscalYear);

@@ -107,7 +107,7 @@ class GrandLivreSingleSheet implements FromArray, WithTitle, WithColumnWidths, W
 
     private function build(): void
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $currency = 'FCFA';
         $accounts = Account::whereIn('id', $this->accountIds)
             ->orderBy('code')

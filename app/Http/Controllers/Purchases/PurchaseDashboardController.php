@@ -90,7 +90,7 @@ class PurchaseDashboardController extends Controller
 
             $created = [];
             foreach ($bySupplier as $supplierId => $lines) {
-                $company = \App\Models\Company::first();
+                $company = \App\Models\currentCompany();
                 $supplier = Supplier::findOrFail($supplierId);
 
                 $subtotal = 0;

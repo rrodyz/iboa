@@ -32,7 +32,7 @@ class PurchaseRequestService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']  = $company->id;
             $data['number']      = $this->sequenceService->nextNumber($company, 'demande_achat');
@@ -132,7 +132,7 @@ class PurchaseRequestService
         }
 
         return DB::transaction(function () use ($request, $supplierId) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
             $request->loadMissing('items');
 
             $po = PurchaseOrder::create([

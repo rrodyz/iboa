@@ -59,7 +59,7 @@ class ReleveSupplierExport implements FromArray, WithTitle, WithColumnWidths, Wi
 
     private function build(): void
     {
-        $company  = Company::first();
+        $company  = currentCompany();
         $supplier = Supplier::find($this->supplierId);
 
         $this->push([$this->companyNameCell($company), null, null, 'RELEVÉ DE COMPTE FOURNISSEUR', null, null,

@@ -90,7 +90,7 @@ class FinancialReportController extends Controller
         $netResult = $this->computeNetResult($selectedFy);
         [$actif, $passif, $totalActif, $totalPassif] = $this->buildBilanSections($accounts, $netResult);
 
-        $company   = Company::first();
+        $company   = currentCompany();
         $printedAt = now()->format('d/m/Y à H:i');
 
         $pdf = Pdf::loadView(
@@ -170,7 +170,7 @@ class FinancialReportController extends Controller
         $accounts->each(fn ($a) => $a->net = abs($a->debit_balance - $a->credit_balance));
         [$charges, $produits, $totalCharges, $totalProduits, $resultat] = $this->buildCdrSections($accounts);
 
-        $company   = Company::first();
+        $company   = currentCompany();
         $printedAt = now()->format('d/m/Y à H:i');
 
         $pdf = Pdf::loadView(
@@ -333,7 +333,7 @@ class FinancialReportController extends Controller
      */
     public function situationComptable(): View
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         // Cash (class 5)
         $cashAccounts = Account::where('is_detail', true)

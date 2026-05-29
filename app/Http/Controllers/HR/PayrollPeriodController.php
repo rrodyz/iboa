@@ -22,7 +22,7 @@ class PayrollPeriodController extends Controller
      */
     public function index(): View
     {
-        $company    = Company::firstOrFail();
+        $company    = currentCompany();
         $byYear     = $this->service->summaryByYear($company->id);
         $openCount  = PayrollPeriod::forCompany($company->id)->open()->count();
         $lockedCount= PayrollPeriod::forCompany($company->id)->locked()->count();
@@ -45,7 +45,7 @@ class PayrollPeriodController extends Controller
             'month' => ['required', 'date_format:Y-m'],
         ]);
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $date    = Carbon::createFromFormat('Y-m', $request->month)->startOfMonth();
 
         $existing = PayrollPeriod::where('company_id', $company->id)
@@ -194,6 +194,6 @@ class PayrollPeriodController extends Controller
 
     private function authorizeCompany(PayrollPeriod $period): void
     {
-        abort_if($period->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($period->company_id !== currentCompany()->id, 403);
     }
 }

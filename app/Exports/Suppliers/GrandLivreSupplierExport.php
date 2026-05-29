@@ -42,7 +42,7 @@ class GrandLivreSupplierExport implements FromArray, WithTitle, WithColumnWidths
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $this->push([$this->companyNameCell($company), null, null, 'GRAND LIVRE FOURNISSEURS (comptes 401)', null, null, null, 'Période : ' . $this->fmt($this->dateFrom) . ' → ' . $this->fmt($this->dateTo)], self::T_DOC_HEADER);
         $periodText = 'Écritures validées — comptes fournisseurs';
         $this->push([$this->companyLegalLine($company, $periodText), null, null, null, null, null, null, 'Édition du ' . now()->format('d/m/Y à H\hi')], self::T_PERIOD);

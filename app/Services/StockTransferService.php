@@ -38,7 +38,7 @@ class StockTransferService
     public function create(array $data): StockTransfer
     {
         return DB::transaction(function () use ($data) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             if (($data['from_warehouse_id'] ?? null) === ($data['to_warehouse_id'] ?? null)) {
                 throw new \RuntimeException('Le dépôt source et le dépôt destination ne peuvent pas être identiques.');

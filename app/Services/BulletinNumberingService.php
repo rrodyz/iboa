@@ -32,7 +32,7 @@ class BulletinNumberingService
      */
     public function assign(PayrollItem $item, Carbon $period, ?PayrollNumbering $rule = null): string
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $rule ??= PayrollNumbering::where('company_id', $company->id)
                                   ->where('is_active', true)
@@ -79,7 +79,7 @@ class BulletinNumberingService
      */
     public function assignTemplate(PayrollItem $item, ?PayrollBulletinTemplate $template = null): void
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $template ??= PayrollBulletinTemplate::where('company_id', $company->id)
                                               ->where('is_active', true)

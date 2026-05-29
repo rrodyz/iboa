@@ -28,7 +28,7 @@ class PurchaseOrderController extends Controller
         $suppliers = Supplier::active()->orderBy('name')->get(['id', 'name']);
 
         // ── Totaux agrégés sur l'ensemble des filtres ──
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $totalsQuery = PurchaseOrder::where('company_id', $company->id)
             ->when(!empty($filters['supplier_id']), fn($q) => $q->where('supplier_id', $filters['supplier_id']))
             ->when(!empty($filters['status']),      fn($q) => $q->where('status', $filters['status']))
@@ -138,7 +138,7 @@ class PurchaseOrderController extends Controller
         $this->authorize('view', $commande);
         try {
             $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
-            $settings      = Company::first()?->documentSetting;
+            $settings      = currentCompany()?->documentSetting;
 
             $pdf = Pdf::loadView('achats.pdf.purchase-order', compact('purchaseOrder', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');

@@ -40,7 +40,7 @@ class OrderService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']    = $company->id;
             $data['fiscal_year_id'] = $company->current_fiscal_year_id;

@@ -35,7 +35,7 @@ class CreditNoteValidatedMail extends Mailable
     public function attachments(): array
     {
         $creditNote = $this->creditNote;
-        $settings   = Company::first()?->documentSetting;
+        $settings   = currentCompany()?->documentSetting;
         $pdf        = Pdf::loadView('ventes.pdf.credit-note', compact('creditNote', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
         $filename = 'Avoir_' . str_replace(['/', '\\', ' '], '-', $creditNote->number) . '.pdf';

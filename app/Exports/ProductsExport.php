@@ -79,7 +79,7 @@ class ProductsExport implements FromArray, WithTitle, WithColumnWidths, WithEven
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $products = Product::with(['family', 'brand', 'unit', 'taxRate'])
             ->where('is_active', true)

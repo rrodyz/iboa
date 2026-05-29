@@ -77,7 +77,7 @@ class StockMovementsExport implements FromArray, WithTitle, WithColumnWidths, Wi
 
     private function build(): void
     {
-        $company  = Company::first();
+        $company  = currentCompany();
         $dateFrom = $this->filters['date_from'] ?? null;
         $dateTo   = $this->filters['date_to']   ?? null;
 

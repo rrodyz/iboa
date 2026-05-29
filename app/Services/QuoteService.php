@@ -35,7 +35,7 @@ class QuoteService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']   = $company->id;
             $data['fiscal_year_id'] = $company->current_fiscal_year_id;
@@ -91,7 +91,7 @@ class QuoteService
     {
         return DB::transaction(function () use ($quote) {
             $quote->load('items');
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $new = Quote::create([
                 'company_id'             => $company->id,
@@ -236,7 +236,7 @@ class QuoteService
         }
 
         return DB::transaction(function () use ($quote) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
             $orderNumber = $this->sequenceService->nextNumber($company, 'commande');
 
             // [FIX-MAJEUR] Propagate all financial and contractual fields from quote

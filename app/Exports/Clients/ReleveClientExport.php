@@ -59,7 +59,7 @@ class ReleveClientExport implements FromArray, WithTitle, WithColumnWidths, With
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $client  = Client::find($this->clientId);
 
         // ── Header ──────────────────────────────────────────────────────────

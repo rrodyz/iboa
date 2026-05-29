@@ -15,7 +15,7 @@ class RhDashboardController extends Controller
 {
     public function index()
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         // ─── Effectifs ─────────────────────────────────────────────────────────
         $totalActif    = Employee::where('company_id', $company->id)->where('status', 'actif')->count();

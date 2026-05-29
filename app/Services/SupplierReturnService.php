@@ -34,7 +34,7 @@ class SupplierReturnService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id']  = $company->id;
             $data['number']      = $this->sequenceService->nextNumber($company, 'retour_fournisseur');

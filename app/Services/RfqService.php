@@ -27,7 +27,7 @@ class RfqService
     public function create(array $data): Rfq
     {
         return DB::transaction(function () use ($data) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $items     = $data['items']     ?? [];
             $suppliers = $data['supplier_ids'] ?? [];
@@ -285,7 +285,7 @@ class RfqService
         }
 
         return DB::transaction(function () use ($rfq, $quote) {
-            $company   = Company::firstOrFail();
+            $company   = currentCompany();
             $supplier  = $quote->rfqSupplier->supplier;
             $rfq->load('items');
             $quote->load('items.item');

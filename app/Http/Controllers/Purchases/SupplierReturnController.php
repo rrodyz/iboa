@@ -81,7 +81,7 @@ class SupplierReturnController extends Controller
     public function pdf(SupplierReturn $retoursFournisseurs): mixed
     {
         $return  = $this->service->repository->findWithDetails($retoursFournisseurs->id);
-        $company = Company::first();
+        $company = currentCompany();
 
         $pdf = Pdf::loadView('achats.pdf.supplier-return', compact('return', 'company'))
             ->setPaper('a4', 'portrait');

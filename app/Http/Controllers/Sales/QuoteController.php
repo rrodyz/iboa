@@ -31,7 +31,7 @@ class QuoteController extends Controller
         $quotes  = $this->service->search($filters, 15);
 
         // ── Totaux agrégés sur l'ensemble des filtres (pas seulement la page courante) ──
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $totalsQuery = Quote::where('company_id', $company->id)
             ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
             ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
@@ -220,7 +220,7 @@ class QuoteController extends Controller
     {
         try {
             $quote    = $this->service->repository->findWithDetails($devis->id);
-            $settings = Company::first()?->documentSetting;
+            $settings = currentCompany()?->documentSetting;
 
             $pdf = Pdf::loadView('ventes.pdf.quote', compact('quote', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');

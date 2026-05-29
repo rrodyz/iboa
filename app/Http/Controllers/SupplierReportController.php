@@ -51,7 +51,7 @@ class SupplierReportController extends Controller
         $supplierId = (int) $request->input('supplier_id');
         $dateFrom   = $request->input('date_from');
         $dateTo     = $request->input('date_to');
-        $company    = Company::first();
+        $company    = currentCompany();
         $supplier   = Supplier::find($supplierId);
         [$lines, $soldeOuv] = $this->computeReleveLines($supplier, $dateFrom, $dateTo);
         $name = $supplier ? str($supplier->name)->slug('-') : 'fournisseur';
@@ -78,7 +78,7 @@ class SupplierReportController extends Controller
     public function balanceExportPdf(Request $request)
     {
         $search = $request->input('search');
-        $company = Company::first();
+        $company = currentCompany();
         [$rows, $totals] = $this->computeBalance($search);
         return Pdf::loadView('suppliers.pdf.balance', compact('company', 'rows', 'totals', 'search'))
             ->setPaper('a4', 'landscape')->download('balance-fournisseurs-' . now()->format('Y-m-d') . '.pdf');
@@ -107,7 +107,7 @@ class SupplierReportController extends Controller
     {
         $today      = Carbon::today();
         $supplierId = $request->input('supplier_id') ? (int) $request->input('supplier_id') : null;
-        $company    = Company::first();
+        $company    = currentCompany();
         [$rows, $totals] = $this->computeBalanceAgee($today, $supplierId);
         return Pdf::loadView('suppliers.pdf.balance-agee', compact('company', 'rows', 'totals', 'today'))
             ->setPaper('a4', 'landscape')->download('balance-agee-fourn-' . now()->format('Y-m-d') . '.pdf');
@@ -139,7 +139,7 @@ class SupplierReportController extends Controller
     {
         $supplierId = $request->input('supplier_id') ? (int) $request->input('supplier_id') : null;
         $today      = Carbon::today();
-        $company    = Company::first();
+        $company    = currentCompany();
         $query      = SupplierInvoice::with('supplier')->where('remaining_amount', '>', 0)->whereNotIn('status', ['brouillon', 'annulee']);
         if ($supplierId) $query->where('supplier_id', $supplierId);
         $invoices = $query->orderBy('due_at')->get();
@@ -173,7 +173,7 @@ class SupplierReportController extends Controller
         $dateFrom    = $request->input('date_from');
         $dateTo      = $request->input('date_to');
         $search      = $request->input('search');
-        $company     = Company::first();
+        $company     = currentCompany();
         $entries     = $this->queryJournalAchats($dateFrom, $dateTo, $search);
         $totalDebit  = $entries->sum('total_debit');
         $totalCredit = $entries->sum('total_credit');
@@ -204,7 +204,7 @@ class SupplierReportController extends Controller
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $search   = $request->input('search');
-        $company  = Company::first();
+        $company  = currentCompany();
         $accounts = $this->computeGrandLivre($dateFrom, $dateTo, $search);
         return Pdf::loadView('suppliers.pdf.grand-livre', compact('company', 'accounts', 'dateFrom', 'dateTo'))
             ->setPaper('a4', 'landscape')->download('grand-livre-fourn-' . now()->format('Y-m-d') . '.pdf');

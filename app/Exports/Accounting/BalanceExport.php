@@ -72,7 +72,7 @@ class BalanceExport implements FromArray, WithTitle, WithColumnWidths, WithEvent
 
     private function build(): void
     {
-        $company  = Company::find($this->companyId) ?? Company::firstOrFail();
+        $company  = Company::find($this->companyId) ?? currentCompany();
         $currency = PayrollSetting::forCompany($company->id)->currency_code ?? 'FCFA';
         $period   = $this->periodLabel();
 

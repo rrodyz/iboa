@@ -50,7 +50,7 @@ class FecExportController extends Controller
             'fiscal_year_id' => ['required', 'integer', 'exists:fiscal_years,id'],
         ]);
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $fy      = FiscalYear::findOrFail($data['fiscal_year_id']);
 
         $entries = JournalEntry::with(['journalType', 'lines.account', 'validatedBy'])

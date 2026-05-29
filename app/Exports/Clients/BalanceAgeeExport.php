@@ -52,7 +52,7 @@ class BalanceAgeeExport implements FromArray, WithTitle, WithColumnWidths, WithE
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $today   = Carbon::today();
 
         $this->push([$this->companyNameCell($company), null, null, 'BALANCE ÂGÉE CLIENTS', null, null, null,

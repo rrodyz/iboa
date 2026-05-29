@@ -633,7 +633,7 @@ class FiscalBfService extends BaseApiService implements FiscalGatewayInterface
         $user = Auth::user();
         if (! $user) {
             // Fallback pour les appels en CLI / artisan
-            return Company::first() ?? throw new \RuntimeException('Aucune société configurée.');
+            return currentCompany() ?? throw new \RuntimeException('Aucune société configurée.');
         }
         return Company::findOrFail($user->company_id);
     }

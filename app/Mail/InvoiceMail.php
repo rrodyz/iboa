@@ -35,7 +35,7 @@ class InvoiceMail extends Mailable
     public function attachments(): array
     {
         $invoice  = $this->invoice;
-        $settings = Company::first()?->documentSetting;
+        $settings = currentCompany()?->documentSetting;
         $pdf      = Pdf::loadView('ventes.pdf.invoice', compact('invoice', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
         $filename = 'Facture_' . str_replace(['/', '\\', ' '], '-', $invoice->number) . '.pdf';

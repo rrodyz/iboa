@@ -164,7 +164,7 @@ class FiscalYearController extends Controller
         }
 
         return DB::transaction(function () use ($fiscalYear, $nextYear) {
-            $company = \App\Models\Company::firstOrFail();
+            $company = \App\Models\currentCompany();
 
             // [I-FIX-01] Compute balances from validated journal entry lines for all
             // fiscal years up to and including the year being closed. This includes

@@ -427,7 +427,7 @@ class ReportController extends Controller
             ->selectRaw("{$labelExpr} as label, {$sortExpr} as sort_key, COUNT(*) as nb, SUM(subtotal_ht) as ht, SUM(total_ttc) as ttc, SUM(paid_amount) as encaisse")
             ->groupByRaw($sortExpr !== $labelExpr ? "{$sortExpr}, {$labelExpr}" : $sortExpr)->orderByRaw($sortExpr)->get();
 
-        $company = Company::first();
+        $company = currentCompany();
         $pdf = Pdf::loadView('reports.pdf.ca', compact('company', 'serie', 'totals', 'from', 'to'))
             ->setPaper('a4', 'landscape');
 
@@ -471,7 +471,7 @@ class ReportController extends Controller
         $totalMarge = $products->sum('marge_brute');
         $tauxMoyen  = $totalCaHt > 0 ? round(($totalMarge / $totalCaHt) * 100, 1) : 0;
 
-        $company = Company::first();
+        $company = currentCompany();
         $pdf = Pdf::loadView('reports.pdf.margins', compact('company', 'products', 'totalCaHt', 'totalCout', 'totalMarge', 'tauxMoyen', 'from', 'to'))
             ->setPaper('a4', 'landscape');
 
@@ -511,7 +511,7 @@ class ReportController extends Controller
             SUM(paid_amount) as encaisse
         ')->first();
 
-        $company = Company::first();
+        $company = currentCompany();
         $pdf = Pdf::loadView('reports.pdf.sales-performance', compact('company', 'perUser', 'grandTotal', 'from', 'to'))
             ->setPaper('a4', 'landscape');
 

@@ -91,7 +91,7 @@ class ExportController extends Controller
                    ->orWhere('reference', 'like', '%'.$filters['search'].'%')
             ))
             ->get();
-        $company = Company::first();
+        $company = currentCompany();
 
         $pdf = Pdf::loadView('products.pdf.index', compact('products', 'company', 'filters'))
             ->setPaper('a4', 'landscape');
@@ -113,7 +113,7 @@ class ExportController extends Controller
             ->when(isset($filters['is_active']), fn($q) => $q->where('is_active', (bool)$filters['is_active']))
             ->when(!empty($filters['type']),     fn($q) => $q->where('type', $filters['type']))
             ->get();
-        $company = Company::first();
+        $company = currentCompany();
 
         $pdf = Pdf::loadView('clients.pdf.index', compact('clients', 'company', 'filters'))
             ->setPaper('a4', 'landscape');
@@ -134,7 +134,7 @@ class ExportController extends Controller
             ))
             ->when(isset($filters['is_active']), fn($q) => $q->where('is_active', (bool)$filters['is_active']))
             ->get();
-        $company = Company::first();
+        $company = currentCompany();
 
         $pdf = Pdf::loadView('suppliers.pdf.index', compact('suppliers', 'company', 'filters'))
             ->setPaper('a4', 'landscape');

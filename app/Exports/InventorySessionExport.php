@@ -75,7 +75,7 @@ class InventorySessionExport implements FromArray, WithTitle, WithColumnWidths, 
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $date    = now()->format('d/m/Y');
         $time    = now()->format('H\hi');
 

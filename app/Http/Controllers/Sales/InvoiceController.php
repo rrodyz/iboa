@@ -44,7 +44,7 @@ class InvoiceController extends Controller
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
 
         // ── Totaux agrégés sur l'ensemble des filtres (pas seulement la page courante) ──
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $totalsQuery = Invoice::where('company_id', $company->id)
             ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
             ->when(!empty($filters['status']),    fn($q) => $q->where('status', $filters['status']))
@@ -253,7 +253,7 @@ class InvoiceController extends Controller
             fn($v) => $v !== '' && $v !== null
         );
 
-        $company = \App\Models\Company::first();
+        $company = \App\Models\currentCompany();
 
         $invoices = Invoice::with(['client'])
             ->when(!empty($filters['client_id']), fn($q) => $q->where('client_id', $filters['client_id']))
@@ -308,7 +308,7 @@ class InvoiceController extends Controller
         try {
             $invoice  = $this->service->repository->findWithDetails($facture->id);
             $viewPath = $this->service->generatePdfPath($invoice);
-            $settings = Company::first()?->documentSetting;
+            $settings = currentCompany()?->documentSetting;
 
             $pdf = Pdf::loadView($viewPath, compact('invoice', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');

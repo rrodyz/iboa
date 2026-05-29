@@ -24,7 +24,7 @@ class WarehouseController extends Controller
     {
         $search = $request->input('search');
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $warehouses = Warehouse::withCount(['productStocks', 'stockMovements'])
             ->where('company_id', $company->id)
@@ -53,7 +53,7 @@ class WarehouseController extends Controller
     {
         $data = $request->validated();
 
-        $data['company_id'] = Company::firstOrFail()->id;
+        $data['company_id'] = currentCompany()->id;
         $data['is_default'] = $request->boolean('is_default');
         $data['is_active']  = $request->boolean('is_active', true);
 

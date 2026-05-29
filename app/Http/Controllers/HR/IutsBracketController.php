@@ -15,7 +15,7 @@ class IutsBracketController extends Controller
 {
     public function index(): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $brackets = IutsBracket::where('company_id', $company->id)
             ->orderBy('impot')->orderBy('ordre')->orderBy('tranche_min')
             ->get()
@@ -26,7 +26,7 @@ class IutsBracketController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
 
         $data['company_id'] = $company->id;
@@ -40,7 +40,7 @@ class IutsBracketController extends Controller
 
     public function update(Request $request, IutsBracket $bracket): RedirectResponse
     {
-        abort_if($bracket->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($bracket->company_id !== currentCompany()->id, 403);
         $bracket->update($this->validated($request));
         IutsBracket::clearCache($bracket->company_id);
 
@@ -49,7 +49,7 @@ class IutsBracketController extends Controller
 
     public function destroy(IutsBracket $bracket): RedirectResponse
     {
-        abort_if($bracket->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($bracket->company_id !== currentCompany()->id, 403);
         $cid = $bracket->company_id;
         $bracket->delete();
         IutsBracket::clearCache($cid);
@@ -67,7 +67,7 @@ class IutsBracketController extends Controller
             'nb_parts'          => ['required', 'numeric', 'min:1', 'max:10'],
         ]);
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $iuts    = IutsBracket::computeIuts(
             $company->id,
             (int) $request->salaire_imposable,

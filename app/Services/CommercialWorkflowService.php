@@ -171,7 +171,7 @@ class CommercialWorkflowService
      */
     public function getDashboardKpis(): array
     {
-        $companyId = Company::first()?->id;
+        $companyId = currentCompany()?->id;
 
         return [
             // Devis

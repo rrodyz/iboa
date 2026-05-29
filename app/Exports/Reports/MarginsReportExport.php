@@ -75,7 +75,7 @@ class MarginsReportExport implements FromArray, WithTitle, WithColumnWidths, Wit
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $totalCaHt    = (int) $this->products->sum('ca_ht');
         $totalCout    = (int) $this->products->sum('cout_achats');

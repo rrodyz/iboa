@@ -17,7 +17,7 @@ class PayrollNumberingController extends Controller
 {
     public function index(): View
     {
-        $company    = Company::firstOrFail();
+        $company    = currentCompany();
         $numberings = PayrollNumbering::where('company_id', $company->id)
             ->withCount('sequences')
             ->with(['sequences' => fn ($q) => $q->orderByDesc('period_key')])
@@ -33,7 +33,7 @@ class PayrollNumberingController extends Controller
 
     public function create(): View
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $numbering = new PayrollNumbering([
             'prefix'       => 'BUL',
             'separator'    => '-',
@@ -51,7 +51,7 @@ class PayrollNumberingController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
 
         $data['company_id'] = $company->id;
@@ -72,7 +72,7 @@ class PayrollNumberingController extends Controller
         $this->authorizeCompany($numerotation);
         return view('rh.parametrage.numerotation.edit', [
             'numbering' => $numerotation,
-            'company'   => Company::firstOrFail(),
+            'company'   => currentCompany(),
         ]);
     }
 
@@ -177,6 +177,6 @@ class PayrollNumberingController extends Controller
 
     private function authorizeCompany(PayrollNumbering $numbering): void
     {
-        abort_if($numbering->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($numbering->company_id !== currentCompany()->id, 403);
     }
 }

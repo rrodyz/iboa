@@ -121,10 +121,71 @@
                     {{ now()->locale('fr')->isoFormat('ddd D MMM YYYY') }}
                 </span>
 
-                {{-- Company --}}
-                <span class="hidden lg:block text-xs font-medium text-gray-600 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100">
-                    {{ optional(auth()->user()->company)->name ?? config('app.name') }}
-                </span>
+                {{-- Company Switcher --}}
+                @php
+                    $activeCompany = currentCompany();
+                    $user = auth()->user();
+                    $allCompanies = $user->hasRole('super-admin')
+                        ? \App\Models\Company::orderBy('name')->get()
+                        : collect([$activeCompany]);
+                @endphp
+                <div class="hidden lg:block relative"
+                     x-data="{ open: false }"
+                     @click.outside="open = false">
+
+                    {{-- Pill / trigger --}}
+                    <button @click="open = !open"
+                            type="button"
+                            class="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-200 transition-colors focus:outline-none"
+                            title="Changer de société">
+                        <svg class="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                        <span class="max-w-[140px] truncate">{{ $activeCompany->name }}</span>
+                        @if($allCompanies->count() > 1)
+                            <svg class="w-3 h-3 text-indigo-400 flex-shrink-0" :class="open ? 'rotate-180' : ''" style="transition:transform .2s" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        @endif
+                    </button>
+
+                    {{-- Dropdown (seulement si > 1 société accessible) --}}
+                    @if($allCompanies->count() > 1)
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 -translate-y-1 scale-95"
+                         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave-end="opacity-0 -translate-y-1 scale-95"
+                         class="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden py-1"
+                         style="display:none">
+
+                        <p class="px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Changer de société</p>
+
+                        @foreach($allCompanies as $co)
+                        <form method="POST" action="{{ route('company.switch', $co) }}">
+                            @csrf
+                            <button type="submit"
+                                    class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left
+                                           {{ $co->id === $activeCompany->id ? 'text-indigo-700 font-semibold bg-indigo-50/60' : 'text-gray-700' }}">
+                                <span class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0
+                                             {{ $co->id === $activeCompany->id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500' }}">
+                                    {{ strtoupper(substr($co->name, 0, 1)) }}
+                                </span>
+                                <span class="flex-1 truncate">{{ $co->name }}</span>
+                                @if($co->id === $activeCompany->id)
+                                <svg class="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                                @endif
+                            </button>
+                        </form>
+                        @endforeach
+                    </div>
+                    @endif
+                </div>
 
                 {{-- Notification Bell --}}
                 <div class="relative" x-data="{ open: false, unread: 0, items: [] }"

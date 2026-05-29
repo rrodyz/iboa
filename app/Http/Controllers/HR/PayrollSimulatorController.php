@@ -36,7 +36,7 @@ class PayrollSimulatorController extends Controller
 
     public function index()
     {
-        $payroll = PayrollSetting::forCompany(Company::firstOrFail()->id);
+        $payroll = PayrollSetting::forCompany(currentCompany()->id);
         $grille  = self::GRILLE;
 
         return view('rh.simulateur.index', compact('payroll', 'grille'));
@@ -78,7 +78,7 @@ class PayrollSimulatorController extends Controller
 
         [$payroll, $result] = $this->runSimulation($data);
 
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $settings = $company->documentSetting;
 
         $familyLabels = [
@@ -115,7 +115,7 @@ class PayrollSimulatorController extends Controller
      */
     private function runSimulation(array $data): array
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $payroll = PayrollSetting::forCompany($company->id);
         $payroll->assertComplete();
 

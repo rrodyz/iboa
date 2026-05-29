@@ -25,7 +25,7 @@ class ChartOfAccountsController extends Controller
 
     public function index(Request $request): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $search  = $request->input('search');
         $classId = $request->input('class_id');
 
@@ -49,7 +49,7 @@ class ChartOfAccountsController extends Controller
 
     public function create(): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $classes = AccountClass::where('company_id', $company->id)->orderBy('number')->get();
         $parents = Account::where('company_id', $company->id)
             ->where('is_detail', false)
@@ -70,7 +70,7 @@ class ChartOfAccountsController extends Controller
             'is_detail'        => ['boolean'],
         ]);
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data['company_id'] = $company->id;
         $data['is_detail']  = $request->boolean('is_detail', true);
         $data['is_active']  = true;
@@ -84,7 +84,7 @@ class ChartOfAccountsController extends Controller
 
     public function edit(Account $account): View
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $classes = AccountClass::where('company_id', $company->id)->orderBy('number')->get();
         $parents = Account::where('company_id', $company->id)
             ->where('is_detail', false)
@@ -120,7 +120,7 @@ class ChartOfAccountsController extends Controller
 
     public function export(Request $request): BinaryFileResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $classId = $request->integer('class_id') ?: null;
 
         return Excel::download(
@@ -131,7 +131,7 @@ class ChartOfAccountsController extends Controller
 
     public function exportPdf(Request $request): mixed
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $search  = $request->input('search');
         $classId = $request->input('class_id');
 
@@ -165,7 +165,7 @@ class ChartOfAccountsController extends Controller
             'file.max'      => 'Le fichier ne doit pas dépasser 5 Mo.',
         ]);
 
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $import  = new AccountsImport($company->id);
 
         Excel::import($import, $request->file('file'));

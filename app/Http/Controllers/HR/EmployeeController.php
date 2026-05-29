@@ -23,7 +23,7 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         $filters = $request->only(['department_id', 'status', 'category', 'search']);
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $query = Employee::with(['department', 'activeContract'])
             ->where('company_id', $company->id)
@@ -64,7 +64,7 @@ class EmployeeController extends Controller
 
     public function create()
     {
-        $company     = Company::firstOrFail();
+        $company     = currentCompany();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
         $nextMatricule = $this->nextMatricule($company->id);
         $payroll     = PayrollSetting::forCompany($company->id);
@@ -75,7 +75,7 @@ class EmployeeController extends Controller
 
     public function store(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         // Validation des primes (facultatif à la création)
         $request->validate([
@@ -198,14 +198,14 @@ class EmployeeController extends Controller
             'documents'  => fn($q) => $q->orderByDesc('created_at'),
         ]);
         $allowanceTypes = PayrollAllowanceType::active()->orderBy('name')->get();
-        $payroll        = PayrollSetting::forCompany(Company::first()->id);
+        $payroll        = PayrollSetting::forCompany(currentCompany()->id);
 
         return view('rh.employes.show', compact('employe', 'allowanceTypes', 'payroll'));
     }
 
     public function edit(Employee $employe)
     {
-        $company     = Company::firstOrFail();
+        $company     = currentCompany();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
         $users       = User::where('company_id', $company->id)->orderBy('name')->get(['id', 'name', 'email']);
         $employe->load(['activeContract', 'department']);
@@ -308,7 +308,7 @@ class EmployeeController extends Controller
 
     public function contracts(Request $request)
     {
-        $company = \App\Models\Company::firstOrFail();
+        $company = currentCompany();
 
         $query = \App\Models\EmployeeContract::with('employee')
             ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
@@ -391,7 +391,7 @@ class EmployeeController extends Controller
 
     public function exportContracts(Request $request)
     {
-        $company = \App\Models\Company::firstOrFail();
+        $company = currentCompany();
 
         $contracts = \App\Models\EmployeeContract::with('employee')
             ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
@@ -443,14 +443,14 @@ class EmployeeController extends Controller
 
     public function departments(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $departments = Department::where('company_id', $company->id)->orderBy('name')->paginate(20);
         return view('rh.departments.index', compact('departments'));
     }
 
     public function storeDepartment(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'code' => ['nullable', 'string', 'max:20'],

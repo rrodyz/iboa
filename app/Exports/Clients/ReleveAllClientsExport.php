@@ -94,7 +94,7 @@ class RecapAllClientsSheet implements FromArray, WithTitle, WithColumnWidths, Wi
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         // ── Header ──────────────────────────────────────────────────────────
         $this->push([

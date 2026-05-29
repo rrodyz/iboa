@@ -22,7 +22,7 @@ class CashFlowForecastService
             $lines = $data['lines'] ?? [];
             unset($data['lines']);
 
-            $company            = Company::firstOrFail();
+            $company            = currentCompany();
             $data['company_id'] = $company->id;
             $data['number']     = $this->seq->nextNumber($company, 'prevision_tresorerie');
             $data['created_by'] = Auth::id();

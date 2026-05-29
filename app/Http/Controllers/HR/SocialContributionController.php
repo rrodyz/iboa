@@ -14,7 +14,7 @@ class SocialContributionController extends Controller
 {
     public function index(): View
     {
-        $company       = Company::firstOrFail();
+        $company       = currentCompany();
         $contributions = SocialContribution::where('company_id', $company->id)
             ->orderBy('organisme')->orderBy('code')
             ->get();
@@ -24,14 +24,14 @@ class SocialContributionController extends Controller
 
     public function create(): View
     {
-        $company      = Company::firstOrFail();
+        $company      = currentCompany();
         $contribution = new SocialContribution();
         return view('rh.parametrage.cotisations.create', compact('contribution', 'company'));
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $this->validated($request);
         $data['company_id'] = $company->id;
         $data['created_by'] = Auth::id();
@@ -47,7 +47,7 @@ class SocialContributionController extends Controller
         $this->authorize403($contribution);
         return view('rh.parametrage.cotisations.edit', [
             'contribution' => $contribution,
-            'company'      => Company::firstOrFail(),
+            'company'      => currentCompany(),
         ]);
     }
 
@@ -96,6 +96,6 @@ class SocialContributionController extends Controller
 
     private function authorize403(SocialContribution $contribution): void
     {
-        abort_if($contribution->company_id !== Company::firstOrFail()->id, 403);
+        abort_if($contribution->company_id !== currentCompany()->id, 403);
     }
 }

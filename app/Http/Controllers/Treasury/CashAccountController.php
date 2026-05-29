@@ -47,7 +47,7 @@ class CashAccountController extends Controller
             'notes'             => ['nullable', 'string', 'max:500'],
         ]);
 
-        $company = \App\Models\Company::firstOrFail();
+        $company = \App\Models\currentCompany();
         $data['company_id']      = $company->id;
         $data['current_balance'] = (int) $data['opening_balance'];
         $data['is_default']      = $request->boolean('is_default');

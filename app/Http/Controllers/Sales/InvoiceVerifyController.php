@@ -30,7 +30,7 @@ class InvoiceVerifyController extends Controller
             abort(404, 'Facture introuvable.');
         }
 
-        $company = Company::first();
+        $company = currentCompany();
 
         return view('ventes.factures.verify', compact('invoice', 'company'));
     }

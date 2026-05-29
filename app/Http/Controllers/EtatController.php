@@ -928,7 +928,7 @@ class EtatController extends Controller
         ?string $subtitle = null,
         string $filename = 'rapport',
     ): mixed {
-        $company = Company::first();
+        $company = currentCompany();
 
         $pdf = Pdf::loadView('reports.pdf.generic-table', [
             'company'    => $company,

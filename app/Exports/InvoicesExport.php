@@ -77,7 +77,7 @@ class InvoicesExport implements FromArray, WithTitle, WithColumnWidths, WithEven
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $cols    = 11;
 
         // ── Document header ──────────────────────────────────────────────────

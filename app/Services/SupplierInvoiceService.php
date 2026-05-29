@@ -36,7 +36,7 @@ class SupplierInvoiceService
             $items = $data['items'] ?? [];
             unset($data['items']);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $data['company_id'] = $company->id;
             $data['number']     = $this->sequenceService->nextNumber($company, 'facture_fournisseur');
@@ -158,7 +158,7 @@ class SupplierInvoiceService
             // [ARCH-C4] Lock invoice row to prevent duplicate or concurrent payments.
             $inv = SupplierInvoice::lockForUpdate()->find($inv->id);
 
-            $company = Company::firstOrFail();
+            $company = currentCompany();
 
             $payment = SupplierPayment::create([
                 'company_id'        => $company->id,

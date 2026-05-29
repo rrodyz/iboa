@@ -74,7 +74,7 @@ class CaReportExport implements FromArray, WithTitle, WithColumnWidths, WithEven
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $totalHt        = (int) $this->totals->total_ht;
         $totalTtc       = (int) $this->totals->total_ttc;

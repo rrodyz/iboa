@@ -81,7 +81,7 @@ class ClientPaymentController extends Controller
             $request->only(['search', 'client_id', 'payment_method_id', 'date_from', 'date_to']),
             fn($v) => $v !== '' && $v !== null
         );
-        $company  = \App\Models\Company::firstOrFail();
+        $company  = \App\Models\currentCompany();
         $dateFrom = $filters['date_from'] ?? null;
         $dateTo   = $filters['date_to']   ?? null;
 
@@ -212,7 +212,7 @@ class ClientPaymentController extends Controller
     {
         $this->authorize('view', $encaissement);
         $payment        = $this->repository->findWithDetails($encaissement->id);
-        $company        = Company::first();
+        $company        = currentCompany();
         $amountInWords  = NumberHelper::toWords((int) $payment->amount);
 
         $pdf = Pdf::loadView('tresorerie.encaissements.pdf.receipt', compact('payment', 'company', 'amountInWords'))

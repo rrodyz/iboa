@@ -318,7 +318,7 @@ class ClientReportController extends Controller
         $clientId = $request->input('client_id');
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
-        $company  = Company::first();
+        $company  = currentCompany();
 
         // ── Mode tous les clients ───────────────────────────────────────────
         if ($clientId === 'all' && $dateFrom && $dateTo) {
@@ -370,7 +370,7 @@ class ClientReportController extends Controller
     {
         $today    = Carbon::today();
         $clientId = $request->input('client_id') ? (int) $request->input('client_id') : null;
-        $company  = Company::first();
+        $company  = currentCompany();
 
         $query = Invoice::with('client')->whereNotIn('status', ['brouillon', 'annulee'])->where('remaining_amount', '>', 0);
         if ($clientId) $query->where('client_id', $clientId);
@@ -418,7 +418,7 @@ class ClientReportController extends Controller
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $search   = $request->input('search');
-        $company  = Company::first();
+        $company  = currentCompany();
 
         $query = JournalEntryLine::with(['account', 'journalEntry.journalType'])
             ->whereHas('account', fn($q) => $q->where('code', 'like', '411%'))

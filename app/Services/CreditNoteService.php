@@ -26,7 +26,7 @@ class CreditNoteService
     public function createFromInvoice(Invoice $invoice, array $data): CreditNote
     {
         return DB::transaction(function () use ($invoice, $data) {
-            $company = Company::firstOrFail();
+            $company = currentCompany();
             $items   = $data['items'] ?? [];
             unset($data['items']);
 

@@ -83,7 +83,7 @@ class ClientsExport implements FromArray, WithTitle, WithColumnWidths, WithEvent
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $clients = Client::orderBy('name')
             ->when(!empty($this->filters['search']), function ($q) {

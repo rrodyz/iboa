@@ -68,7 +68,7 @@ class StockController extends Controller
 
     public function exportPdf(Request $request): mixed
     {
-        $company     = Company::firstOrFail();
+        $company     = currentCompany();
         $warehouseId = $request->input('warehouse_id') ?: null;
         $search      = $request->input('search') ?: null;
         $lowStock    = $request->boolean('low_stock');
@@ -97,7 +97,7 @@ class StockController extends Controller
 
     public function movementsPdf(Request $request): mixed
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $filters = $request->only(['search', 'product_id', 'warehouse_id', 'type', 'date_from', 'date_to']);
 
         $movements = StockMovement::with(['product', 'warehouse', 'createdBy'])

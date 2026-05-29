@@ -17,7 +17,7 @@ class PayRubricController extends Controller
 {
     public function index(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $query = PayRubric::where('company_id', $company->id)->ordered();
 
@@ -47,7 +47,7 @@ class PayRubricController extends Controller
 
     public function store(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
 
         $validated = $this->validateRubric($request, $company->id);
         $validated['company_id'] = $company->id;
@@ -61,7 +61,7 @@ class PayRubricController extends Controller
 
     public function edit(PayRubric $rubric)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($rubric->company_id !== $company->id, 403);
 
         return view('rh.rubriques.edit', compact('rubric'));
@@ -69,7 +69,7 @@ class PayRubricController extends Controller
 
     public function update(Request $request, PayRubric $rubric)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($rubric->company_id !== $company->id, 403);
 
         $validated = $this->validateRubric($request, $company->id, $rubric->id);
@@ -81,7 +81,7 @@ class PayRubricController extends Controller
 
     public function destroy(PayRubric $rubric)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($rubric->company_id !== $company->id, 403);
 
         // Vérifier si la rubrique est référencée dans des bulletins existants

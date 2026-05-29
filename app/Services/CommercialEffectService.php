@@ -14,7 +14,7 @@ class CommercialEffectService
     public function create(array $data): CommercialEffect
     {
         return DB::transaction(function () use ($data) {
-            $company            = Company::firstOrFail();
+            $company            = currentCompany();
             $data['company_id'] = $company->id;
             $data['number']     = $this->seq->nextNumber($company, 'effet_commerce');
             $data['created_by'] = Auth::id();

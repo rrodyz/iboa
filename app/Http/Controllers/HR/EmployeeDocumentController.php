@@ -20,7 +20,7 @@ class EmployeeDocumentController extends Controller
     /** Upload d'un document pour un employé */
     public function store(Request $request, Employee $employe)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($employe->company_id !== $company->id, 403);
 
         $request->validate([
@@ -56,7 +56,7 @@ class EmployeeDocumentController extends Controller
     /** Téléchargement sécurisé */
     public function download(Employee $employe, EmployeeDocument $document)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($employe->company_id !== $company->id, 403);
         abort_if($document->employee_id !== $employe->id, 403);
 
@@ -74,7 +74,7 @@ class EmployeeDocumentController extends Controller
     /** Suppression d'un document */
     public function destroy(Employee $employe, EmployeeDocument $document)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($employe->company_id !== $company->id, 403);
         abort_if($document->employee_id !== $employe->id, 403);
 
@@ -87,7 +87,7 @@ class EmployeeDocumentController extends Controller
     /** Upload / mise à jour de la photo de profil */
     public function updatePhoto(Request $request, Employee $employe)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($employe->company_id !== $company->id, 403);
 
         $request->validate([
@@ -108,7 +108,7 @@ class EmployeeDocumentController extends Controller
     /** Accès à la photo de profil */
     public function photo(Employee $employe)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         abort_if($employe->company_id !== $company->id, 403);
 
         if (! $employe->photo_path || ! Storage::disk('private')->exists($employe->photo_path)) {

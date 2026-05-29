@@ -26,7 +26,7 @@ class LedgerController extends Controller
 
     public function grandLivre(Request $request): View
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $accountId = $request->input('account_id');
         $classId   = $request->input('class_id');
         $dateFrom  = $request->input('date_from');
@@ -83,7 +83,7 @@ class LedgerController extends Controller
 
     public function grandLivrePdf(Request $request): mixed
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $accountId = $request->input('account_id');
         $classId   = $request->input('class_id');
         $dateFrom  = $request->input('date_from');
@@ -153,7 +153,7 @@ class LedgerController extends Controller
 
     public function grandLivreExport(Request $request): mixed
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $accountId = $request->input('account_id');
         $classId   = $request->input('class_id');
         $dateFrom  = $request->input('date_from');
@@ -190,7 +190,7 @@ class LedgerController extends Controller
 
     public function balance(Request $request): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $classId  = $request->input('class_id');
@@ -279,7 +279,7 @@ class LedgerController extends Controller
 
     public function balanceExport(Request $request): mixed
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $classId  = $request->input('class_id');
@@ -294,7 +294,7 @@ class LedgerController extends Controller
 
     public function balancePdf(Request $request): mixed
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $classId  = $request->input('class_id');
@@ -400,7 +400,7 @@ class LedgerController extends Controller
 
     public function brouillard(Request $request): View
     {
-        $company      = Company::firstOrFail();
+        $company      = currentCompany();
         $journalTypes = JournalType::orderBy('code')->get(['id', 'code', 'name']);
         $filters      = $request->only(['journal_type_id', 'date_from', 'date_to', 'search']);
 
@@ -429,7 +429,7 @@ class LedgerController extends Controller
 
     public function livreJournal(Request $request): View
     {
-        $company      = Company::firstOrFail();
+        $company      = currentCompany();
         $journalTypes = JournalType::orderBy('code')->get(['id', 'code', 'name']);
         $filters      = $request->only(['journal_type_id', 'date_from', 'date_to', 'search']);
 
@@ -461,7 +461,7 @@ class LedgerController extends Controller
 
     public function balanceAuxiliaire(Request $request): View
     {
-        $company  = Company::firstOrFail();
+        $company  = currentCompany();
         $dateFrom = $request->input('date_from');
         $dateTo   = $request->input('date_to');
         $type     = $request->input('type', 'all'); // 'clients', 'fournisseurs', 'all'

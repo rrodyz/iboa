@@ -30,7 +30,7 @@ class DeliveryNoteVerifyController extends Controller
             abort(404, 'Bon de livraison introuvable.');
         }
 
-        $company = Company::first();
+        $company = currentCompany();
 
         return view('ventes.bons-livraison.verify', compact('deliveryNote', 'company'));
     }

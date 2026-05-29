@@ -27,7 +27,7 @@ class PayrollPeriodService
      */
     public function resolveForDate(Carbon $date, ?int $companyId = null): PayrollPeriod
     {
-        $companyId ??= Company::firstOrFail()->id;
+        $companyId ??= currentCompany()->id;
         return PayrollPeriod::findOrCreateForMonth($date, $companyId);
     }
 
@@ -118,7 +118,7 @@ class PayrollPeriodService
      */
     public function attachRunToPeriod(int $runId, Carbon $date): int
     {
-        $companyId = Company::firstOrFail()->id;
+        $companyId = currentCompany()->id;
         $period    = $this->resolveForDate($date, $companyId);
 
         // Guard : ne pas rattacher si la période est déjà verrouillée

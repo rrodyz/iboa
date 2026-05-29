@@ -40,7 +40,7 @@ class JournalAchatsExport implements FromArray, WithTitle, WithColumnWidths, Wit
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $this->push([$this->companyNameCell($company), null, null, 'JOURNAL DES ACHATS', null, null, 'Période : ' . $this->fmt($this->dateFrom) . ' → ' . $this->fmt($this->dateTo)], self::T_DOC_HEADER);
         $periodText = 'Écritures validées — journal Achat';
         $this->push([$this->companyLegalLine($company, $periodText), null, null, null, null, null, 'Édition du ' . now()->format('d/m/Y à H\hi')], self::T_PERIOD);

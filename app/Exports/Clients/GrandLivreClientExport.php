@@ -56,7 +56,7 @@ class GrandLivreClientExport implements FromArray, WithTitle, WithColumnWidths, 
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $this->push([$this->companyNameCell($company), null, null, 'GRAND LIVRE CLIENTS (comptes 411)', null, null, null,
             'Période : ' . $this->fmtDate($this->dateFrom) . ' → ' . $this->fmtDate($this->dateTo)], self::T_DOC_HEADER);

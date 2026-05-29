@@ -77,7 +77,7 @@ class GenericTableExport implements FromArray, WithTitle, WithColumnWidths, With
     // -------------------------------------------------------------------------
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
         $period  = $this->from && $this->to
             ? 'Période : ' . $this->from . ' → ' . $this->to
             : 'Édité le ' . now()->format('d/m/Y H:i');

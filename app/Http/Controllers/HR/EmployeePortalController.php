@@ -92,8 +92,8 @@ class EmployeePortalController extends Controller
 
         $item->load(['employee.department', 'employee.activeContract', 'payrollRun.company']);
         $company  = $run->company;
-        $settings = Company::first()?->documentSetting;
-        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+        $settings = currentCompany()?->documentSetting;
+        $payroll  = PayrollSetting::forCompany($run->company_id ?? currentCompany()->id);
 
         // [P2] Soldes de congés de l'employé pour l'année du bulletin
         $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)

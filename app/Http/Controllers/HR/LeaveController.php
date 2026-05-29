@@ -17,14 +17,14 @@ class LeaveController extends Controller
 
     public function indexTypes()
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $types   = LeaveType::where('company_id', $company->id)->orderBy('name')->get();
         return view('rh.conges.types', compact('types'));
     }
 
     public function storeType(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $data    = $request->validate([
             'name'              => ['required', 'string', 'max:100'],
             'code'              => ['required', 'string', 'max:20'],
@@ -47,7 +47,7 @@ class LeaveController extends Controller
 
     public function index(Request $request)
     {
-        $company = Company::firstOrFail();
+        $company = currentCompany();
         $filters = $request->only(['employee_id', 'status', 'year']);
 
         $empIds = Employee::where('company_id', $company->id)->pluck('id');
@@ -159,7 +159,7 @@ class LeaveController extends Controller
 
     public function balances(Request $request)
     {
-        $company   = Company::firstOrFail();
+        $company   = currentCompany();
         $year      = $request->integer('year', now()->year);
         $employees = Employee::with(['leaveBalances' => fn($q) => $q->where('year', $year)->with('leaveType')])
             ->where('company_id', $company->id)

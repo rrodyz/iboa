@@ -81,7 +81,7 @@ class SuppliersExport implements FromArray, WithTitle, WithColumnWidths, WithEve
 
     private function build(): void
     {
-        $company = Company::first();
+        $company = currentCompany();
 
         $suppliers = Supplier::orderBy('name')
             ->when(!empty($this->filters['search']), function ($q) {

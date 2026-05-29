@@ -136,7 +136,7 @@ class SupplierPaymentController extends Controller
     public function recu(SupplierPayment $decaissement): mixed
     {
         $payment       = $this->repository->findWithDetails($decaissement->id);
-        $company       = Company::first();
+        $company       = currentCompany();
         $amountInWords = NumberHelper::toWords((int) $payment->amount);
 
         $pdf = Pdf::loadView('tresorerie.decaissements.pdf.receipt', compact('payment', 'company', 'amountInWords'))
