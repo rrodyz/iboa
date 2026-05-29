@@ -26,6 +26,15 @@ class RolesAndPermissionsSeeder extends Seeder
             'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.delete', 'invoices.validate', 'invoices.send',
             'deliveries.view', 'deliveries.create', 'deliveries.edit', 'deliveries.validate',
             'credit_notes.view', 'credit_notes.create', 'credit_notes.edit',
+            // Workflow de validation interne Ventes (transversal à tous les documents)
+            'sales.create',       // créer un document en brouillon
+            'sales.submit',       // soumettre à validation interne
+            'sales.validate',     // valider (responsable)
+            'sales.reject',       // refuser avec motif obligatoire
+            'sales.cancel',       // annuler avec motif obligatoire
+            'sales.transform',              // transformer (Devis→Commande→BL→Facture→Écriture)
+            'sales.view_all',               // voir tous les documents (pas seulement les siens)
+            'sales.bypass_self_validation', // valider son propre document (bypass double validation)
             // Achats
             'purchase_requests.view', 'purchase_requests.create', 'purchase_requests.submit', 'purchase_requests.approve',
             'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.edit', 'purchase_orders.validate',
@@ -59,19 +68,21 @@ class RolesAndPermissionsSeeder extends Seeder
         $directeur = Role::firstOrCreate(['name' => 'directeur', 'guard_name' => 'web']);
         $directeur->syncPermissions(Permission::whereNotIn('name', ['users.manage', 'roles.manage'])->get());
 
-        // Commercial — ventes + clients
+        // Commercial — ventes + clients + workflow (create + submit + transform)
         $commercial = Role::firstOrCreate(['name' => 'commercial', 'guard_name' => 'web']);
         $commercial->syncPermissions([
             'products.view', 'clients.view', 'clients.create', 'clients.edit',
-            'quotes.view', 'quotes.create', 'quotes.edit', 'quotes.validate',
-            'orders.view', 'orders.create', 'orders.edit', 'orders.validate',
+            'quotes.view', 'quotes.create', 'quotes.edit',
+            'orders.view', 'orders.create', 'orders.edit',
             'invoices.view', 'invoices.create', 'invoices.send',
-            'deliveries.view', 'deliveries.create', 'deliveries.validate',
+            'deliveries.view', 'deliveries.create',
             'credit_notes.view', 'credit_notes.create',
             'payments.view', 'reports.view',
+            // Workflow : un commercial crée, soumet et transforme mais ne valide pas
+            'sales.create', 'sales.submit', 'sales.transform',
         ]);
 
-        // Comptable — factures + trésorerie + rapports
+        // Comptable — factures + trésorerie + rapports + workflow validation factures/avoirs
         $comptable = Role::firstOrCreate(['name' => 'comptable', 'guard_name' => 'web']);
         $comptable->syncPermissions([
             'products.view', 'clients.view', 'suppliers.view',
@@ -84,6 +95,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'treasury.write', 'treasury.validate',
             'reports.view', 'reports.export',
             'accounting.view', 'accounting.write', 'accounting.validate', 'accounting.manage',
+            // Workflow : le comptable valide les factures et avoirs, peut annuler
+            'sales.validate', 'sales.reject', 'sales.cancel', 'sales.view_all',
         ]);
 
         // Magasinier — stocks + réceptions

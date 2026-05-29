@@ -49,8 +49,10 @@ use App\Listeners\UpdateClientBalance;
 use App\Listeners\UpdateSupplierBalance;
 use App\Services\UserHomeRoute;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Permission\Models\Role;
 
@@ -70,6 +72,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // ── Rate limiters API ──────────────────────────────────────────────────
+        // [SEC-API] Rate limiter nommé "api" :
+        //   • 60 req/min par utilisateur authentifié (clé = user_id)
+        //   • 30 req/min par adresse IP pour les routes non authentifiées (fallback)
+        RateLimiter::for('api', function (\Illuminate\Http\Request $request) {
+            return $request->user()
+                ? Limit::perMinute(60)->by($request->user()->id)
+                : Limit::perMinute(30)->by($request->ip());
+        });
+
+        // Rate limiter strict pour les endpoints d'authentification (brute-force)
+        RateLimiter::for('api_auth', function (\Illuminate\Http\Request $request) {
+            return Limit::perMinute(5)->by($request->ip());
+        });
+
         // ── Event → Listener bindings ──────────────────────────────────────────
         // Ventes
         Event::listen(InvoiceValidated::class,          SendInvoiceToClient::class);

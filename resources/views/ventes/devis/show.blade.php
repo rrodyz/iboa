@@ -26,26 +26,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-3 flex-wrap">
                 <h1 class="text-2xl font-bold text-gray-900 font-mono">{{ $quote->number }}</h1>
-                @switch($quote->status)
-                    @case('brouillon')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">Brouillon</span>
-                        @break
-                    @case('envoye')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Envoyé</span>
-                        @break
-                    @case('accepte')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Accepté</span>
-                        @break
-                    @case('refuse')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Refusé</span>
-                        @break
-                    @case('expire')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Expiré</span>
-                        @break
-                    @case('annule')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Annulé</span>
-                        @break
-                @endswitch
+                <x-workflow.status-badge :status="$quote->status" :label="$quote->status_label" />
                 <span class="text-gray-500 text-sm">{{ $quote->client?->name }}</span>
             </div>
 
@@ -73,7 +54,8 @@
                     Aperçu
                 </a>
                 <a href="{{ route('ventes.devis.pdf', $quote) }}"
-                   class="{{ $btnOutline }}" title="Télécharger le PDF">
+                   class="{{ $btnOutline }}" title="Télécharger le PDF"
+                   data-loading data-loading-text="Génération du devis…">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
@@ -95,7 +77,7 @@
 
                 {{-- ───────────────────── BROUILLON ───────────────────── --}}
                 @if($quote->status === 'brouillon')
-                    {{-- Secondaire : Modifier --}}
+                    {{-- Modifier --}}
                     <a href="{{ route('ventes.devis.edit', $quote) }}" class="{{ $btnOutline }}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -103,33 +85,22 @@
                         Modifier
                     </a>
 
-                    {{-- PRIMAIRE : Envoyer au client (l'action attendue d'un brouillon) --}}
-                    <form action="{{ route('ventes.devis.send', $quote) }}" method="POST">
+                    {{-- PRIMAIRE : Soumettre à validation interne --}}
+                    @can('sales.submit')
+                    <form action="{{ route('ventes.devis.submit', $quote) }}" method="POST"
+                          onsubmit="return confirm('Soumettre ce devis à la validation interne ?')">
                         @csrf
                         <button type="submit" class="{{ $btnPrimary }} bg-blue-600 hover:bg-blue-700">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                             </svg>
-                            Envoyer au client
+                            Soumettre à validation
                         </button>
                     </form>
+                    @endcan
 
-                    {{-- Raccourci alternatif : valider directement sans passer par "envoyé" --}}
-                    @if(!$quote->converted_to_order_id)
-                    <form action="{{ route('ventes.devis.accept', $quote) }}" method="POST"
-                          onsubmit="return confirm('Valider ce devis sans envoi et créer directement la commande ?')">
-                        @csrf
-                        <button type="submit" class="{{ $btnOutline }} !text-emerald-700 !border-emerald-300 hover:!bg-emerald-50"
-                                title="Saute l'étape d'envoi/acceptation client">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            Valider → Commande
-                        </button>
-                    </form>
-                    @endif
-
-                    {{-- Suppression : brouillon = non envoyé = on peut supprimer franchement --}}
+                    {{-- Supprimer --}}
                     <form action="{{ route('ventes.devis.destroy', $quote) }}" method="POST"
                           onsubmit="return confirm('Supprimer définitivement ce devis brouillon ?')">
                         @csrf @method('DELETE')
@@ -142,74 +113,95 @@
                     </form>
                 @endif
 
-                {{-- ───────────────────── ENVOYÉ ───────────────────── --}}
-                @if($quote->status === 'envoye')
-                    {{-- PRIMAIRE : Accepter & créer la commande --}}
-                    @if(!$quote->converted_to_order_id)
-                    <form action="{{ route('ventes.devis.accept', $quote) }}" method="POST"
-                          onsubmit="return confirm('Marquer ce devis accepté par le client et créer la commande ?')">
+                {{-- ─────── EN ATTENTE DE VALIDATION ─────────────────────────────────────────── --}}
+                @if($quote->status === 'en_attente_validation')
+                    {{-- Badge info --}}
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-yellow-700 bg-yellow-50 border border-yellow-200">
+                        <svg class="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        En attente de validation
+                    </span>
+                    {{-- VALIDER --}}
+                    @can('sales.validate')
+                    <form action="{{ route('ventes.devis.validate-internal', $quote) }}" method="POST"
+                          onsubmit="return confirm('Valider ce devis ?')">
                         @csrf
                         <button type="submit" class="{{ $btnPrimary }} bg-emerald-600 hover:bg-emerald-700">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            Accepté → Commande
+                            Valider
                         </button>
                     </form>
-                    @endif
-
-                    {{-- Refus client (logique : il a reçu, il a refusé) --}}
-                    <form action="{{ route('ventes.devis.refuse', $quote) }}" method="POST"
-                          onsubmit="return confirm('Marquer ce devis comme refusé par le client ?')">
+                    {{-- REFUSER --}}
+                    <form action="{{ route('ventes.devis.reject-internal', $quote) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5) { alert('Le motif est obligatoire (5 caractères min.)'); return; } $el.submit()">
                         @csrf
-                        <button type="submit" class="{{ $btnWarnOutline }}">
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $btnWarnOutline }}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            Refusé par le client
+                            Refuser
                         </button>
+                        {{-- Modal motif refus --}}
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4" @click.outside="open = false">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif de refus</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Expliquez le motif du refus (obligatoire)…" autofocus></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $btnOutline }}">Annuler</button>
+                                    <button type="submit" class="{{ $btnPrimary }} bg-orange-600 hover:bg-orange-700">Confirmer le refus</button>
+                                </div>
+                            </div>
+                        </div>
                     </form>
-
-                    {{-- Renvoyer (relance) --}}
-                    <form action="{{ route('ventes.devis.send', $quote) }}" method="POST">
+                    @endcan
+                    {{-- ANNULER --}}
+                    @can('sales.cancel')
+                    <form action="{{ route('ventes.devis.cancel-internal', $quote) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5) { alert('Le motif est obligatoire (5 caractères min.)'); return; } $el.submit()">
                         @csrf
-                        <button type="submit" class="{{ $btnOutline }}" title="Renvoyer le devis au client">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                            Relancer
-                        </button>
-                    </form>
-
-                    {{-- Annulation interne (≠ refus client) --}}
-                    <form action="{{ route('ventes.devis.cancel', $quote) }}" method="POST"
-                          onsubmit="return confirm('Annuler ce devis (décision interne, à distinguer d\'un refus client) ?')">
-                        @csrf
-                        <button type="submit" class="{{ $btnOutline }}">
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $btnDangerOutline }}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                             Annuler
                         </button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4" @click.outside="open = false">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif d'annulation</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="Expliquez le motif de l'annulation (obligatoire)…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $btnOutline }}">Fermer</button>
+                                    <button type="submit" class="{{ $btnPrimary }} bg-red-600 hover:bg-red-700">Confirmer l'annulation</button>
+                                </div>
+                            </div>
+                        </div>
                     </form>
+                    @endcan
                 @endif
 
-                {{-- ───────────────────── ACCEPTÉ ───────────────────── --}}
-                @if($quote->status === 'accepte')
+                {{-- ─────── VALIDÉ → Transformer en commande ──────────────────────────────────── --}}
+                @if($quote->status === 'valide')
                     @if(!$quote->converted_to_order_id)
-                        {{-- PRIMAIRE : Convertir en commande --}}
+                        @can('sales.transform')
                         <form action="{{ route('ventes.devis.convert', $quote) }}" method="POST"
-                              onsubmit="return confirm('Créer la commande à partir de ce devis accepté ?')">
+                              onsubmit="return confirm('Transformer ce devis en commande ?')">
                             @csrf
                             <button type="submit" class="{{ $btnPrimary }} bg-emerald-600 hover:bg-emerald-700">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>
-                                Créer la commande
+                                Transformer en commande
                             </button>
                         </form>
+                        @endcan
                     @else
-                        {{-- PRIMAIRE : Voir la commande générée --}}
                         <a href="{{ route('ventes.commandes.show', $quote->converted_to_order_id) }}"
                            class="{{ $btnPrimary }} bg-blue-600 hover:bg-blue-700">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,10 +210,43 @@
                             Voir la commande
                         </a>
                     @endif
+                    {{-- Annuler même un devis validé (admin) --}}
+                    @can('sales.cancel')
+                    <form action="{{ route('ventes.devis.cancel-internal', $quote) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5) { alert('Motif obligatoire (5 caractères min.)'); return; } $el.submit()">
+                        @csrf
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $btnDangerOutline }}">Annuler</button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif d'annulation</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Motif obligatoire…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $btnOutline }}">Fermer</button>
+                                    <button type="submit" class="{{ $btnPrimary }} bg-red-600 hover:bg-red-700">Confirmer</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    @endcan
                 @endif
 
-                {{-- ─────────── REFUSÉ / ANNULÉ / EXPIRÉ (lecture seule) ─────────── --}}
-                @if(in_array($quote->status, ['refuse', 'annule', 'expire']))
+                {{-- ─────── CONVERTI → Voir la commande ─────────────────────────────────────────────── --}}
+                @if($quote->status === 'converti')
+                    @if($quote->converted_to_order_id)
+                        <a href="{{ route('ventes.commandes.show', $quote->converted_to_order_id) }}"
+                           class="{{ $btnPrimary }} bg-indigo-600 hover:bg-indigo-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                            </svg>
+                            Voir la commande
+                        </a>
+                    @endif
+                @endif
+
+                {{-- ─────────── REFUSÉ / ANNULÉ / EXPIRÉ / anciens statuts (lecture seule) ─────────── --}}
+                @if(in_array($quote->status, ['refuse', 'annule', 'expire', 'envoye', 'accepte']))
                     @if(!$quote->converted_to_order_id)
                     <form action="{{ route('ventes.devis.destroy', $quote) }}" method="POST"
                           onsubmit="return confirm('Supprimer définitivement ce devis ?')">
@@ -250,12 +275,15 @@
     {{-- Letterhead : logo + infos société + badge document --}}
     @php
         $statusMapLh = [
-            'brouillon' => ['label' => 'Brouillon', 'class' => 'bg-gray-100 text-gray-700'],
-            'envoye'    => ['label' => 'Envoyé',    'class' => 'bg-blue-100 text-blue-700'],
-            'accepte'   => ['label' => 'Accepté',   'class' => 'bg-green-100 text-green-700'],
-            'refuse'    => ['label' => 'Refusé',    'class' => 'bg-red-100 text-red-700'],
-            'expire'    => ['label' => 'Expiré',    'class' => 'bg-orange-100 text-orange-700'],
-            'annule'    => ['label' => 'Annulé',    'class' => 'bg-purple-100 text-purple-700'],
+            'brouillon'            => ['label' => 'Brouillon',               'class' => 'bg-gray-100 text-gray-700'],
+            'en_attente_validation'=> ['label' => 'En attente de validation', 'class' => 'bg-yellow-100 text-yellow-700'],
+            'valide'               => ['label' => 'Validé',                  'class' => 'bg-green-100 text-green-700'],
+            'envoye'               => ['label' => 'Envoyé',                  'class' => 'bg-blue-100 text-blue-700'],
+            'accepte'              => ['label' => 'Accepté',                 'class' => 'bg-green-100 text-green-700'],
+            'refuse'               => ['label' => 'Refusé',                  'class' => 'bg-red-100 text-red-700'],
+            'expire'               => ['label' => 'Expiré',                  'class' => 'bg-orange-100 text-orange-700'],
+            'annule'               => ['label' => 'Annulé',                  'class' => 'bg-purple-100 text-purple-700'],
+            'converti'             => ['label' => 'Converti',                'class' => 'bg-indigo-100 text-indigo-700'],
         ];
     @endphp
     @include('partials._doc-letterhead', [
@@ -390,6 +418,77 @@
     </div>
 
 
+
+    {{-- ── Workflow : boutons d'action + historique de validation ─────────── --}}
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <svg class="size-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                </svg>
+                Validation interne
+            </h2>
+            <x-workflow.status-badge :status="$quote->status" :label="$quote->status_label" />
+        </div>
+
+        {{-- Alerte si refusé --}}
+        @if($quote->rejection_reason)
+            <div class="mb-4 rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm text-orange-800">
+                <strong>Motif de refus :</strong> {{ $quote->rejection_reason }}
+                @if($quote->rejected_at)
+                    <span class="text-orange-500 ml-1">({{ $quote->rejected_at->format('d/m/Y H:i') }})</span>
+                @endif
+            </div>
+        @endif
+
+        {{-- Boutons workflow --}}
+        <x-workflow.action-buttons
+            :document="$quote"
+            submitRoute="ventes.devis.submit"
+            validateRoute="ventes.devis.validate-internal"
+            rejectRoute="ventes.devis.reject-internal"
+            cancelRoute="ventes.devis.cancel-internal"
+            :routeParam="$quote->id"
+        />
+
+        {{-- Historique --}}
+        <x-workflow.history :document="$quote" />
+    </div>
+
+    {{-- Documents liés --}}
+    @php
+        $relatedLinks = [];
+        if ($quote->convertedOrder) {
+            $relatedLinks[] = [
+                'icon'       => '📦',
+                'label'      => 'Commande ' . $quote->convertedOrder->number,
+                'href'       => route('ventes.commandes.show', $quote->convertedOrder),
+                'badge'      => $quote->convertedOrder->status_label ?? ucfirst($quote->convertedOrder->status),
+                'badgeColor' => 'blue',
+            ];
+            foreach ($quote->convertedOrder->deliveryNotes ?? [] as $dn) {
+                $relatedLinks[] = [
+                    'icon'       => '🚚',
+                    'label'      => 'Bon de livraison ' . $dn->number,
+                    'href'       => route('ventes.bons-livraison.show', $dn),
+                    'badge'      => $dn->status_label ?? ucfirst($dn->status),
+                    'badgeColor' => 'purple',
+                ];
+            }
+            foreach ($quote->convertedOrder->invoices ?? [] as $inv) {
+                $relatedLinks[] = [
+                    'icon'       => '🧾',
+                    'label'      => 'Facture ' . $inv->number,
+                    'href'       => route('ventes.factures.show', $inv),
+                    'badge'      => $inv->status_label ?? ucfirst($inv->status),
+                    'badgeColor' => 'green',
+                ];
+            }
+        }
+    @endphp
+    @if(count($relatedLinks))
+        <x-document.related :links="$relatedLinks" title="Documents liés à ce devis" />
+    @endif
 
     {{-- [TRACE] Historique d'activité --}}
     <x-audit.timeline :model="\App\Models\Quote::class" :id="$quote->id" />

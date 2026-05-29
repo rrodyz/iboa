@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\HasCompanyScope;
 use App\Models\Traits\HasCreator;
+use App\Traits\HasCommercialWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quote extends Model
 {
-    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope;
+    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope, HasCommercialWorkflow;
+
+    const DOCUMENT_TYPE = 'quote';
 
     protected $table = 'quotes';
 
@@ -48,6 +51,11 @@ class Quote extends Model
         'validated_by',
         'validated_at',
         'converted_to_order_id',
+        'submitted_by',
+        'submitted_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -61,6 +69,8 @@ class Quote extends Model
         'global_discount_amount'  => 'integer',
         'exchange_rate'           => 'decimal:6',
         'validated_at'            => 'datetime',
+        'submitted_at'            => 'datetime',
+        'rejected_at'             => 'datetime',
     ];
 
     // -------------------------------------------------------------------------
@@ -112,26 +122,35 @@ class Quote extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            'brouillon' => 'Brouillon',
-            'valide'    => $this->is_expired ? 'Expiré' : 'Validé',
-            'converti'  => 'Converti',
-            'expire'    => 'Expiré',
-            'refuse'    => 'Refusé',
-            'annule'    => 'Annulé',
-            default     => ucfirst($this->status),
+            'brouillon'            => 'Brouillon',
+            'en_attente_validation'=> 'En attente de validation',
+            'envoye'               => 'Envoyé',
+            'valide'               => $this->is_expired ? 'Expiré' : 'Validé',
+            'converti'             => 'Converti',
+            'expire'               => 'Expiré',
+            'refuse'               => 'Refusé',
+            'annule'               => 'Annulé',
+            default                => ucfirst($this->status),
         };
     }
 
     public function getStatusColorAttribute(): string
     {
         return match ($this->status) {
-            'brouillon' => 'gray',
-            'valide'    => $this->is_expired ? 'orange' : 'blue',
-            'converti'  => 'green',
-            'expire'    => 'orange',
-            'refuse'    => 'red',
-            'annule'    => 'red',
-            default     => 'gray',
+            'brouillon'            => 'gray',
+            'en_attente_validation'=> 'yellow',
+            'envoye'               => 'blue',
+            'valide'               => $this->is_expired ? 'orange' : 'green',
+            'converti'             => 'green',
+            'expire'               => 'orange',
+            'refuse'               => 'red',
+            'annule'               => 'red',
+            default                => 'gray',
         };
+    }
+
+    protected function getValidatedStatuses(): array
+    {
+        return ['envoye', 'accepte', 'converti'];
     }
 }

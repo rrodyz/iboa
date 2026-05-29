@@ -19,21 +19,7 @@ window._quoteFormData = {
 <div x-data="quoteForm()" x-ref="root" x-cloak>
 
 {{-- ── Bannière erreurs ────────────────────────────────────────────────── --}}
-@if($errors->any())
-<div class="mb-4 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
-    <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <div>
-        <p class="font-medium mb-1">Veuillez corriger les erreurs suivantes :</p>
-        <ul class="list-disc list-inside space-y-0.5 text-red-700">
-            @foreach($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    </div>
-</div>
-@endif
+<x-validation-errors />
 
 {{-- ══════════════════════════════════════════════════════════════════════
      Section 1 — Informations générales

@@ -15,14 +15,7 @@
     <p class="text-sm text-gray-500 mt-0.5">Créez une facture client avec lignes d'articles, taxes et remises</p>
 </div>
 
-@if($errors->any())
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
-    <ul class="text-sm text-red-700 space-y-1 list-disc list-inside">
-        @foreach($errors->all() as $error)
-            <li>{{ $error }}</li>
-        @endforeach
-    </ul>
-</div>
+<x-validation-errors />
 @endif
 
 <form method="POST" action="{{ route('ventes.factures.store') }}">

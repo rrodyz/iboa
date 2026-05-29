@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\AccountClass;
+use App\Models\AccountingPeriodLock;
 use App\Models\BankDeposit;
 use App\Models\CashAccount;
 use App\Models\ClientPayment;
@@ -711,6 +712,19 @@ class AccountingService
      */
     private function post(Company $company, string $journalTypeCode, array $header, array $lines): JournalEntry
     {
+        // [FIX-COMPTA-LOCK] Refuser toute écriture automatique sur une période verrouillée.
+        $entryDate = $header['entry_date'] ?? today();
+        $lock = AccountingPeriodLock::findForDate($company->id, $entryDate);
+        if ($lock) {
+            throw new \RuntimeException(sprintf(
+                "Impossible de comptabiliser : la période « %s » est verrouillée (par %s le %s). "
+                . "Déverrouillez la période dans Comptabilité → Périodes, ou corrigez la date du document.",
+                $lock->label(),
+                $lock->lockedBy?->name ?? 'système',
+                $lock->locked_at?->format('d/m/Y') ?? '?'
+            ));
+        }
+
         $totalDebit  = (int) collect($lines)->sum('debit');
         $totalCredit = (int) collect($lines)->sum('credit');
 

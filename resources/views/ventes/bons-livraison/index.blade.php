@@ -47,8 +47,9 @@
 
             <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
                 <option value="">Tous les statuts</option>
-                <option value="brouillon" {{ ($filters['status'] ?? '') === 'brouillon' ? 'selected' : '' }}>Brouillon</option>
-                <option value="valide"    {{ ($filters['status'] ?? '') === 'valide'    ? 'selected' : '' }}>Validé</option>
+                <option value="brouillon"             {{ ($filters['status'] ?? '') === 'brouillon'             ? 'selected' : '' }}>Brouillon</option>
+                <option value="en_attente_validation" {{ ($filters['status'] ?? '') === 'en_attente_validation' ? 'selected' : '' }}>⏳ En attente de validation</option>
+                <option value="valide"                {{ ($filters['status'] ?? '') === 'valide'                ? 'selected' : '' }}>Validé</option>
                 <option value="livre"     {{ ($filters['status'] ?? '') === 'livre'     ? 'selected' : '' }}>Livré</option>
                 <option value="annule"    {{ ($filters['status'] ?? '') === 'annule'    ? 'selected' : '' }}>Annulé</option>
             </select>
@@ -112,15 +113,7 @@
                             {{ $dn->warehouse?->name ?? '—' }}
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @if($dn->status === 'valide')
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Validé</span>
-                            @elseif($dn->status === 'livre')
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Livré</span>
-                            @elseif($dn->status === 'annule')
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Annulé</span>
-                            @else
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Brouillon</span>
-                            @endif
+                            <x-workflow.status-badge :status="$dn->status" :label="$dn->status_label" size="sm" />
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">

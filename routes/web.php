@@ -230,12 +230,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // [VENTES-PRO] Action Duplicate (équivalent Odoo)
             Route::post('devis/{devis}/duplicate', [\App\Http\Controllers\Sales\QuoteController::class, 'duplicate'])->name('devis.duplicate');
         });
-        Route::middleware('permission:quotes.validate')->group(function () {
+        // [WORKFLOW-V2] Transformer un devis validé en commande (sales.transform)
+        Route::middleware('permission:sales.transform')->group(function () {
             Route::post('devis/{devis}/convert', [\App\Http\Controllers\Sales\QuoteController::class, 'convert'])->name('devis.convert');
-            Route::post('devis/{devis}/send',    [\App\Http\Controllers\Sales\QuoteController::class, 'send'])->name('devis.send');
-            Route::post('devis/{devis}/accept',  [\App\Http\Controllers\Sales\QuoteController::class, 'accept'])->name('devis.accept');
-            Route::post('devis/{devis}/refuse',  [\App\Http\Controllers\Sales\QuoteController::class, 'refuse'])->name('devis.refuse');
-            Route::post('devis/{devis}/cancel',  [\App\Http\Controllers\Sales\QuoteController::class, 'cancel'])->name('devis.cancel');
+        });
+        // ── Workflow de validation interne — devis ──────────────────────────────
+        Route::middleware('permission:sales.submit')->group(function () {
+            Route::post('devis/{devis}/submit',          [\App\Http\Controllers\Sales\QuoteController::class, 'submit'])->name('devis.submit');
+        });
+        Route::middleware('permission:sales.validate')->group(function () {
+            Route::post('devis/{devis}/validate-internal', [\App\Http\Controllers\Sales\QuoteController::class, 'validateInternal'])->name('devis.validate-internal');
+        });
+        Route::middleware('permission:sales.reject')->group(function () {
+            Route::post('devis/{devis}/reject-internal',  [\App\Http\Controllers\Sales\QuoteController::class, 'rejectInternal'])->name('devis.reject-internal');
+        });
+        Route::middleware('permission:sales.cancel')->group(function () {
+            Route::post('devis/{devis}/cancel-internal',  [\App\Http\Controllers\Sales\QuoteController::class, 'cancelInternal'])->name('devis.cancel-internal');
         });
 
         Route::middleware('permission:orders.view')->group(function () {
@@ -246,6 +256,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('commandes/{commande}/delivery-note', [\App\Http\Controllers\Sales\OrderController::class, 'createDeliveryNote'])->name('commandes.delivery-note');
             Route::post('commandes/{commande}/confirm',       [\App\Http\Controllers\Sales\OrderController::class, 'confirm'])->name('commandes.confirm');
             Route::post('commandes/{commande}/cancel',        [\App\Http\Controllers\Sales\OrderController::class, 'cancel'])->name('commandes.cancel');
+        });
+        // ── Workflow de validation interne — commandes ──────────────────────────
+        Route::middleware('permission:sales.submit')->group(function () {
+            Route::post('commandes/{commande}/submit',           [\App\Http\Controllers\Sales\OrderController::class, 'submit'])->name('commandes.submit');
+        });
+        Route::middleware('permission:sales.validate')->group(function () {
+            Route::post('commandes/{commande}/validate-internal', [\App\Http\Controllers\Sales\OrderController::class, 'validateInternal'])->name('commandes.validate-internal');
+        });
+        Route::middleware('permission:sales.reject')->group(function () {
+            Route::post('commandes/{commande}/reject-internal',  [\App\Http\Controllers\Sales\OrderController::class, 'rejectInternal'])->name('commandes.reject-internal');
+        });
+        Route::middleware('permission:sales.cancel')->group(function () {
+            Route::post('commandes/{commande}/cancel-internal',  [\App\Http\Controllers\Sales\OrderController::class, 'cancelInternal'])->name('commandes.cancel-internal');
         });
 
         Route::middleware('permission:deliveries.view')->group(function () {
@@ -260,6 +283,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('bons-livraison/{bonsLivraison}/validate', [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'validateNote'])->name('bons-livraison.validate');
             Route::post('bons-livraison/{bonsLivraison}/invoice',  [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'createInvoice'])->name('bons-livraison.invoice');
             Route::post('bons-livraison/{bonsLivraison}/cancel',   [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'cancel'])->name('bons-livraison.cancel');
+        });
+        // ── Workflow de validation interne — bons de livraison ──────────────────
+        Route::middleware('permission:sales.submit')->group(function () {
+            Route::post('bons-livraison/{bonsLivraison}/submit',           [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'submit'])->name('bons-livraison.submit');
+        });
+        Route::middleware('permission:sales.validate')->group(function () {
+            Route::post('bons-livraison/{bonsLivraison}/validate-internal', [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'validateInternal'])->name('bons-livraison.validate-internal');
+        });
+        Route::middleware('permission:sales.reject')->group(function () {
+            Route::post('bons-livraison/{bonsLivraison}/reject-internal',  [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'rejectInternal'])->name('bons-livraison.reject-internal');
+        });
+        Route::middleware('permission:sales.cancel')->group(function () {
+            Route::post('bons-livraison/{bonsLivraison}/cancel-internal',  [\App\Http\Controllers\Sales\DeliveryNoteController::class, 'cancelInternal'])->name('bons-livraison.cancel-internal');
         });
 
         Route::middleware('permission:invoices.view')->group(function () {
@@ -281,6 +317,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // [MED-1] Conversion proforma → standard (génère compta + stock)
             Route::post('factures/{facture}/convert-proforma', [\App\Http\Controllers\Sales\InvoiceController::class, 'convertProforma'])->name('factures.convert-proforma');
         });
+        // ── Workflow de validation interne — factures ───────────────────────────
+        Route::middleware('permission:sales.submit')->group(function () {
+            Route::post('factures/{facture}/submit',           [\App\Http\Controllers\Sales\InvoiceController::class, 'submit'])->name('factures.submit');
+        });
+        Route::middleware('permission:sales.validate')->group(function () {
+            Route::post('factures/{facture}/validate-internal', [\App\Http\Controllers\Sales\InvoiceController::class, 'validateInternal'])->name('factures.validate-internal');
+        });
+        Route::middleware('permission:sales.reject')->group(function () {
+            Route::post('factures/{facture}/reject-internal',  [\App\Http\Controllers\Sales\InvoiceController::class, 'rejectInternal'])->name('factures.reject-internal');
+        });
+        Route::middleware('permission:sales.cancel')->group(function () {
+            Route::post('factures/{facture}/cancel-internal',  [\App\Http\Controllers\Sales\InvoiceController::class, 'cancelInternal'])->name('factures.cancel-internal');
+        });
         Route::middleware(['permission:invoices.send', 'invoice.locked'])->group(function () {
             Route::post('factures/{facture}/send-email', [\App\Http\Controllers\Sales\InvoiceController::class, 'sendEmail'])->name('factures.send-email');
         });
@@ -294,6 +343,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:credit_notes.create')->group(function () {
             Route::post('avoirs/{avoir}/validate', [\App\Http\Controllers\Sales\CreditNoteController::class, 'validateNote'])->name('avoirs.validate');
             Route::post('avoirs/{avoir}/apply', [\App\Http\Controllers\Sales\CreditNoteController::class, 'applyToInvoice'])->name('avoirs.apply');
+        });
+        // ── Workflow de validation interne — avoirs ─────────────────────────────
+        Route::middleware('permission:sales.submit')->group(function () {
+            Route::post('avoirs/{avoir}/submit',           [\App\Http\Controllers\Sales\CreditNoteController::class, 'submit'])->name('avoirs.submit');
+        });
+        Route::middleware('permission:sales.validate')->group(function () {
+            Route::post('avoirs/{avoir}/validate-internal', [\App\Http\Controllers\Sales\CreditNoteController::class, 'validateInternal'])->name('avoirs.validate-internal');
+        });
+        Route::middleware('permission:sales.reject')->group(function () {
+            Route::post('avoirs/{avoir}/reject-internal',  [\App\Http\Controllers\Sales\CreditNoteController::class, 'rejectInternal'])->name('avoirs.reject-internal');
+        });
+        Route::middleware('permission:sales.cancel')->group(function () {
+            Route::post('avoirs/{avoir}/cancel-internal',  [\App\Http\Controllers\Sales\CreditNoteController::class, 'cancelInternal'])->name('avoirs.cancel-internal');
         });
     });
 

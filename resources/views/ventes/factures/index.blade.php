@@ -19,14 +19,16 @@
         </div>
         <div class="flex items-center gap-2 self-start">
             <a href="{{ route('ventes.factures.index', array_merge(request()->query(), ['export' => 1])) }}"
-               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+               class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+               data-loading data-loading-text="Export Excel en cours…">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
                 </svg>
                 Excel
             </a>
             <a href="{{ route('ventes.factures.export-pdf', request()->query()) }}"
-               class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors">
+               class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors"
+               data-loading data-loading-text="Génération du PDF liste…">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                 </svg>
@@ -59,8 +61,9 @@
 
             <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 <option value="">Tous les statuts</option>
-                <option value="brouillon"           {{ ($filters['status'] ?? '') === 'brouillon'           ? 'selected' : '' }}>Brouillon</option>
-                <option value="emise"               {{ ($filters['status'] ?? '') === 'emise'               ? 'selected' : '' }}>Émise</option>
+                <option value="brouillon"             {{ ($filters['status'] ?? '') === 'brouillon'             ? 'selected' : '' }}>Brouillon</option>
+                <option value="en_attente_validation" {{ ($filters['status'] ?? '') === 'en_attente_validation' ? 'selected' : '' }}>⏳ En attente de validation</option>
+                <option value="emise"                 {{ ($filters['status'] ?? '') === 'emise'                 ? 'selected' : '' }}>Émise</option>
                 <option value="envoyee"             {{ ($filters['status'] ?? '') === 'envoyee'             ? 'selected' : '' }}>Envoyée</option>
                 <option value="partiellement_payee" {{ ($filters['status'] ?? '') === 'partiellement_payee' ? 'selected' : '' }}>Partiellement payée</option>
                 <option value="payee"               {{ ($filters['status'] ?? '') === 'payee'               ? 'selected' : '' }}>Payée</option>
@@ -216,9 +219,7 @@
                             @endif
                         </td>
                         <td class="px-4 py-3 text-center">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $statusBadges[$invoice->status] ?? 'bg-gray-100 text-gray-600' }}">
-                                {{ $statusLabels[$invoice->status] ?? $invoice->status }}
-                            </span>
+                            <x-workflow.status-badge :status="$invoice->status" :label="$invoice->status_label" size="sm" />
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">

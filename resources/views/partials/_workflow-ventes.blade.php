@@ -24,8 +24,8 @@
 
     // Determine doc state per step
     $stepData = [
-        'devis'     => isset($quote)       ? ['done' => in_array($quote->status, ['accepte', 'annule', 'refuse']),       'url' => route('ventes.devis.show', $quote),        'label' => $quote->number,         'status' => $quote->status]       : null,
-        'commande'  => isset($order)       ? ['done' => in_array($order->status, ['livre', 'facture', 'annule']),         'url' => route('ventes.commandes.show', $order),   'label' => $order->number,         'status' => $order->status]       : null,
+        'devis'     => isset($quote)       ? ['done' => in_array($quote->status, ['valide', 'converti', 'accepte', 'annule', 'refuse']), 'url' => route('ventes.devis.show', $quote), 'label' => $quote->number, 'status' => $quote->status] : null,
+        'commande'  => isset($order)       ? ['done' => in_array($order->status, ['confirme', 'en_preparation', 'partiellement_livre', 'livre', 'facture', 'annule']), 'url' => route('ventes.commandes.show', $order), 'label' => $order->number, 'status' => $order->status] : null,
         'livraison' => isset($deliveryNote)? ['done' => in_array($deliveryNote->status, ['valide', 'livre', 'annule']),   'url' => route('ventes.bons-livraison.show', $deliveryNote), 'label' => $deliveryNote->number, 'status' => $deliveryNote->status]: null,
         'facture'   => isset($invoice)     ? ['done' => in_array($invoice->status, ['emise', 'envoyee', 'payee', 'partiellement_payee']), 'url' => route('ventes.factures.show', $invoice), 'label' => $invoice->number, 'status' => $invoice->status]: null,
         'paiement'  => isset($invoice)     ? ['done' => in_array($invoice->status, ['payee']),                           'url' => route('ventes.factures.show', $invoice),  'label' => $invoice->status === 'payee' ? 'Payé' : ($invoice->status === 'partiellement_payee' ? 'Partiel' : 'En attente'), 'status' => $invoice->status]: null,

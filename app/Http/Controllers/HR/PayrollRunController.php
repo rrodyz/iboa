@@ -158,22 +158,27 @@ class PayrollRunController extends Controller
      */
     public function bulletinPdf(PayrollRun $run, \App\Models\PayrollItem $item)
     {
-        $run->load('company');
-        $settings = Company::first()?->documentSetting;
-        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+        try {
+            $run->load('company');
+            $settings = Company::first()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        // [P2] Soldes de congés de l'employé pour l'année du bulletin
-        $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)
-            ->where('year', $run->period_year)
-            ->with(['leaveType' => fn($q) => $q->where('is_active', true)])
-            ->get()
-            ->filter(fn($b) => $b->leaveType !== null);
+            // [P2] Soldes de congés de l'employé pour l'année du bulletin
+            $leaveBalances = LeaveBalance::where('employee_id', $item->employee_id)
+                ->where('year', $run->period_year)
+                ->with(['leaveType' => fn($q) => $q->where('is_active', true)])
+                ->get()
+                ->filter(fn($b) => $b->leaveType !== null);
 
-        $pdf = Pdf::loadView('rh.pdf.bulletin', compact('run', 'item', 'settings', 'payroll', 'leaveBalances'))
-            ->setPaper('a4', 'portrait');
+            $pdf = Pdf::loadView('rh.pdf.bulletin', compact('run', 'item', 'settings', 'payroll', 'leaveBalances'))
+                ->setPaper('a4', 'portrait');
 
-        $filename = "Bulletin_{$run->period_year}_{$run->period_month}_{$item->employee_matricule}.pdf";
-        return $pdf->stream($filename);
+            $filename = "Bulletin_{$run->period_year}_{$run->period_month}_{$item->employee_matricule}.pdf";
+            return $pdf->stream($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF bulletin error', ['run' => $run->id, 'item' => $item->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le bulletin PDF : ' . $e->getMessage());
+        }
     }
 
     /**
@@ -181,14 +186,19 @@ class PayrollRunController extends Controller
      */
     public function recapPdf(PayrollRun $run)
     {
-        $run->load('items');
-        $settings = Company::first()?->documentSetting;
+        try {
+            $run->load('items');
+            $settings = Company::first()?->documentSetting;
 
-        $pdf = Pdf::loadView('rh.pdf.recap', compact('run', 'settings'))
-            ->setPaper('a4', 'landscape');
+            $pdf = Pdf::loadView('rh.pdf.recap', compact('run', 'settings'))
+                ->setPaper('a4', 'landscape');
 
-        $filename = "Recap_Paie_{$run->period_year}_{$run->period_month}.pdf";
-        return $pdf->download($filename);
+            $filename = "Recap_Paie_{$run->period_year}_{$run->period_month}.pdf";
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF recap paie error', ['run' => $run->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le récapitulatif PDF : ' . $e->getMessage());
+        }
     }
 
     /**
@@ -196,15 +206,20 @@ class PayrollRunController extends Controller
      */
     public function cnssPdf(PayrollRun $run)
     {
-        $run->load('items');
-        $settings = Company::first()?->documentSetting;
-        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+        try {
+            $run->load('items');
+            $settings = Company::first()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.cnss', compact('run', 'settings', 'payroll'))
-            ->setPaper('a4', 'portrait');
+            $pdf = Pdf::loadView('rh.pdf.cnss', compact('run', 'settings', 'payroll'))
+                ->setPaper('a4', 'portrait');
 
-        $filename = "Bordereau_CNSS_{$run->period_year}_{$run->period_month}.pdf";
-        return $pdf->download($filename);
+            $filename = "Bordereau_CNSS_{$run->period_year}_{$run->period_month}.pdf";
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF CNSS error', ['run' => $run->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le bordereau CNSS : ' . $e->getMessage());
+        }
     }
 
     /**
@@ -212,15 +227,20 @@ class PayrollRunController extends Controller
      */
     public function iutsPdf(PayrollRun $run)
     {
-        $run->load('items');
-        $settings = Company::first()?->documentSetting;
-        $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
+        try {
+            $run->load('items');
+            $settings = Company::first()?->documentSetting;
+            $payroll  = PayrollSetting::forCompany($run->company_id ?? Company::first()->id);
 
-        $pdf = Pdf::loadView('rh.pdf.iuts', compact('run', 'settings', 'payroll'))
-            ->setPaper('a4', 'landscape');
+            $pdf = Pdf::loadView('rh.pdf.iuts', compact('run', 'settings', 'payroll'))
+                ->setPaper('a4', 'landscape');
 
-        $filename = "Etat_IUTS_{$run->period_year}_{$run->period_month}.pdf";
-        return $pdf->download($filename);
+            $filename = "Etat_IUTS_{$run->period_year}_{$run->period_month}.pdf";
+            return $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF IUTS error', ['run' => $run->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer l\'état IUTS : ' . $e->getMessage());
+        }
     }
 
     /**

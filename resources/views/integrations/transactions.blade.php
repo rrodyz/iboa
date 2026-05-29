@@ -202,7 +202,7 @@
                         <td class="px-4 py-3 text-right" @click.stop>
                             <div class="flex items-center justify-end gap-2">
                                 @if($tx->invoice_id)
-                                <a href="{{ route('invoices.show', $tx->invoice_id) }}"
+                                <a href="{{ route('ventes.factures.show', $tx->invoice_id) }}"
                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium" title="Voir la facture">
                                     Facture
                                 </a>

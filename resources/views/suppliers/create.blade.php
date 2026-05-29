@@ -17,22 +17,7 @@
         <p class="text-sm text-gray-500 mt-0.5">Renseignez les informations du fournisseur</p>
     </div>
 
-    {{-- Validation errors summary --}}
-    @if($errors->any())
-    <div class="mb-6 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
-        <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <div>
-            <p class="font-medium">Veuillez corriger les erreurs suivantes :</p>
-            <ul class="mt-1 list-disc list-inside space-y-0.5">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    </div>
-    @endif
+    <x-validation-errors />
 
     <div class="bg-white rounded-xl border border-gray-200 p-6">
         @include('suppliers._form', [

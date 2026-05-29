@@ -83,71 +83,81 @@ class DeliveryNoteService
         }
 
         return DB::transaction(function () use ($dn) {
-            $dn->load('items.product', 'order.items');
-
-            $warehouseId = $dn->warehouse_id
-                ?? Warehouse::where('is_default', true)->value('id')
-                ?? Warehouse::value('id');
-
-            foreach ($dn->items as $item) {
-                if (!$item->product_id || !($item->product?->is_stockable ?? true)) {
-                    continue;
-                }
-
-                // Use the current average cost for valuation, not the sale price
-                $avgCost = ProductStock::where('product_id', $item->product_id)
-                    ->where('warehouse_id', $warehouseId)
-                    ->value('avg_cost') ?? 0;
-
-                $deliveredQty = abs((float) $item->quantity);
-
-                $this->stockService->recordMovement([
-                    'product_id'     => $item->product_id,
-                    'warehouse_id'   => $warehouseId,
-                    'type'           => 'sortie',
-                    'quantity'       => $deliveredQty,
-                    'unit_cost'      => (float) $avgCost,
-                    'occurred_at'    => now(),
-                    'reference_type' => 'delivery_note',
-                    'reference_id'   => $dn->id,
-                    'notes'          => 'BL ' . $dn->number,
-                ]);
-
-                // [FIX-VENTES-06] The reservation placed at order confirmation is now consumed.
-                // Iterate all matching rows (there may be multiple when the original reservation
-                // was placed without a warehouse filter) so no phantom reserved_quantity remains.
-                $remaining = $deliveredQty;
-                ProductStock::where('product_id', $item->product_id)
-                    ->where('warehouse_id', $warehouseId)
-                    ->where('reserved_quantity', '>', 0)
-                    ->orderBy('id')
-                    ->each(function ($stockRow) use (&$remaining) {
-                        if ($remaining <= 0) return false; // stop iteration
-                        $release = min($remaining, (float) $stockRow->reserved_quantity);
-                        $stockRow->decrement('reserved_quantity', $release);
-                        $remaining -= $release;
-                    });
-
-                // Update delivered_quantity on the linked order item
-                if ($item->order_item_id) {
-                    $orderItem = OrderItem::find($item->order_item_id);
-                    if ($orderItem) {
-                        $orderItem->increment('delivered_quantity', (float) $item->quantity);
-                    }
-                }
-            }
-
             $dn->update([
                 'status'       => 'valide',
                 'validated_by' => Auth::id(),
                 'validated_at' => now(),
             ]);
 
-            // Advance order status based on delivery progress
-            $this->syncOrderDeliveryStatus($dn->order);
+            $this->applyStockOut($dn);
 
             return $dn->fresh();
         });
+    }
+
+    /**
+     * Applique les mouvements de sortie de stock pour un BL validé.
+     * Méthode publique appelée à la fois par validate() et par CommercialWorkflowService::validateDeliveryNote()
+     * pour le circuit interne (brouillon → en_attente_validation → valide).
+     */
+    public function applyStockOut(DeliveryNote $dn): void
+    {
+        $dn->load('items.product', 'order.items');
+
+        $warehouseId = $dn->warehouse_id
+            ?? Warehouse::where('is_default', true)->value('id')
+            ?? Warehouse::value('id');
+
+        foreach ($dn->items as $item) {
+            if (!$item->product_id || !($item->product?->is_stockable ?? true)) {
+                continue;
+            }
+
+            // Use the current average cost for valuation, not the sale price
+            $avgCost = ProductStock::where('product_id', $item->product_id)
+                ->where('warehouse_id', $warehouseId)
+                ->value('avg_cost') ?? 0;
+
+            $deliveredQty = abs((float) $item->quantity);
+
+            $this->stockService->recordMovement([
+                'product_id'     => $item->product_id,
+                'warehouse_id'   => $warehouseId,
+                'type'           => 'sortie',
+                'quantity'       => $deliveredQty,
+                'unit_cost'      => (float) $avgCost,
+                'occurred_at'    => now(),
+                'reference_type' => 'delivery_note',
+                'reference_id'   => $dn->id,
+                'notes'          => 'BL ' . $dn->number,
+            ]);
+
+            // [FIX-VENTES-06] The reservation placed at order confirmation is now consumed.
+            // Iterate all matching rows (there may be multiple when the original reservation
+            // was placed without a warehouse filter) so no phantom reserved_quantity remains.
+            $remaining = $deliveredQty;
+            ProductStock::where('product_id', $item->product_id)
+                ->where('warehouse_id', $warehouseId)
+                ->where('reserved_quantity', '>', 0)
+                ->orderBy('id')
+                ->each(function ($stockRow) use (&$remaining) {
+                    if ($remaining <= 0) return false; // stop iteration
+                    $release = min($remaining, (float) $stockRow->reserved_quantity);
+                    $stockRow->decrement('reserved_quantity', $release);
+                    $remaining -= $release;
+                });
+
+            // Update delivered_quantity on the linked order item
+            if ($item->order_item_id) {
+                $orderItem = OrderItem::find($item->order_item_id);
+                if ($orderItem) {
+                    $orderItem->increment('delivered_quantity', (float) $item->quantity);
+                }
+            }
+        }
+
+        // Advance order status based on delivery progress
+        $this->syncOrderDeliveryStatus($dn->order);
     }
 
     /**

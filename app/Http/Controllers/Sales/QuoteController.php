@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Services\CommercialWorkflowService;
 use App\Services\QuoteService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -17,7 +18,10 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class QuoteController extends Controller
 {
-    public function __construct(private QuoteService $service) {}
+    public function __construct(
+        private QuoteService                $service,
+        private CommercialWorkflowService   $workflow,
+    ) {}
 
     public function index(Request $request)
     {
@@ -138,58 +142,9 @@ class QuoteController extends Controller
             ->with('success', "Devis dupliqué : {$new->number}. Modifiez puis enregistrez.");
     }
 
-    /** POST ventes/devis/{quote}/send — mark as sent to client. */
-    public function send(Quote $devis)
-    {
-        try {
-            $this->service->send($devis);
-            return back()->with('success', 'Devis ' . $devis->number . ' marqué comme envoyé.');
-        } catch (\RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-    }
-
     /**
-     * POST ventes/devis/{quote}/accept
-     * Valide le devis ET crée automatiquement la commande en une seule action.
-     * L'utilisateur est directement redirigé vers la commande créée.
-     */
-    public function accept(Quote $devis)
-    {
-        try {
-            $order = $this->service->acceptAndConvert($devis);
-            return redirect()
-                ->route('ventes.commandes.show', $order)
-                ->with('success', 'Devis ' . $devis->number . ' validé — Commande ' . $order->number . ' créée avec succès.');
-        } catch (\RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-    }
-
-    /** POST ventes/devis/{quote}/refuse — client has refused. */
-    public function refuse(Quote $devis)
-    {
-        try {
-            $this->service->refuse($devis);
-            return back()->with('success', 'Devis ' . $devis->number . ' marqué comme refusé.');
-        } catch (\RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-    }
-
-    /** POST ventes/devis/{quote}/cancel — cancel the quote. */
-    public function cancel(Quote $devis)
-    {
-        try {
-            $this->service->cancel($devis);
-            return back()->with('success', 'Devis ' . $devis->number . ' annulé.');
-        } catch (\RuntimeException $e) {
-            return back()->with('error', $e->getMessage());
-        }
-    }
-
-    /**
-     * POST ventes/devis/{quote}/convert — convert quote to sales order.
+     * POST ventes/devis/{quote}/convert — transformer le devis validé en commande.
+     * Requiert : sales.transform — déclenché uniquement sur devis au statut 'valide'.
      */
     public function convert(Quote $devis)
     {
@@ -197,7 +152,61 @@ class QuoteController extends Controller
             $order = $this->service->convertToOrder($devis);
             return redirect()
                 ->route('ventes.commandes.show', $order)
-                ->with('success', 'Devis converti en commande ' . $order->number . '.');
+                ->with('success', 'Devis ' . $devis->number . ' transformé en commande ' . $order->number . '.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    // ── Workflow de validation interne ────────────────────────────────────────
+
+    /** POST ventes/devis/{devis}/submit — soumet le devis à validation interne. */
+    public function submit(Request $request, Quote $devis)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->submit($devis, $request->motif);
+            return back()->with('success', "Devis {$devis->number} soumis à validation.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /** POST ventes/devis/{devis}/validate-internal — valide le devis en interne. */
+    public function validateInternal(Request $request, Quote $devis)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->validateQuote($devis, $request->motif);
+            return back()->with('success', "Devis {$devis->number} validé avec succès.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /** POST ventes/devis/{devis}/reject-internal — refuse le devis avec motif. */
+    public function rejectInternal(Request $request, Quote $devis)
+    {
+        $request->validate([
+            'motif' => ['required', 'string', 'min:5', 'max:500'],
+        ], ['motif.required' => 'Le motif de refus est obligatoire.']);
+        try {
+            $this->workflow->reject($devis, $request->motif);
+            return back()->with('success', "Devis {$devis->number} refusé — retour en brouillon.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /** POST ventes/devis/{devis}/cancel-internal — annule le devis. */
+    public function cancelInternal(Request $request, Quote $devis)
+    {
+        $request->validate([
+            'motif' => ['required', 'string', 'min:5', 'max:500'],
+        ], ['motif.required' => "Le motif d'annulation est obligatoire."]);
+        try {
+            $this->workflow->cancel($devis, $request->motif);
+            return back()->with('success', "Devis {$devis->number} annulé.");
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -209,16 +218,21 @@ class QuoteController extends Controller
      */
     public function pdf(Quote $devis, Request $request)
     {
-        $quote    = $this->service->repository->findWithDetails($devis->id);
-        $settings = Company::first()?->documentSetting;
+        try {
+            $quote    = $this->service->repository->findWithDetails($devis->id);
+            $settings = Company::first()?->documentSetting;
 
-        $pdf = Pdf::loadView('ventes.pdf.quote', compact('quote', 'settings'))
-            ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            $pdf = Pdf::loadView('ventes.pdf.quote', compact('quote', 'settings'))
+                ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
 
-        $filename = 'Devis_' . str_replace(['/', '\\', ' '], '-', $quote->number) . '.pdf';
+            $filename = 'Devis_' . str_replace(['/', '\\', ' '], '-', $quote->number) . '.pdf';
 
-        return $request->boolean('preview')
-            ? $pdf->stream($filename)
-            : $pdf->download($filename);
+            return $request->boolean('preview')
+                ? $pdf->stream($filename)
+                : $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF devis error', ['id' => $devis->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le PDF : ' . $e->getMessage());
+        }
     }
 }

@@ -7,13 +7,17 @@ use App\Http\Requests\Sale\StoreCreditNoteRequest;
 use App\Models\Company;
 use App\Models\CreditNote;
 use App\Models\Invoice;
+use App\Services\CommercialWorkflowService;
 use App\Services\CreditNoteService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class CreditNoteController extends Controller
 {
-    public function __construct(private CreditNoteService $service) {}
+    public function __construct(
+        private CreditNoteService           $service,
+        private CommercialWorkflowService   $workflow,
+    ) {}
 
     public function index(Request $request)
     {
@@ -104,6 +108,54 @@ class CreditNoteController extends Controller
             return redirect()
                 ->route('ventes.avoirs.index')
                 ->with('success', 'Avoir supprimé.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    // ── Workflow de validation interne ────────────────────────────────────────
+
+    public function submit(Request $request, CreditNote $avoir)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->submit($avoir, $request->motif);
+            return back()->with('success', "Avoir {$avoir->number} soumis à validation.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function validateInternal(Request $request, CreditNote $avoir)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->validateCreditNote($avoir, $request->motif);
+            return back()->with('success', "Avoir {$avoir->number} validé.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function rejectInternal(Request $request, CreditNote $avoir)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => 'Le motif est obligatoire.']);
+        try {
+            $this->workflow->reject($avoir, $request->motif);
+            return back()->with('success', "Avoir {$avoir->number} refusé — retour en brouillon.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function cancelInternal(Request $request, CreditNote $avoir)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => "Le motif est obligatoire."]);
+        try {
+            $this->workflow->cancel($avoir, $request->motif);
+            return back()->with('success', "Avoir {$avoir->number} annulé.");
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }

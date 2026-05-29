@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\HasCompanyScope;
 use App\Models\Traits\HasCreator;
+use App\Traits\HasCommercialWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
-    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope;
+    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope, HasCommercialWorkflow;
+
+    const DOCUMENT_TYPE = 'order';
 
     protected $table = 'orders';
 
@@ -45,6 +48,11 @@ class Order extends Model
         'created_by',
         'validated_by',
         'validated_at',
+        'submitted_by',
+        'submitted_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -60,6 +68,8 @@ class Order extends Model
         'invoiced_amount'         => 'integer',
         'exchange_rate'           => 'decimal:6',
         'validated_at'            => 'datetime',
+        'submitted_at'            => 'datetime',
+        'rejected_at'             => 'datetime',
     ];
 
     // -------------------------------------------------------------------------
@@ -114,5 +124,42 @@ class Order extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    // ── Accessors workflow ────────────────────────────────────────────────────
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'Brouillon',
+            'en_attente_validation' => 'En attente de validation',
+            'confirme'              => 'Confirmé',
+            'en_preparation'        => 'En préparation',
+            'partiellement_livre'   => 'Partiellement livré',
+            'livre'                 => 'Livré',
+            'facture'               => 'Facturé',
+            'annule'                => 'Annulé',
+            default                 => ucfirst($this->status),
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'gray',
+            'en_attente_validation' => 'yellow',
+            'confirme'              => 'green',
+            'en_preparation'        => 'blue',
+            'partiellement_livre'   => 'indigo',
+            'livre'                 => 'teal',
+            'facture'               => 'purple',
+            'annule'                => 'red',
+            default                 => 'gray',
+        };
+    }
+
+    protected function getValidatedStatuses(): array
+    {
+        return ['confirme', 'en_preparation', 'partiellement_livre', 'livre', 'facture'];
     }
 }

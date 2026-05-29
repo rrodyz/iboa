@@ -27,6 +27,59 @@
         </div>
     </div>
 
+    {{-- ── KPIs Workflow Validation — alertes temps réel ───────────────────── --}}
+    @if($workflowKpis['total_pending'] > 0 || $workflowKpis['recently_rejected'] > 0)
+    <div class="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-4">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="text-yellow-600 text-lg">🔒</span>
+            <h2 class="text-sm font-semibold text-yellow-800">Validation interne — Documents en attente</h2>
+            @if($workflowKpis['total_pending'] > 0)
+                <span class="ml-auto inline-flex items-center rounded-full bg-yellow-500 px-2.5 py-0.5 text-xs font-semibold text-white animate-pulse">
+                    {{ $workflowKpis['total_pending'] }} en attente
+                </span>
+            @endif
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            @if($workflowKpis['quotes_en_attente'] > 0)
+            <a href="{{ route('ventes.devis.index', ['status' => 'en_attente_validation']) }}" class="rounded-lg bg-white border border-yellow-200 p-3 text-center hover:border-yellow-400 transition-colors">
+                <div class="text-xl font-bold text-yellow-700">{{ $workflowKpis['quotes_en_attente'] }}</div>
+                <div class="text-xs text-yellow-600 mt-0.5">Devis</div>
+            </a>
+            @endif
+            @if($workflowKpis['orders_en_attente'] > 0)
+            <a href="{{ route('ventes.commandes.index', ['status' => 'en_attente_validation']) }}" class="rounded-lg bg-white border border-yellow-200 p-3 text-center hover:border-yellow-400 transition-colors">
+                <div class="text-xl font-bold text-yellow-700">{{ $workflowKpis['orders_en_attente'] }}</div>
+                <div class="text-xs text-yellow-600 mt-0.5">Commandes</div>
+            </a>
+            @endif
+            @if($workflowKpis['deliveries_en_attente'] > 0)
+            <a href="{{ route('ventes.bons-livraison.index', ['status' => 'en_attente_validation']) }}" class="rounded-lg bg-white border border-yellow-200 p-3 text-center hover:border-yellow-400 transition-colors">
+                <div class="text-xl font-bold text-yellow-700">{{ $workflowKpis['deliveries_en_attente'] }}</div>
+                <div class="text-xs text-yellow-600 mt-0.5">BL</div>
+            </a>
+            @endif
+            @if($workflowKpis['invoices_en_attente'] > 0)
+            <a href="{{ route('ventes.factures.index', ['status' => 'en_attente_validation']) }}" class="rounded-lg bg-white border border-yellow-200 p-3 text-center hover:border-yellow-400 transition-colors">
+                <div class="text-xl font-bold text-yellow-700">{{ $workflowKpis['invoices_en_attente'] }}</div>
+                <div class="text-xs text-yellow-600 mt-0.5">Factures</div>
+            </a>
+            @endif
+            @if($workflowKpis['credit_notes_en_attente'] > 0)
+            <a href="{{ route('ventes.avoirs.index', ['status' => 'en_attente_validation']) }}" class="rounded-lg bg-white border border-yellow-200 p-3 text-center hover:border-yellow-400 transition-colors">
+                <div class="text-xl font-bold text-yellow-700">{{ $workflowKpis['credit_notes_en_attente'] }}</div>
+                <div class="text-xs text-yellow-600 mt-0.5">Avoirs</div>
+            </a>
+            @endif
+            @if($workflowKpis['recently_rejected'] > 0)
+            <div class="rounded-lg bg-orange-50 border border-orange-200 p-3 text-center">
+                <div class="text-xl font-bold text-orange-700">{{ $workflowKpis['recently_rejected'] }}</div>
+                <div class="text-xs text-orange-600 mt-0.5">Refusés (7j)</div>
+            </div>
+            @endif
+        </div>
+    </div>
+    @endif
+
     {{-- KPIs principaux --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -92,6 +145,36 @@
             <p class="text-xs font-medium text-gray-500 uppercase">CA HT mois -1</p>
             <p class="mt-1 text-2xl font-bold tabular-nums text-gray-700">{{ $fmt($kpis['ca_prev_month']) }}</p>
             <p class="text-xs text-gray-400 mt-0.5">référence comparative</p>
+        </div>
+
+        {{-- CA Année en cours --}}
+        <div class="bg-white rounded-xl border border-indigo-200 p-5">
+            <p class="text-xs font-medium text-indigo-600 uppercase">📊 CA HT {{ now()->year }}</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-indigo-800">{{ $fmt($kpis['ca_year']) }}</p>
+            @if($kpis['ca_year_variation'] !== null)
+                @php $yearUp = $kpis['ca_year_variation'] >= 0; @endphp
+                <p class="text-xs mt-0.5 {{ $yearUp ? 'text-emerald-600' : 'text-red-600' }}">
+                    {{ $yearUp ? '↑' : '↓' }} {{ abs($kpis['ca_year_variation']) }} % vs {{ now()->year - 1 }}
+                </p>
+            @else
+                <p class="text-xs text-indigo-400 mt-0.5">cumulé depuis le 1er janv.</p>
+            @endif
+        </div>
+
+        {{-- Panier moyen --}}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase">🛒 Panier moyen</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900">{{ $fmt($kpis['avg_basket_month']) }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">FCFA TTC · ce mois</p>
+        </div>
+
+        {{-- Nouveaux clients --}}
+        <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 uppercase">👥 Nouveaux clients</p>
+            <p class="mt-1 text-2xl font-bold tabular-nums {{ $kpis['new_clients_month'] > 0 ? 'text-emerald-700' : 'text-gray-400' }}">
+                {{ $kpis['new_clients_month'] }}
+            </p>
+            <p class="text-xs text-gray-400 mt-0.5">ce mois</p>
         </div>
     </div>
 

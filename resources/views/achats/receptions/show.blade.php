@@ -337,6 +337,10 @@
         </div>
     @endif
 
+    {{-- Audit timeline --}}
+    <x-audit.timeline :model="\App\Models\Reception::class" :id="$reception->id"
+                      title="Historique de la réception" />
+
 </div>
 
 @push('scripts')

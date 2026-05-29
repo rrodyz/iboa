@@ -16,15 +16,7 @@
     <h1 class="text-2xl font-bold text-gray-900">Modifier la facture <span class="font-mono">{{ $invoice->number }}</span></h1>
 </div>
 
-@if($errors->any())
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
-    <ul class="text-sm text-red-700 space-y-1 list-disc list-inside">
-        @foreach($errors->all() as $error)
-            <li>{{ $error }}</li>
-        @endforeach
-    </ul>
-</div>
-@endif
+<x-validation-errors />
 
 {{-- [CONCURRENCE] Bandeau de verrou d'édition --}}
 <x-edit-lock-banner :model="$invoice" model-type="Invoice" :edit-lock="$editLock ?? null" />

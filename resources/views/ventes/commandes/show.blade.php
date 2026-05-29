@@ -26,65 +26,105 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div class="flex items-center gap-3 flex-wrap">
                 <h1 class="text-2xl font-bold text-gray-900 font-mono">{{ $order->number }}</h1>
-                @switch($order->status)
-                    @case('brouillon')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">Brouillon</span>
-                        @break
-                    @case('confirme')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Confirmé</span>
-                        @break
-                    @case('en_preparation')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">En préparation</span>
-                        @break
-                    @case('partiellement_livre')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">Part. livré</span>
-                        @break
-                    @case('livre')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Livré</span>
-                        @break
-                    @case('facture')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">Facturé</span>
-                        @break
-                    @case('annule')
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Annulé</span>
-                        @break
-                @endswitch
+                <x-workflow.status-badge :status="$order->status" :label="$order->status_label" />
                 <span class="text-gray-500 text-sm">{{ $order->client?->name }}</span>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
 
-                {{-- Brouillon: Confirmer + Modifier + Annuler --}}
+                @php
+                    $btnO  = 'inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors';
+                    $btnP  = 'inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors';
+                    $btnWO = 'inline-flex items-center gap-2 px-3 py-2 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors';
+                    $btnDO = 'inline-flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors';
+                @endphp
+
+                {{-- ── BROUILLON : Modifier + Soumettre + Supprimer ───────────────────── --}}
                 @if($order->status === 'brouillon')
-                    <form action="{{ route('ventes.commandes.confirm', $order) }}" method="POST"
-                          onsubmit="return confirm('Confirmer cette commande ?')">
-                        @csrf
-                        <button type="submit"
-                                class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            Confirmer
-                        </button>
-                    </form>
-                    <a href="{{ route('ventes.commandes.edit', $order) }}"
-                       class="inline-flex items-center gap-2 px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
+                    <a href="{{ route('ventes.commandes.edit', $order) }}" class="{{ $btnO }}">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                         </svg>
                         Modifier
                     </a>
-                    <form action="{{ route('ventes.commandes.cancel', $order) }}" method="POST"
-                          onsubmit="return confirm('Annuler cette commande ?')">
+                    @can('sales.submit')
+                    <form action="{{ route('ventes.commandes.submit', $order) }}" method="POST"
+                          onsubmit="return confirm('Soumettre cette commande à la validation interne ?')">
                         @csrf
-                        <button type="submit"
-                                class="inline-flex items-center gap-2 px-3 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
+                        <button type="submit" class="{{ $btnP }} bg-blue-600 hover:bg-blue-700">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
                             </svg>
-                            Annuler
+                            Soumettre à validation
                         </button>
                     </form>
+                    @endcan
+                    @can('orders.validate')
+                    <form action="{{ route('ventes.commandes.destroy', $order) }}" method="POST"
+                          onsubmit="return confirm('Supprimer définitivement cette commande brouillon ?')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="{{ $btnDO }}">Supprimer</button>
+                    </form>
+                    @endcan
+                @endif
+
+                {{-- ── EN ATTENTE DE VALIDATION ────────────────────────────────────────── --}}
+                @if($order->status === 'en_attente_validation')
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-yellow-700 bg-yellow-50 border border-yellow-200">
+                        <svg class="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        En attente de validation
+                    </span>
+                    @can('sales.validate')
+                    <form action="{{ route('ventes.commandes.validate-internal', $order) }}" method="POST"
+                          onsubmit="return confirm('Valider cette commande ?')">
+                        @csrf
+                        <button type="submit" class="{{ $btnP }} bg-emerald-600 hover:bg-emerald-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Valider
+                        </button>
+                    </form>
+                    <form action="{{ route('ventes.commandes.reject-internal', $order) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5){ alert('Motif obligatoire'); return; } $el.submit()">
+                        @csrf
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $btnWO }}">Refuser</button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif de refus</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Motif obligatoire…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $btnO }}">Annuler</button>
+                                    <button type="submit" class="{{ $btnP }} bg-orange-600 hover:bg-orange-700">Confirmer le refus</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    @endcan
+                    @can('sales.cancel')
+                    <form action="{{ route('ventes.commandes.cancel-internal', $order) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5){ alert('Motif obligatoire'); return; } $el.submit()">
+                        @csrf
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $btnDO }}">Annuler</button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif d'annulation</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Motif obligatoire…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $btnO }}">Fermer</button>
+                                    <button type="submit" class="{{ $btnP }} bg-red-600 hover:bg-red-700">Confirmer l'annulation</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    @endcan
                 @endif
 
                 {{-- Confirmé: Créer BL + Créer Facture + Annuler --}}
@@ -179,13 +219,14 @@
     {{-- Letterhead : logo + infos société + badge document --}}
     @php
         $statusMapCmd = [
-            'brouillon'           => ['label' => 'Brouillon',      'class' => 'bg-gray-100 text-gray-700'],
-            'confirme'            => ['label' => 'Confirmé',       'class' => 'bg-blue-100 text-blue-700'],
-            'en_preparation'      => ['label' => 'En préparation', 'class' => 'bg-yellow-100 text-yellow-700'],
-            'partiellement_livre' => ['label' => 'Part. livré',    'class' => 'bg-orange-100 text-orange-700'],
-            'livre'               => ['label' => 'Livré',          'class' => 'bg-green-100 text-green-700'],
-            'facture'             => ['label' => 'Facturé',        'class' => 'bg-purple-100 text-purple-700'],
-            'annule'              => ['label' => 'Annulé',         'class' => 'bg-red-100 text-red-700'],
+            'brouillon'            => ['label' => 'Brouillon',               'class' => 'bg-gray-100 text-gray-700'],
+            'en_attente_validation'=> ['label' => 'En attente de validation', 'class' => 'bg-yellow-100 text-yellow-700'],
+            'confirme'             => ['label' => 'Confirmé',                'class' => 'bg-blue-100 text-blue-700'],
+            'en_preparation'       => ['label' => 'En préparation',          'class' => 'bg-yellow-100 text-yellow-700'],
+            'partiellement_livre'  => ['label' => 'Part. livré',             'class' => 'bg-orange-100 text-orange-700'],
+            'livre'                => ['label' => 'Livré',                   'class' => 'bg-green-100 text-green-700'],
+            'facture'              => ['label' => 'Facturé',                 'class' => 'bg-purple-100 text-purple-700'],
+            'annule'               => ['label' => 'Annulé',                  'class' => 'bg-red-100 text-red-700'],
         ];
     @endphp
     @include('partials._doc-letterhead', [
@@ -404,6 +445,64 @@
     @endif
 
 
+
+    {{-- ── Workflow validation interne ─────────────────────────────────────── --}}
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <svg class="size-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+                Validation interne
+            </h2>
+            <x-workflow.status-badge :status="$order->status" :label="$order->status_label" />
+        </div>
+        @if($order->rejection_reason)
+            <div class="mb-4 rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm text-orange-800">
+                <strong>Motif de refus :</strong> {{ $order->rejection_reason }}
+            </div>
+        @endif
+        <x-workflow.action-buttons :document="$order"
+            submitRoute="ventes.commandes.submit"
+            validateRoute="ventes.commandes.validate-internal"
+            rejectRoute="ventes.commandes.reject-internal"
+            cancelRoute="ventes.commandes.cancel-internal"
+            :routeParam="$order->id" />
+        <x-workflow.history :document="$order" />
+    </div>
+
+    {{-- Documents liés --}}
+    @php
+        $relatedLinks = [];
+        if ($order->quote) {
+            $relatedLinks[] = [
+                'icon'       => '📋',
+                'label'      => 'Devis ' . $order->quote->number,
+                'href'       => route('ventes.devis.show', $order->quote),
+                'badge'      => $order->quote->status_label ?? ucfirst($order->quote->status),
+                'badgeColor' => 'gray',
+            ];
+        }
+        foreach ($order->deliveryNotes ?? [] as $dn) {
+            $relatedLinks[] = [
+                'icon'       => '🚚',
+                'label'      => 'Bon de livraison ' . $dn->number,
+                'href'       => route('ventes.bons-livraison.show', $dn),
+                'badge'      => $dn->status_label ?? ucfirst($dn->status),
+                'badgeColor' => 'purple',
+            ];
+        }
+        foreach ($order->invoices ?? [] as $inv) {
+            $relatedLinks[] = [
+                'icon'       => '🧾',
+                'label'      => 'Facture ' . $inv->number,
+                'href'       => route('ventes.factures.show', $inv),
+                'badge'      => $inv->status_label ?? ucfirst($inv->status),
+                'badgeColor' => 'green',
+            ];
+        }
+    @endphp
+    @if(count($relatedLinks))
+        <x-document.related :links="$relatedLinks" title="Documents liés à cette commande" />
+    @endif
 
     <x-audit.timeline :model="\App\Models\Order::class" :id="$order->id" />
 

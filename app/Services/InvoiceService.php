@@ -367,24 +367,38 @@ class InvoiceService
             $invoice->update($updates);
 
             $fresh = $invoice->fresh(['client', 'company']);
-
-            // [MED-1] PROFORMA = document commercial sans impact réel.
-            // Ni comptabilité, ni stock, ni balance client.
-            // Doit être "convertie" en facture standard via convertProforma() pour générer les impacts.
-            if ($fresh->type === 'proforma') {
-                return $fresh;
-            }
-
-            // Post to GL synchronously — must be in the same transaction
-            $this->accountingService->postClientInvoice($fresh);
-            // [COMPTA-STOCK] Sortie de stock automatique
-            $this->accountingService->postSaleStockMovement($fresh);
-
-            // Fire event — queued listener sends email after commit
-            event(new InvoiceValidated($fresh));
+            $this->applyValidationSideEffects($fresh);
 
             return $fresh;
         });
+    }
+
+    /**
+     * Applique les effets secondaires de la validation d'une facture :
+     * - Comptabilisation au grand livre (GL)
+     * - Sortie de stock du coût des ventes
+     * - Événement InvoiceValidated
+     *
+     * Méthode publique appelée aussi par CommercialWorkflowService::validateInvoice()
+     * pour le circuit interne (brouillon → en_attente_validation → emise).
+     * Les proformas sont ignorées (pas d'impact comptable/stock).
+     */
+    public function applyValidationSideEffects(Invoice $invoice): void
+    {
+        // [MED-1] PROFORMA = document commercial sans impact réel.
+        // Ni comptabilité, ni stock, ni balance client.
+        // Doit être "convertie" en facture standard via convertProforma() pour générer les impacts.
+        if ($invoice->type === 'proforma') {
+            return;
+        }
+
+        // Post to GL synchronously — must be in the same transaction
+        $this->accountingService->postClientInvoice($invoice);
+        // [COMPTA-STOCK] Sortie de stock automatique
+        $this->accountingService->postSaleStockMovement($invoice);
+
+        // Fire event — queued listener sends email after commit
+        event(new InvoiceValidated($invoice));
     }
 
     /**

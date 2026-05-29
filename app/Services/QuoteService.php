@@ -221,12 +221,15 @@ class QuoteService
 
     /**
      * Convert this quote into a confirmed sales order.
-     * Requires status = accepte.
+     * Requires status = 'valide' (nouveau workflow interne) ou 'accepte' (ancien workflow client).
      */
     public function convertToOrder(Quote $quote): Order
     {
-        if ($quote->status !== 'accepte') {
-            throw new \RuntimeException('Le devis doit être accepté par le client avant d\'être converti en commande. Statut actuel : ' . $quote->status . '.');
+        $allowedStatuses = ['valide', 'accepte'];
+        if (! in_array($quote->status, $allowedStatuses, true)) {
+            throw new \RuntimeException(
+                'Le devis doit être validé avant d\'être transformé en commande. Statut actuel : ' . $quote->status . '.'
+            );
         }
         if ($quote->converted_to_order_id) {
             throw new \RuntimeException('Ce devis a déjà été converti en commande.');

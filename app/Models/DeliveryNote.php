@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\HasCompanyScope;
 use App\Models\Traits\HasCreator;
+use App\Traits\HasCommercialWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DeliveryNote extends Model
 {
-    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope;
+    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope, HasCommercialWorkflow;
+
+    const DOCUMENT_TYPE = 'delivery_note';
 
     protected $table = 'delivery_notes';
 
@@ -33,11 +36,18 @@ class DeliveryNote extends Model
         'validated_at',
         'currency_code',
         'total_quantity',
+        'submitted_by',
+        'submitted_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
         'issued_at'      => 'date',
         'validated_at'   => 'datetime',
+        'submitted_at'   => 'datetime',
+        'rejected_at'    => 'datetime',
         'total_quantity' => 'decimal:4',
     ];
 
@@ -90,5 +100,36 @@ class DeliveryNote extends Model
     {
         return $this->hasMany(StockMovement::class, 'reference_id')
                     ->where('reference_type', 'delivery_note');
+    }
+
+    // ── Accessors workflow ────────────────────────────────────────────────────
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'Brouillon',
+            'en_attente_validation' => 'En attente de validation',
+            'valide'                => 'Validé',
+            'livre'                 => 'Livré',
+            'annule'                => 'Annulé',
+            default                 => ucfirst($this->status),
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'gray',
+            'en_attente_validation' => 'yellow',
+            'valide'                => 'green',
+            'livre'                 => 'teal',
+            'annule'                => 'red',
+            default                 => 'gray',
+        };
+    }
+
+    protected function getValidatedStatuses(): array
+    {
+        return ['valide', 'livre'];
     }
 }

@@ -136,17 +136,22 @@ class PurchaseOrderController extends Controller
     public function pdf(PurchaseOrder $commande, Request $request)
     {
         $this->authorize('view', $commande);
-        $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
-        $settings      = Company::first()?->documentSetting;
+        try {
+            $purchaseOrder = $this->service->repository->findWithDetails($commande->id);
+            $settings      = Company::first()?->documentSetting;
 
-        $pdf = Pdf::loadView('achats.pdf.purchase-order', compact('purchaseOrder', 'settings'))
-            ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            $pdf = Pdf::loadView('achats.pdf.purchase-order', compact('purchaseOrder', 'settings'))
+                ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
 
-        $filename = 'BC_' . str_replace(['/', '\\', ' '], '-', $purchaseOrder->number) . '.pdf';
+            $filename = 'BC_' . str_replace(['/', '\\', ' '], '-', $purchaseOrder->number) . '.pdf';
 
-        return $request->boolean('preview')
-            ? $pdf->stream($filename)
-            : $pdf->download($filename);
+            return $request->boolean('preview')
+                ? $pdf->stream($filename)
+                : $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF BC error', ['id' => $commande->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le PDF : ' . $e->getMessage());
+        }
     }
 
     /**

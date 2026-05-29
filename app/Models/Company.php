@@ -69,10 +69,13 @@ class Company extends Model
         'share_capital_currency',
         'default_currency_id',
         'current_fiscal_year_id',
+        'validation_mode',
+        'allow_self_validation',
     ];
 
     protected $casts = [
-        'is_vat_subject' => 'boolean',
+        'is_vat_subject'       => 'boolean',
+        'allow_self_validation' => 'boolean',
     ];
 
     // -------------------------------------------------------------------------

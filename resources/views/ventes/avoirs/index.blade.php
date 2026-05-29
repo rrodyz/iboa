@@ -46,8 +46,9 @@
                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
             <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                 <option value="">Tous les statuts</option>
-                <option value="brouillon" {{ ($filters['status'] ?? '') === 'brouillon' ? 'selected' : '' }}>Brouillon</option>
-                <option value="valide"    {{ ($filters['status'] ?? '') === 'valide'    ? 'selected' : '' }}>Validé</option>
+                <option value="brouillon"             {{ ($filters['status'] ?? '') === 'brouillon'             ? 'selected' : '' }}>Brouillon</option>
+                <option value="en_attente_validation" {{ ($filters['status'] ?? '') === 'en_attente_validation' ? 'selected' : '' }}>⏳ En attente de validation</option>
+                <option value="valide"                {{ ($filters['status'] ?? '') === 'valide'                ? 'selected' : '' }}>Validé</option>
                 <option value="applique"  {{ ($filters['status'] ?? '') === 'applique'  ? 'selected' : '' }}>Appliqué</option>
                 <option value="annule"    {{ ($filters['status'] ?? '') === 'annule'    ? 'selected' : '' }}>Annulé</option>
             </select>
@@ -109,9 +110,7 @@
                             {{ number_format($cn->remaining_credit, 0, ',', ' ') }} FCFA
                         </td>
                         <td class="px-4 py-3 text-center">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $badges[$cn->status] ?? 'bg-gray-100 text-gray-600' }}">
-                                {{ $labels[$cn->status] ?? $cn->status }}
-                            </span>
+                            <x-workflow.status-badge :status="$cn->status" :label="$cn->status_label" size="sm" />
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">

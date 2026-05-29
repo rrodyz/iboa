@@ -19,6 +19,14 @@
          get providerHint() { return this.hints[this.provider] ?? null; },
          get sandboxUrl() { return this.providerHint?.sandbox_url ?? ''; },
          get prodUrl() { return this.providerHint?.prod_url ?? ''; },
+         validateJson(el) {
+             let valid = true;
+             if (el.value.trim()) {
+                 try { JSON.parse(el.value); } catch(e) { valid = false; }
+             }
+             el.classList.toggle('border-red-400', !valid);
+             el.classList.toggle('border-gray-300', valid);
+         },
      }">
 
     {{-- Header --}}
@@ -218,7 +226,7 @@
                     </span>
                 </p>
                 <textarea name="extra_config_raw" rows="5" x-ref="jsonField"
-                    @blur="try { JSON.parse($el.value); $el.classList.remove('border-red-400'); $el.classList.add('border-gray-300'); } catch(e) { if($el.value.trim()) { $el.classList.add('border-red-400'); $el.classList.remove('border-gray-300'); } }"
+                    @blur="validateJson($el)"
                     class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 transition-colors"
                     placeholder='{"sender_id": "IBOA", "merchant_id": "12345"}'>{{ old('extra_config_raw', $integration->extra_config ? json_encode($integration->extra_config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) : '') }}</textarea>
             </div>

@@ -12,6 +12,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\Product;
+use App\Services\CommercialWorkflowService;
 use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -21,7 +22,10 @@ class InvoiceController extends Controller
 {
     use ManagesEditLock;
 
-    public function __construct(private InvoiceService $service) {}
+    public function __construct(
+        private InvoiceService              $service,
+        private CommercialWorkflowService   $workflow,
+    ) {}
 
     public function index(Request $request)
     {
@@ -301,18 +305,71 @@ class InvoiceController extends Controller
     {
         $this->authorize('view', $facture);
 
-        $invoice  = $this->service->repository->findWithDetails($facture->id);
-        $viewPath = $this->service->generatePdfPath($invoice);
-        $settings = Company::first()?->documentSetting;
+        try {
+            $invoice  = $this->service->repository->findWithDetails($facture->id);
+            $viewPath = $this->service->generatePdfPath($invoice);
+            $settings = Company::first()?->documentSetting;
 
-        $pdf = Pdf::loadView($viewPath, compact('invoice', 'settings'))
-            ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            $pdf = Pdf::loadView($viewPath, compact('invoice', 'settings'))
+                ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
 
-        $filename = 'Facture_' . str_replace(['/', '\\', ' '], '-', $invoice->number) . '.pdf';
+            $filename = 'Facture_' . str_replace(['/', '\\', ' '], '-', $invoice->number) . '.pdf';
 
-        return $request->boolean('preview')
-            ? $pdf->stream($filename)
-            : $pdf->download($filename);
+            return $request->boolean('preview')
+                ? $pdf->stream($filename)
+                : $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF facture error', ['id' => $facture->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le PDF : ' . $e->getMessage());
+        }
+    }
+
+    // ── Workflow de validation interne ────────────────────────────────────────
+
+    public function submit(Request $request, Invoice $facture)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->submit($facture, $request->motif);
+            return back()->with('success', "Facture {$facture->number} soumise à validation.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function validateInternal(Request $request, Invoice $facture)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->validateInvoice($facture, $request->motif);
+            return back()->with('success', "Facture {$facture->number} validée.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function rejectInternal(Request $request, Invoice $facture)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => 'Le motif est obligatoire.']);
+        try {
+            $this->workflow->reject($facture, $request->motif);
+            return back()->with('success', "Facture {$facture->number} refusée — retour en brouillon.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function cancelInternal(Request $request, Invoice $facture)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => "Le motif est obligatoire."]);
+        try {
+            $this->workflow->cancel($facture, $request->motif);
+            return back()->with('success', "Facture {$facture->number} annulée.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     /**

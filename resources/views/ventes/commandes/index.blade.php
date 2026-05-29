@@ -54,8 +54,9 @@
 
             <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="">Tous les statuts</option>
-                <option value="brouillon"          {{ ($filters['status'] ?? '') === 'brouillon'          ? 'selected' : '' }}>Brouillon</option>
-                <option value="confirme"           {{ ($filters['status'] ?? '') === 'confirme'           ? 'selected' : '' }}>Confirmée</option>
+                <option value="brouillon"             {{ ($filters['status'] ?? '') === 'brouillon'             ? 'selected' : '' }}>Brouillon</option>
+                <option value="en_attente_validation" {{ ($filters['status'] ?? '') === 'en_attente_validation' ? 'selected' : '' }}>⏳ En attente de validation</option>
+                <option value="confirme"              {{ ($filters['status'] ?? '') === 'confirme'              ? 'selected' : '' }}>Confirmée</option>
                 <option value="en_preparation"     {{ ($filters['status'] ?? '') === 'en_preparation'     ? 'selected' : '' }}>En préparation</option>
                 <option value="partiellement_livre" {{ ($filters['status'] ?? '') === 'partiellement_livre' ? 'selected' : '' }}>Part. livrée</option>
                 <option value="livre"              {{ ($filters['status'] ?? '') === 'livre'              ? 'selected' : '' }}>Livrée</option>
@@ -124,31 +125,7 @@
                             {{ number_format($order->total_ttc, 0, ',', ' ') }} FCFA
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @switch($order->status)
-                                @case('brouillon')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Brouillon</span>
-                                    @break
-                                @case('confirme')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Confirmée</span>
-                                    @break
-                                @case('en_preparation')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">En prép.</span>
-                                    @break
-                                @case('partiellement_livre')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Part. livrée</span>
-                                    @break
-                                @case('livre')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Livrée</span>
-                                    @break
-                                @case('facture')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Facturée</span>
-                                    @break
-                                @case('annule')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Annulée</span>
-                                    @break
-                                @default
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{{ $order->status }}</span>
-                            @endswitch
+                            <x-workflow.status-badge :status="$order->status" :label="$order->status_label" size="sm" />
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">

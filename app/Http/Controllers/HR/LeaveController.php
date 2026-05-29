@@ -102,24 +102,42 @@ class LeaveController extends Controller
             return back()->with('error', 'Cette demande ne peut plus être approuvée.');
         }
 
-        DB::transaction(function () use ($leave) {
+        // [FIX-RH-SOLDE] Vérifier le solde disponible avant approbation.
+        $year    = $leave->start_date->year;
+        $balance = LeaveBalance::firstOrCreate(
+            ['employee_id'   => $leave->employee_id,
+             'leave_type_id' => $leave->leave_type_id,
+             'year'          => $year],
+            ['entitled_days' => $leave->leaveType->days_per_year ?? 0]
+        );
+        $available = max(0, (float) $balance->entitled_days - (float) $balance->taken_days);
+
+        if ($leave->days > $available) {
+            return back()->with('error', sprintf(
+                'Solde insuffisant pour %s : %g jour(s) demandé(s) mais seulement %g jour(s) disponible(s) sur %g acquis.',
+                $leave->employee->full_name,
+                $leave->days,
+                $available,
+                $balance->entitled_days
+            ));
+        }
+
+        DB::transaction(function () use ($leave, $balance) {
             $leave->update([
                 'status'      => 'approuve',
                 'approved_by' => auth()->id(),
                 'approved_at' => now(),
             ]);
 
-            // Mettre à jour le solde
-            $year = $leave->start_date->year;
-            LeaveBalance::firstOrCreate(
-                ['employee_id'    => $leave->employee_id,
-                 'leave_type_id'  => $leave->leave_type_id,
-                 'year'           => $year],
-                ['entitled_days'  => $leave->leaveType->days_per_year]
-            )->increment('taken_days', $leave->days);
+            // Déduire du solde
+            $balance->increment('taken_days', $leave->days);
         });
 
-        return back()->with('success', 'Congé approuvé et solde mis à jour.');
+        return back()->with('success', sprintf(
+            'Congé approuvé — %g jour(s) déduit(s) du solde de %s.',
+            $leave->days,
+            $leave->employee->full_name
+        ));
     }
 
     public function refuse(LeaveRequest $leave, Request $request)

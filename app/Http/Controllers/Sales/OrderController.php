@@ -9,12 +9,16 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\Product;
+use App\Services\CommercialWorkflowService;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
-    public function __construct(private OrderService $service) {}
+    public function __construct(
+        private OrderService                $service,
+        private CommercialWorkflowService   $workflow,
+    ) {}
 
     public function index(Request $request)
     {
@@ -155,6 +159,54 @@ class OrderController extends Controller
             return redirect()
                 ->route('ventes.bons-livraison.show', $dn)
                 ->with('success', 'Bon de livraison ' . $dn->number . ' créé depuis la commande.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    // ── Workflow de validation interne ────────────────────────────────────────
+
+    public function submit(Request $request, Order $commande)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->submit($commande, $request->motif);
+            return back()->with('success', "Commande {$commande->number} soumise à validation.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function validateInternal(Request $request, Order $commande)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->validateOrder($commande, $request->motif);
+            return back()->with('success', "Commande {$commande->number} validée.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function rejectInternal(Request $request, Order $commande)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => 'Le motif est obligatoire.']);
+        try {
+            $this->workflow->reject($commande, $request->motif);
+            return back()->with('success', "Commande {$commande->number} refusée — retour en brouillon.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function cancelInternal(Request $request, Order $commande)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => "Le motif d'annulation est obligatoire."]);
+        try {
+            $this->workflow->cancel($commande, $request->motif);
+            return back()->with('success', "Commande {$commande->number} annulée.");
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }

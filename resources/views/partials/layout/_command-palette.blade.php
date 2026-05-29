@@ -6,6 +6,7 @@
 <div x-data="commandPalette()"
      x-show="open"
      x-cloak
+     data-search-url="{{ route('search') }}"
      @keydown.escape.window="close()"
      @keydown.ctrl.k.window.prevent="toggle()"
      @keydown.meta.k.window.prevent="toggle()"
@@ -154,116 +155,20 @@
     </div>
 </div>
 
-@push('scripts')
-{{-- data-turbo-eval="false" → exécuté UNE SEULE FOIS (chargement initial).
-     La fonction commandPalette() reste dans le scope global entre les navigations Turbo.
-     Alpine.js appelle commandPalette() depuis x-data à chaque fois que l'élément est
-     connecté au DOM (body-swap), la fonction existante suffit. --}}
-<script data-turbo-eval="false">
-function commandPalette() {
-    return {
-        open: false,
-        query: '',
-        results: [],
-        loading: false,
-        activeIndex: 0,
-        recentVisits: JSON.parse(localStorage.getItem('erp_recent_visits') || '[]').slice(0, 5),
-        quickActions: [
-            @can('invoices.create')
-            { label: 'Nouvelle facture', section: 'Ventes', icon: '🧾', color: 'indigo', url: '{{ route("ventes.factures.create") }}' },
-            @endcan
-            @can('quotes.create')
-            { label: 'Nouveau devis', section: 'Ventes', icon: '📋', color: 'violet', url: '{{ route("ventes.devis.create") }}' },
-            @endcan
-            @can('purchase_orders.create')
-            { label: 'Bon de commande', section: 'Achats', icon: '🛒', color: 'amber', url: '{{ route("achats.commandes.create") }}' },
-            @endcan
-            { label: 'Nouveau contact CRM', section: 'CRM', icon: '👤', color: 'cyan', url: '{{ route("crm.contacts.create") }}' },
-            { label: 'Nouvelle opportunité', section: 'CRM', icon: '💡', color: 'emerald', url: '{{ route("crm.opportunities.create") }}' },
-            { label: 'Tableau de bord', section: 'Navigation', icon: '🏠', color: 'gray', url: '{{ route("dashboard") }}' },
-            { label: 'Pipeline CRM', section: 'CRM', icon: '📊', color: 'blue', url: '{{ route("crm.opportunities.index") }}' },
-            { label: 'Clients', section: 'Gestion', icon: '🏢', color: 'emerald', url: '{{ route("clients.index") }}' },
-        ],
-
-        toggle() { this.open ? this.close() : this.open_(); },
-        open_() {
-            this.open = true;
-            this.query = '';
-            this.results = [];
-            this.activeIndex = 0;
-            this.recentVisits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]').slice(0, 5);
-            this.$nextTick(() => this.$refs.searchInput?.focus());
-        },
-        close() {
-            this.open = false;
-            this.query = '';
-            this.results = [];
-        },
-
-        async search() {
-            if (this.query.length < 2) { this.results = []; return; }
-            this.loading = true;
-            this.activeIndex = 0;
-            try {
-                const r = await fetch('{{ route("search") }}?q=' + encodeURIComponent(this.query), {
-                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-                });
-                if (!r.ok) return;
-                const d = await r.json();
-                this.results = d.results ?? [];
-            } catch(e) {}
-            finally { this.loading = false; }
-        },
-
-        moveDown() {
-            const max = this.query.length >= 2 ? this.results.length - 1 : this.quickActions.length + this.recentVisits.length - 1;
-            if (this.activeIndex < max) this.activeIndex++;
-        },
-        moveUp() {
-            if (this.activeIndex > 0) this.activeIndex--;
-        },
-        selectActive() {
-            let item;
-            if (this.query.length >= 2) {
-                item = this.results[this.activeIndex];
-                if (item) { this.trackVisit(item); window.location.href = item.url; }
-            } else {
-                const all = [...this.quickActions, ...this.recentVisits];
-                item = all[this.activeIndex];
-                if (item) { window.location.href = item.url; }
-            }
-            this.close();
-        },
-
-        trackVisit(item) {
-            if (!item?.url || !item?.label) return;
-            let visits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]');
-            visits = visits.filter(v => v.url !== item.url);
-            visits.unshift({ url: item.url, label: item.label, sub: item.sublabel || item.type, icon: this.typeIcon(item.type) });
-            if (visits.length > 10) visits.pop();
-            localStorage.setItem('erp_recent_visits', JSON.stringify(visits));
-        },
-
-        typeIcon(type) {
-            const icons = { Facture:'🧾', Devis:'📋', Client:'🏢', Fournisseur:'🏭', Produit:'📦', CRM:'👤', Stock:'📦', Trésorerie:'💰' };
-            return icons[type] || '📄';
-        },
-
-        colorStyle(color) {
-            const styles = {
-                indigo: 'background:#EEF2FF;color:#4338CA',
-                violet: 'background:#F5F3FF;color:#7C3AED',
-                blue:   'background:#EFF6FF;color:#1D4ED8',
-                amber:  'background:#FFFBEB;color:#B45309',
-                emerald:'background:#ECFDF5;color:#047857',
-                cyan:   'background:#ECFEFF;color:#0E7490',
-                red:    'background:#FEF2F2;color:#DC2626',
-                orange: 'background:#FFF7ED;color:#C2410C',
-                gray:   'background:#F9FAFB;color:#374151',
-            };
-            return styles[color] || styles.gray;
-        },
-    };
-}
+{{--
+    Quick actions rendues côté serveur en JSON — lues par app.js lors de l'init du composant.
+    Pas de @push('scripts') : le composant commandPalette est enregistré dans app.js
+    (Alpine.data('commandPalette', ...)) avant Alpine.start() → zéro risque de timing.
+--}}
+<script type="application/json" id="cp-quick-actions">
+{{ json_encode(array_values(array_filter([
+    Auth::user()?->can('invoices.create')       ? ['label'=>'Nouvelle facture',    'section'=>'Ventes',     'icon'=>'🧾', 'color'=>'indigo',  'url'=>route('ventes.factures.create')]       : null,
+    Auth::user()?->can('quotes.create')         ? ['label'=>'Nouveau devis',       'section'=>'Ventes',     'icon'=>'📋', 'color'=>'violet',  'url'=>route('ventes.devis.create')]          : null,
+    Auth::user()?->can('purchase_orders.create')? ['label'=>'Bon de commande',     'section'=>'Achats',     'icon'=>'🛒', 'color'=>'amber',   'url'=>route('achats.commandes.create')]      : null,
+    ['label'=>'Nouveau contact CRM',  'section'=>'CRM',        'icon'=>'👤', 'color'=>'cyan',    'url'=>route('crm.contacts.create')],
+    ['label'=>'Nouvelle opportunité', 'section'=>'CRM',        'icon'=>'💡', 'color'=>'emerald', 'url'=>route('crm.opportunities.create')],
+    ['label'=>'Tableau de bord',      'section'=>'Navigation', 'icon'=>'🏠', 'color'=>'gray',    'url'=>route('dashboard')],
+    ['label'=>'Pipeline CRM',         'section'=>'CRM',        'icon'=>'📊', 'color'=>'blue',    'url'=>route('crm.opportunities.index')],
+    ['label'=>'Clients',              'section'=>'Gestion',    'icon'=>'🏢', 'color'=>'emerald', 'url'=>route('clients.index')],
+])), JSON_UNESCAPED_UNICODE) }}
 </script>
-@endpush

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Traits\HasAttachments;
 use App\Models\Traits\HasCompanyScope;
 use App\Models\Traits\HasCreator;
+use App\Traits\HasCommercialWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,7 +16,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
 {
-    use HasFactory, SoftDeletes, HasCreator, HasAttachments, HasCompanyScope;
+    use HasFactory, SoftDeletes, HasCreator, HasAttachments, HasCompanyScope, HasCommercialWorkflow;
+
+    const DOCUMENT_TYPE = 'invoice';
 
     protected $table = 'invoices';
 
@@ -69,6 +72,11 @@ class Invoice extends Model
         'parent_invoice_id',
         'journal_entry_id',   // [AUDIT-ERP-A]
         'quote_id',           // [AUDIT-ERP-A]
+        'submitted_by',
+        'submitted_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -90,6 +98,8 @@ class Invoice extends Model
         'is_recurring'            => 'boolean',
         'validated_at'            => 'datetime',
         'sent_at'                 => 'datetime',
+        'submitted_at'            => 'datetime',
+        'rejected_at'             => 'datetime',
     ];
 
     // -------------------------------------------------------------------------
@@ -190,8 +200,9 @@ class Invoice extends Model
     {
         return match ($this->status) {
             'brouillon'             => 'Brouillon',
-            'emise'                 => 'Émise',      // [AUDIT-ERP-B] statut réel
-            'validee'               => 'Validée',    // rétrocompat si anciennes données
+            'en_attente_validation' => 'En attente de validation',
+            'emise'                 => 'Émise',
+            'validee'               => 'Validée',    // rétrocompat
             'envoyee'               => 'Envoyée',
             'partiellement_payee'   => 'Part. payée',
             'payee'                 => 'Payée',
@@ -204,16 +215,22 @@ class Invoice extends Model
     public function getStatusColorAttribute(): string
     {
         return match ($this->status) {
-            'brouillon'           => 'gray',
-            'emise'               => 'blue',    // [AUDIT-ERP-B]
-            'validee'             => 'blue',    // rétrocompat
-            'envoyee'             => 'indigo',
-            'partiellement_payee' => 'amber',
-            'payee'               => 'green',
-            'en_retard'           => 'red',
-            'annulee'             => 'red',
-            default               => 'gray',
+            'brouillon'             => 'gray',
+            'en_attente_validation' => 'yellow',
+            'emise'                 => 'blue',
+            'validee'               => 'blue',    // rétrocompat
+            'envoyee'               => 'indigo',
+            'partiellement_payee'   => 'amber',
+            'payee'                 => 'green',
+            'en_retard'             => 'red',
+            'annulee'               => 'red',
+            default                 => 'gray',
         };
+    }
+
+    protected function getValidatedStatuses(): array
+    {
+        return ['emise', 'envoyee', 'partiellement_payee', 'payee', 'en_retard'];
     }
 
     // -------------------------------------------------------------------------

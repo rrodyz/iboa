@@ -44,7 +44,8 @@
                     'date_from' => $filters['date_from'] ?? null,
                     'date_to'   => $filters['date_to']   ?? null,
                 ])) }}"
-               class="inline-flex items-center gap-2 px-4 py-2.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium rounded-lg transition-colors">
+               class="inline-flex items-center gap-2 px-4 py-2.5 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium rounded-lg transition-colors"
+               data-loading data-loading-text="Export Excel en cours…">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                 </svg>
@@ -68,12 +69,13 @@
 
             <select name="status" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <option value="">Tous les statuts</option>
-                <option value="brouillon" {{ ($filters['status'] ?? '') === 'brouillon' ? 'selected' : '' }}>Brouillon</option>
-                <option value="envoye"    {{ ($filters['status'] ?? '') === 'envoye'    ? 'selected' : '' }}>Envoyé</option>
-                <option value="accepte"   {{ ($filters['status'] ?? '') === 'accepte'   ? 'selected' : '' }}>Accepté</option>
-                <option value="refuse"    {{ ($filters['status'] ?? '') === 'refuse'    ? 'selected' : '' }}>Refusé</option>
-                <option value="expire"    {{ ($filters['status'] ?? '') === 'expire'    ? 'selected' : '' }}>Expiré</option>
-                <option value="annule"    {{ ($filters['status'] ?? '') === 'annule'    ? 'selected' : '' }}>Annulé</option>
+                <option value="brouillon"             {{ ($filters['status'] ?? '') === 'brouillon'             ? 'selected' : '' }}>Brouillon</option>
+                <option value="en_attente_validation" {{ ($filters['status'] ?? '') === 'en_attente_validation' ? 'selected' : '' }}>⏳ En attente de validation</option>
+                <option value="envoye"                {{ ($filters['status'] ?? '') === 'envoye'                ? 'selected' : '' }}>Envoyé</option>
+                <option value="accepte"               {{ ($filters['status'] ?? '') === 'accepte'               ? 'selected' : '' }}>Accepté</option>
+                <option value="refuse"                {{ ($filters['status'] ?? '') === 'refuse'                ? 'selected' : '' }}>Refusé</option>
+                <option value="expire"                {{ ($filters['status'] ?? '') === 'expire'                ? 'selected' : '' }}>Expiré</option>
+                <option value="annule"                {{ ($filters['status'] ?? '') === 'annule'                ? 'selected' : '' }}>Annulé</option>
             </select>
 
             <input type="date" name="date_from" value="{{ $filters['date_from'] ?? '' }}"
@@ -146,28 +148,7 @@
                             {{ number_format($quote->total_ttc, 0, ',', ' ') }} FCFA
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @switch($quote->status)
-                                @case('brouillon')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">Brouillon</span>
-                                    @break
-                                @case('envoye')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Envoyé</span>
-                                    @break
-                                @case('accepte')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Accepté</span>
-                                    @break
-                                @case('refuse')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Refusé</span>
-                                    @break
-                                @case('expire')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Expiré</span>
-                                    @break
-                                @case('annule')
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Annulé</span>
-                                    @break
-                                @default
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{{ $quote->status }}</span>
-                            @endswitch
+                            <x-workflow.status-badge :status="$quote->status" :label="$quote->status_label" size="sm" />
                         </td>
                         <td class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">

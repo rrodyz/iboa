@@ -38,17 +38,7 @@
     @csrf
     @if($isEdit) @method('PUT') @endif
 
-    {{-- ──────────────────────────────────────────────────────────
-         Erreurs de validation
-    ────────────────────────────────────────────────────────── --}}
-    @if($errors->any())
-    <div class="bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">
-        <strong>Veuillez corriger les erreurs suivantes :</strong>
-        <ul class="mt-1 list-disc list-inside">
-            @foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach
-        </ul>
-    </div>
-    @endif
+    <x-validation-errors />
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 

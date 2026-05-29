@@ -19,99 +19,131 @@ class SalesInsightsService
 {
     /**
      * KPIs synthétiques pour le tableau de bord.
+     *
+     * Optimisé : une seule requête agrégée par domaine via DB::selectRaw.
      */
     public function dashboardKpis(): array
     {
-        $today = now();
-        $startOfMonth = $today->copy()->startOfMonth();
-        $endOfMonth   = $today->copy()->endOfMonth();
+        $today          = now();
+        $todayStr       = $today->toDateString();
+        $startOfMonth   = $today->copy()->startOfMonth();
+        $endOfMonth     = $today->copy()->endOfMonth();
         $startPrevMonth = $today->copy()->subMonth()->startOfMonth();
         $endPrevMonth   = $today->copy()->subMonth()->endOfMonth();
+        $startOfYear    = $today->copy()->startOfYear();
+        $startPrevYear  = $today->copy()->subYear()->startOfYear();
+        $endPrevYear    = $today->copy()->subYear()->endOfYear();
 
-        // CA HT du mois (factures non-brouillon, non-annulées, non-avoir)
-        $caMonth = (int) DB::table('invoices')
+        // ── Agrégats factures en une requête ────────────────────────────────
+        $invoiceAgg = DB::table('invoices')
             ->whereNull('deleted_at')
-            ->whereNotIn('status', ['brouillon', 'annulee'])
-            ->where('type', '!=', 'avoir')
-            ->whereBetween('issued_at', [$startOfMonth, $endOfMonth])
-            ->sum('subtotal_ht');
+            ->selectRaw("
+                -- CA mois courant
+                SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at BETWEEN ? AND ? THEN subtotal_ht ELSE 0 END) AS ca_month,
+                -- CA mois précédent
+                SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at BETWEEN ? AND ? THEN subtotal_ht ELSE 0 END) AS ca_prev_month,
+                -- CA année en cours
+                SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at >= ? THEN subtotal_ht ELSE 0 END) AS ca_year,
+                -- CA année précédente (même périmètre)
+                SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at BETWEEN ? AND ? THEN subtotal_ht ELSE 0 END) AS ca_prev_year,
+                -- CA 90 derniers jours (pour DSO)
+                SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN subtotal_ht ELSE 0 END) AS ca_90d,
+                -- Encours (non payées)
+                SUM(CASE WHEN status IN ('emise','envoyee','partiellement_payee','en_retard')
+                         THEN remaining_amount ELSE 0 END) AS outstanding,
+                -- Retards — montant
+                SUM(CASE WHEN status IN ('emise','envoyee','partiellement_payee','en_retard')
+                         AND due_at < ? AND remaining_amount > 0 THEN remaining_amount ELSE 0 END) AS overdue_amount,
+                -- Retards — nombre
+                SUM(CASE WHEN status IN ('emise','envoyee','partiellement_payee','en_retard')
+                         AND due_at < ? AND remaining_amount > 0 THEN 1 ELSE 0 END) AS overdue_count,
+                -- Brouillons à valider
+                SUM(CASE WHEN status = 'brouillon' THEN 1 ELSE 0 END) AS draft_invoices,
+                -- Panier moyen mois courant
+                AVG(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
+                         AND issued_at BETWEEN ? AND ? THEN total_ttc ELSE NULL END) AS avg_basket_month
+            ",
+                // bindings dans l'ordre des ?
+                [
+                    $startOfMonth,   $endOfMonth,
+                    $startPrevMonth, $endPrevMonth,
+                    $startOfYear,
+                    $startPrevYear,  $endPrevYear,
+                    $todayStr, $todayStr,
+                    $startOfMonth,   $endOfMonth,
+                ]
+            )
+            ->first();
 
-        $caPrevMonth = (int) DB::table('invoices')
+        $caMonth      = (int) ($invoiceAgg->ca_month      ?? 0);
+        $caPrevMonth  = (int) ($invoiceAgg->ca_prev_month ?? 0);
+        $caYear       = (int) ($invoiceAgg->ca_year       ?? 0);
+        $caPrevYear   = (int) ($invoiceAgg->ca_prev_year  ?? 0);
+        $ca90         = (int) ($invoiceAgg->ca_90d        ?? 0);
+        $outstanding  = (int) ($invoiceAgg->outstanding   ?? 0);
+        $overdue      = (int) ($invoiceAgg->overdue_amount ?? 0);
+        $overdueCount = (int) ($invoiceAgg->overdue_count ?? 0);
+        $draftInvoices = (int) ($invoiceAgg->draft_invoices ?? 0);
+        $avgBasket    = (int) ($invoiceAgg->avg_basket_month ?? 0);
+
+        $variation      = $caPrevMonth > 0
+            ? round(($caMonth - $caPrevMonth) / $caPrevMonth * 100, 1)
+            : null;
+        $yearVariation  = $caPrevYear > 0
+            ? round(($caYear - $caPrevYear) / $caPrevYear * 100, 1)
+            : null;
+        $dso = $ca90 > 0 ? (int) round($outstanding / $ca90 * 90) : 0;
+
+        // ── Devis : taux de conversion ───────────────────────────────────────
+        $quoteAgg = DB::table('quotes')
             ->whereNull('deleted_at')
-            ->whereNotIn('status', ['brouillon', 'annulee'])
-            ->where('type', '!=', 'avoir')
-            ->whereBetween('issued_at', [$startPrevMonth, $endPrevMonth])
-            ->sum('subtotal_ht');
+            ->selectRaw("
+                SUM(CASE WHEN status NOT IN ('brouillon','annule') THEN 1 ELSE 0 END) AS sent,
+                SUM(CASE WHEN status IN ('accepte','converti') THEN 1 ELSE 0 END) AS accepted
+            ")
+            ->first();
 
-        $variation = $caPrevMonth > 0 ? round(($caMonth - $caPrevMonth) / $caPrevMonth * 100, 1) : null;
+        $quotesSent     = (int) ($quoteAgg->sent     ?? 0);
+        $quotesAccepted = (int) ($quoteAgg->accepted ?? 0);
+        $conversionRate = $quotesSent > 0
+            ? round($quotesAccepted / $quotesSent * 100, 1)
+            : 0.0;
 
-        // Encours clients (total factures non payées)
-        $outstanding = (int) DB::table('invoices')
-            ->whereNull('deleted_at')
-            ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
-            ->sum('remaining_amount');
-
-        // Retards (due_at < aujourd'hui)
-        $overdue = (int) DB::table('invoices')
-            ->whereNull('deleted_at')
-            ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
-            ->whereDate('due_at', '<', $today->toDateString())
-            ->where('remaining_amount', '>', 0)
-            ->sum('remaining_amount');
-
-        $overdueCount = (int) DB::table('invoices')
-            ->whereNull('deleted_at')
-            ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
-            ->whereDate('due_at', '<', $today->toDateString())
-            ->where('remaining_amount', '>', 0)
-            ->count();
-
-        // DSO (Days Sales Outstanding) — délai moyen de paiement
-        // approximation : (encours / CA 90 derniers jours) × 90
-        $ca90 = (int) DB::table('invoices')
-            ->whereNull('deleted_at')
-            ->whereNotIn('status', ['brouillon', 'annulee'])
-            ->where('type', '!=', 'avoir')
-            ->where('issued_at', '>=', $today->copy()->subDays(90))
-            ->sum('subtotal_ht');
-        $dso = $ca90 > 0 ? round($outstanding / $ca90 * 90, 0) : 0;
-
-        // Devis : taux de conversion (acceptés ou convertis / total émis hors brouillon/annulé)
-        $quotesSent = DB::table('quotes')
-            ->whereNull('deleted_at')
-            ->whereNotIn('status', ['brouillon', 'annule'])
-            ->count();
-        $quotesAccepted = DB::table('quotes')
-            ->whereNull('deleted_at')
-            ->whereIn('status', ['accepte', 'converti'])
-            ->count();
-        $conversionRate = $quotesSent > 0 ? round($quotesAccepted / $quotesSent * 100, 1) : 0;
-
-        // Commandes en cours (non livrées, non annulées)
-        $ordersInProgress = DB::table('orders')
+        // ── Commandes en cours ───────────────────────────────────────────────
+        $ordersInProgress = (int) DB::table('orders')
             ->whereNull('deleted_at')
             ->whereIn('status', ['confirmee', 'partiellement_livre'])
             ->count();
 
-        // Factures brouillon à valider
-        $draftInvoices = DB::table('invoices')
+        // ── Nouveaux clients ce mois ─────────────────────────────────────────
+        $newClientsMonth = (int) DB::table('clients')
             ->whereNull('deleted_at')
-            ->where('status', 'brouillon')
+            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
             ->count();
 
         return [
             'ca_month'           => $caMonth,
             'ca_prev_month'      => $caPrevMonth,
             'ca_variation_pct'   => $variation,
+            'ca_year'            => $caYear,
+            'ca_prev_year'       => $caPrevYear,
+            'ca_year_variation'  => $yearVariation,
             'outstanding'        => $outstanding,
             'overdue_amount'     => $overdue,
             'overdue_count'      => $overdueCount,
             'dso_days'           => $dso,
+            'avg_basket_month'   => $avgBasket,
             'quotes_sent'        => $quotesSent,
             'quotes_accepted'    => $quotesAccepted,
             'conversion_rate'    => $conversionRate,
             'orders_in_progress' => $ordersInProgress,
             'draft_invoices'     => $draftInvoices,
+            'new_clients_month'  => $newClientsMonth,
         ];
     }
 

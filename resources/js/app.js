@@ -306,4 +306,119 @@ document.addEventListener('turbo:load', function () {
     } catch(e) {}
 });
 
+// ── Command Palette (Ctrl+K / Cmd+K) ─────────────────────────────────────────
+// Enregistré ici, AVANT Alpine.start(), pour garantir que le composant est
+// disponible dès que Alpine initialise le DOM (y compris après navigations Turbo).
+// Les quickActions sont rendues côté serveur dans un <script type="application/json"
+// id="cp-quick-actions"> par _command-palette.blade.php.
+// À chaque navigation Turbo, Turbo remplace le body → nouvel élément #cp-quick-actions
+// → Alpine ré-instancie le composant → factory re-lit le JSON → actions à jour. ✓
+Alpine.data('commandPalette', function () {
+    let quickActions = [];
+    try {
+        const el = document.getElementById('cp-quick-actions');
+        if (el) quickActions = JSON.parse(el.textContent || '[]');
+    } catch (e) {}
+
+    return {
+        open:         false,
+        query:        '',
+        results:      [],
+        loading:      false,
+        activeIndex:  0,
+        recentVisits: [],
+        quickActions: quickActions,
+
+        init() {
+            this.recentVisits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]').slice(0, 5);
+        },
+
+        toggle()  { this.open ? this.close() : this.open_(); },
+        open_() {
+            this.open        = true;
+            this.query       = '';
+            this.results     = [];
+            this.activeIndex = 0;
+            this.recentVisits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]').slice(0, 5);
+            this.$nextTick(() => this.$refs.searchInput?.focus());
+        },
+        close() {
+            this.open    = false;
+            this.query   = '';
+            this.results = [];
+        },
+
+        async search() {
+            if (this.query.length < 2) { this.results = []; return; }
+            this.loading     = true;
+            this.activeIndex = 0;
+            try {
+                // URL lue depuis data-search-url sur le div racine pour éviter le hardcode
+                const searchUrl = this.$el.dataset.searchUrl || '/search';
+                const r = await fetch(searchUrl + '?q=' + encodeURIComponent(this.query), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                if (!r.ok) return;
+                const d = await r.json();
+                this.results = d.results ?? [];
+            } catch (e) {
+                /* réseau indisponible — on ignore silencieusement */
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        moveDown() {
+            const max = this.query.length >= 2
+                ? this.results.length - 1
+                : this.quickActions.length + this.recentVisits.length - 1;
+            if (this.activeIndex < max) this.activeIndex++;
+        },
+        moveUp() {
+            if (this.activeIndex > 0) this.activeIndex--;
+        },
+        selectActive() {
+            let item;
+            if (this.query.length >= 2) {
+                item = this.results[this.activeIndex];
+                if (item) { this.trackVisit(item); window.location.href = item.url; }
+            } else {
+                const all = [...this.quickActions, ...this.recentVisits];
+                item = all[this.activeIndex];
+                if (item) window.location.href = item.url;
+            }
+            this.close();
+        },
+
+        trackVisit(item) {
+            if (!item?.url || !item?.label) return;
+            let visits = JSON.parse(localStorage.getItem('erp_recent_visits') || '[]');
+            visits = visits.filter(v => v.url !== item.url);
+            visits.unshift({ url: item.url, label: item.label, sub: item.sublabel || item.type, icon: this.typeIcon(item.type) });
+            if (visits.length > 10) visits.pop();
+            localStorage.setItem('erp_recent_visits', JSON.stringify(visits));
+        },
+
+        typeIcon(type) {
+            const icons = { Facture:'🧾', Devis:'📋', Client:'🏢', Fournisseur:'🏭', Produit:'📦', CRM:'👤', Stock:'📦', Trésorerie:'💰' };
+            return icons[type] || '📄';
+        },
+
+        colorStyle(color) {
+            const styles = {
+                indigo:  'background:#EEF2FF;color:#4338CA',
+                violet:  'background:#F5F3FF;color:#7C3AED',
+                blue:    'background:#EFF6FF;color:#1D4ED8',
+                amber:   'background:#FFFBEB;color:#B45309',
+                emerald: 'background:#ECFDF5;color:#047857',
+                cyan:    'background:#ECFEFF;color:#0E7490',
+                red:     'background:#FEF2F2;color:#DC2626',
+                orange:  'background:#FFF7ED;color:#C2410C',
+                gray:    'background:#F9FAFB;color:#374151',
+            };
+            return styles[color] || styles.gray;
+        },
+    };
+});
+
 Alpine.start();

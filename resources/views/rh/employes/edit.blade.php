@@ -11,12 +11,7 @@
 <div class="max-w-5xl mx-auto">
 <h1 class="text-2xl font-bold text-gray-900 mb-6">Modifier — {{ $employe->full_name }}</h1>
 
-@if($errors->any())
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-    <ul class="list-disc list-inside space-y-1">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-</div>
-@endif
-
+{{-- Les erreurs de validation sont affichées par la bannière globale du layout. --}}
 <form method="POST" action="{{ route('rh.employes.update', $employe) }}">
 @csrf @method('PUT')
 <x-form-guard :model="$employe" />
@@ -38,14 +33,22 @@
                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 font-mono">
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Nom <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium {{ $errors->has('last_name') ? 'text-red-700' : 'text-gray-700' }} mb-1">
+                Nom <span class="text-red-500">*</span>
+            </label>
             <input type="text" name="last_name" value="{{ old('last_name', $employe->last_name) }}" required
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                   @if($errors->has('last_name')) aria-invalid="true" @endif
+                   class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 {{ $errors->has('last_name') ? 'border-red-400 bg-red-50 focus:ring-red-400' : 'border-gray-300' }}">
+            @error('last_name') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Prénom <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium {{ $errors->has('first_name') ? 'text-red-700' : 'text-gray-700' }} mb-1">
+                Prénom <span class="text-red-500">*</span>
+            </label>
             <input type="text" name="first_name" value="{{ old('first_name', $employe->first_name) }}" required
-                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                   @if($errors->has('first_name')) aria-invalid="true" @endif
+                   class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 {{ $errors->has('first_name') ? 'border-red-400 bg-red-50 focus:ring-red-400' : 'border-gray-300' }}">
+            @error('first_name') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Sexe</label>

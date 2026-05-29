@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Traits\HasCompanyScope;
 use App\Models\Traits\HasCreator;
+use App\Traits\HasCommercialWorkflow;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -12,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CreditNote extends Model
 {
-    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope;
+    use HasFactory, SoftDeletes, HasCreator, HasCompanyScope, HasCommercialWorkflow;
+
+    const DOCUMENT_TYPE = 'credit_note';
 
     protected $table = 'credit_notes';
 
@@ -34,6 +37,11 @@ class CreditNote extends Model
         'created_by',
         'validated_by',
         'validated_at',
+        'submitted_by',
+        'submitted_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
@@ -44,6 +52,8 @@ class CreditNote extends Model
         'applied_amount'   => 'integer',
         'remaining_credit' => 'integer',
         'validated_at'     => 'datetime',
+        'submitted_at'     => 'datetime',
+        'rejected_at'      => 'datetime',
     ];
 
     // -------------------------------------------------------------------------
@@ -84,5 +94,36 @@ class CreditNote extends Model
     public function allocations(): HasMany
     {
         return $this->hasMany(ClientPaymentAllocation::class, 'credit_note_id');
+    }
+
+    // ── Accessors workflow ────────────────────────────────────────────────────
+
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'Brouillon',
+            'en_attente_validation' => 'En attente de validation',
+            'valide'                => 'Validé',
+            'applique'              => 'Appliqué',
+            'annule'                => 'Annulé',
+            default                 => ucfirst($this->status),
+        };
+    }
+
+    public function getStatusColorAttribute(): string
+    {
+        return match ($this->status) {
+            'brouillon'             => 'gray',
+            'en_attente_validation' => 'yellow',
+            'valide'                => 'green',
+            'applique'              => 'teal',
+            'annule'                => 'red',
+            default                 => 'gray',
+        };
+    }
+
+    protected function getValidatedStatuses(): array
+    {
+        return ['valide', 'applique'];
     }
 }

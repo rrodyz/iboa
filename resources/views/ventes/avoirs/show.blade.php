@@ -36,7 +36,8 @@
                 {{-- PDF --}}
                 <a href="{{ route('ventes.avoirs.pdf', $creditNote) }}"
                    class="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-                   title="Télécharger le PDF">
+                   title="Télécharger le PDF"
+                   data-loading data-loading-text="Génération de l'avoir…">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
@@ -52,19 +53,96 @@
                     Aperçu
                 </a>
 
-                {{-- Valider --}}
+                @php
+                    $avBtnO  = 'inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors';
+                    $avBtnP  = 'inline-flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors';
+                    $avBtnWO = 'inline-flex items-center gap-2 px-3 py-2 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors';
+                    $avBtnDO = 'inline-flex items-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors';
+                @endphp
+
+                {{-- ── BROUILLON : Soumettre à validation + Supprimer ───────────────────── --}}
                 @if($creditNote->status === 'brouillon')
-                <form action="{{ route('ventes.avoirs.validate', $creditNote) }}" method="POST"
-                      onsubmit="return confirm('Valider cet avoir ? Cette action est irréversible.')">
-                    @csrf
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    @can('sales.submit')
+                    <form action="{{ route('ventes.avoirs.submit', $creditNote) }}" method="POST"
+                          onsubmit="return confirm('Soumettre cet avoir à la validation interne ?')">
+                        @csrf
+                        <button type="submit" class="{{ $avBtnP }} bg-blue-600 hover:bg-blue-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 11l3 3L22 4"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                            </svg>
+                            Soumettre à validation
+                        </button>
+                    </form>
+                    @endcan
+                    <form action="{{ route('ventes.avoirs.destroy', $creditNote) }}" method="POST"
+                          onsubmit="return confirm('Supprimer définitivement cet avoir ?')">
+                        @csrf @method('DELETE')
+                        <button type="submit" class="{{ $avBtnDO }}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Supprimer
+                        </button>
+                    </form>
+                @endif
+
+                {{-- ── EN ATTENTE DE VALIDATION ────────────────────────────────────────── --}}
+                @if($creditNote->status === 'en_attente_validation')
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-yellow-700 bg-yellow-50 border border-yellow-200">
+                        <svg class="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        Valider
-                    </button>
-                </form>
+                        En attente de validation
+                    </span>
+                    @can('sales.validate')
+                    <form action="{{ route('ventes.avoirs.validate-internal', $creditNote) }}" method="POST"
+                          onsubmit="return confirm('Valider cet avoir ? Cette action génère une écriture comptable.')">
+                        @csrf
+                        <button type="submit" class="{{ $avBtnP }} bg-purple-600 hover:bg-purple-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Valider l'avoir
+                        </button>
+                    </form>
+                    <form action="{{ route('ventes.avoirs.reject-internal', $creditNote) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5){ alert('Motif obligatoire'); return; } $el.submit()">
+                        @csrf
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $avBtnWO }}">Refuser</button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif de refus</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Motif obligatoire…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $avBtnO }}">Annuler</button>
+                                    <button type="submit" class="{{ $avBtnP }} bg-orange-600 hover:bg-orange-700">Confirmer le refus</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    @endcan
+                    @can('sales.cancel')
+                    <form action="{{ route('ventes.avoirs.cancel-internal', $creditNote) }}" method="POST"
+                          x-data="{ open: false, motif: '' }"
+                          @submit.prevent="if(motif.trim().length < 5){ alert('Motif obligatoire'); return; } $el.submit()">
+                        @csrf
+                        <input type="hidden" name="motif" x-model="motif">
+                        <button type="button" @click="open = true" class="{{ $avBtnDO }}">Annuler</button>
+                        <div x-show="open" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50">
+                            <div class="bg-white rounded-xl p-6 shadow-2xl w-full max-w-md mx-4">
+                                <h3 class="font-semibold text-gray-900 mb-3">Motif d'annulation</h3>
+                                <textarea x-model="motif" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Motif obligatoire…"></textarea>
+                                <div class="flex justify-end gap-2 mt-4">
+                                    <button type="button" @click="open = false" class="{{ $avBtnO }}">Fermer</button>
+                                    <button type="submit" class="{{ $avBtnP }} bg-red-600 hover:bg-red-700">Confirmer l'annulation</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    @endcan
                 @endif
 
                 {{-- Appliquer à la facture --}}
@@ -78,21 +156,6 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         Appliquer sur facture
-                    </button>
-                </form>
-                @endif
-
-                {{-- Supprimer (brouillon seulement) --}}
-                @if($creditNote->status === 'brouillon')
-                <form action="{{ route('ventes.avoirs.destroy', $creditNote) }}" method="POST"
-                      onsubmit="return confirm('Supprimer définitivement cet avoir ?')">
-                    @csrf @method('DELETE')
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-3 py-2 border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                        Supprimer
                     </button>
                 </form>
                 @endif
@@ -111,10 +174,11 @@
     {{-- Letterhead : logo + infos société + badge document --}}
     @php
         $statusMapAv = [
-            'brouillon' => ['label' => 'Brouillon', 'class' => 'bg-gray-100 text-gray-700'],
-            'valide'    => ['label' => 'Validé',    'class' => 'bg-purple-100 text-purple-700'],
-            'applique'  => ['label' => 'Appliqué',  'class' => 'bg-green-100 text-green-700'],
-            'annule'    => ['label' => 'Annulé',    'class' => 'bg-red-100 text-red-600'],
+            'brouillon'            => ['label' => 'Brouillon',               'class' => 'bg-gray-100 text-gray-700'],
+            'en_attente_validation'=> ['label' => 'En attente de validation', 'class' => 'bg-yellow-100 text-yellow-700'],
+            'valide'               => ['label' => 'Validé',                  'class' => 'bg-purple-100 text-purple-700'],
+            'applique'             => ['label' => 'Appliqué',                'class' => 'bg-green-100 text-green-700'],
+            'annule'               => ['label' => 'Annulé',                  'class' => 'bg-red-100 text-red-600'],
         ];
     @endphp
     @include('partials._doc-letterhead', [
@@ -245,6 +309,59 @@
             </table>
         </div>
     </div>
+
+    {{-- ── Workflow validation interne ─────────────────────────────────────── --}}
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <svg class="size-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+                Validation interne
+            </h2>
+            <x-workflow.status-badge :status="$creditNote->status" :label="$creditNote->status_label" />
+        </div>
+        @if($creditNote->rejection_reason)
+            <div class="mb-4 rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm text-orange-800">
+                <strong>Motif de refus :</strong> {{ $creditNote->rejection_reason }}
+            </div>
+        @endif
+        <x-workflow.action-buttons :document="$creditNote"
+            submitRoute="ventes.avoirs.submit"
+            validateRoute="ventes.avoirs.validate-internal"
+            rejectRoute="ventes.avoirs.reject-internal"
+            cancelRoute="ventes.avoirs.cancel-internal"
+            :routeParam="$creditNote->id" />
+        <x-workflow.history :document="$creditNote" />
+    </div>
+
+    {{-- Documents liés --}}
+    @php
+        $relatedLinks = [];
+        if ($creditNote->invoice) {
+            $relatedLinks[] = [
+                'icon'       => '🧾',
+                'label'      => 'Facture ' . $creditNote->invoice->number,
+                'href'       => route('ventes.factures.show', $creditNote->invoice),
+                'badge'      => $creditNote->invoice->status_label ?? ucfirst($creditNote->invoice->status),
+                'badgeColor' => 'green',
+            ];
+            if ($creditNote->invoice->order) {
+                $relatedLinks[] = [
+                    'icon'       => '📦',
+                    'label'      => 'Commande ' . $creditNote->invoice->order->number,
+                    'href'       => route('ventes.commandes.show', $creditNote->invoice->order),
+                    'badge'      => $creditNote->invoice->order->status_label ?? ucfirst($creditNote->invoice->order->status),
+                    'badgeColor' => 'blue',
+                ];
+            }
+        }
+    @endphp
+    @if(count($relatedLinks))
+        <x-document.related :links="$relatedLinks" title="Documents liés à cet avoir" />
+    @endif
+
+    {{-- Audit timeline --}}
+    <x-audit.timeline :model="\App\Models\CreditNote::class" :id="$creditNote->id"
+                      title="Historique de l'avoir" />
 
 </div>
 @endsection

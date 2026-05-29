@@ -5,13 +5,17 @@ namespace App\Http\Controllers\Sales;
 use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\DeliveryNote;
+use App\Services\CommercialWorkflowService;
 use App\Services\DeliveryNoteService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
 class DeliveryNoteController extends Controller
 {
-    public function __construct(private DeliveryNoteService $service) {}
+    public function __construct(
+        private DeliveryNoteService         $service,
+        private CommercialWorkflowService   $workflow,
+    ) {}
 
     public function index(Request $request)
     {
@@ -165,6 +169,54 @@ class DeliveryNoteController extends Controller
         }
     }
 
+    // ── Workflow de validation interne ────────────────────────────────────────
+
+    public function submit(Request $request, DeliveryNote $bonsLivraison)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->submit($bonsLivraison, $request->motif);
+            return back()->with('success', "BL {$bonsLivraison->number} soumis à validation.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function validateInternal(Request $request, DeliveryNote $bonsLivraison)
+    {
+        $request->validate(['motif' => ['nullable', 'string', 'max:500']]);
+        try {
+            $this->workflow->validateDeliveryNote($bonsLivraison, $request->motif);
+            return back()->with('success', "BL {$bonsLivraison->number} validé.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function rejectInternal(Request $request, DeliveryNote $bonsLivraison)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => 'Le motif est obligatoire.']);
+        try {
+            $this->workflow->reject($bonsLivraison, $request->motif);
+            return back()->with('success', "BL {$bonsLivraison->number} refusé — retour en brouillon.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function cancelInternal(Request $request, DeliveryNote $bonsLivraison)
+    {
+        $request->validate(['motif' => ['required', 'string', 'min:5', 'max:500']],
+            ['motif.required' => "Le motif est obligatoire."]);
+        try {
+            $this->workflow->cancel($bonsLivraison, $request->motif);
+            return back()->with('success', "BL {$bonsLivraison->number} annulé.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     /**
      * GET ventes/bons-livraison/{deliveryNote}/pdf — download or stream PDF.
      * Add ?preview=1 to open in browser instead of downloading.
@@ -172,17 +224,22 @@ class DeliveryNoteController extends Controller
     public function pdf(DeliveryNote $bonsLivraison, Request $request)
     {
         $this->authorize('view', $bonsLivraison);
-        $deliveryNote = $this->service->repository->findWithDetails($bonsLivraison->id);
-        $viewPath     = $this->service->generatePdfPath($deliveryNote);
-        $settings     = Company::first()?->documentSetting;
+        try {
+            $deliveryNote = $this->service->repository->findWithDetails($bonsLivraison->id);
+            $viewPath     = $this->service->generatePdfPath($deliveryNote);
+            $settings     = Company::first()?->documentSetting;
 
-        $pdf = Pdf::loadView($viewPath, compact('deliveryNote', 'settings'))
-            ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            $pdf = Pdf::loadView($viewPath, compact('deliveryNote', 'settings'))
+                ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
 
-        $filename = 'BL_' . str_replace(['/', '\\', ' '], '-', $deliveryNote->number) . '.pdf';
+            $filename = 'BL_' . str_replace(['/', '\\', ' '], '-', $deliveryNote->number) . '.pdf';
 
-        return $request->boolean('preview')
-            ? $pdf->stream($filename)
-            : $pdf->download($filename);
+            return $request->boolean('preview')
+                ? $pdf->stream($filename)
+                : $pdf->download($filename);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('PDF BL error', ['id' => $bonsLivraison->id, 'error' => $e->getMessage()]);
+            return back()->with('error', 'Impossible de générer le PDF : ' . $e->getMessage());
+        }
     }
 }

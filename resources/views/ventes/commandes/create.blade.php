@@ -15,15 +15,7 @@
     <p class="text-sm text-gray-500 mt-0.5">Créez une commande client et gérez les lignes d'articles</p>
 </div>
 
-@if($errors->any())
-<div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
-    <ul class="text-sm text-red-700 space-y-1 list-disc list-inside">
-        @foreach($errors->all() as $error)
-            <li>{{ $error }}</li>
-        @endforeach
-    </ul>
-</div>
-@endif
+<x-validation-errors />
 
 <form method="POST" action="{{ route('ventes.commandes.store') }}">
     @csrf

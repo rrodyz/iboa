@@ -103,17 +103,30 @@ class CreditNoteService
             ]);
 
             $fresh = $creditNote->fresh(['client', 'company']);
-
-            // Post to GL synchronously — must be in the same transaction
-            $this->accountingService->postCreditNote($fresh);
-            // [COMPTA-STOCK] Retour en stock automatique
-            $this->accountingService->postCreditNoteStockMovement($fresh);
-
-            // Fire event — queued listeners handle secondary effects after commit
-            event(new CreditNoteValidated($fresh));
+            $this->applyValidationSideEffects($fresh);
 
             return $fresh;
         });
+    }
+
+    /**
+     * Applique les effets secondaires de la validation d'un avoir :
+     * - Comptabilisation au grand livre
+     * - Retour de stock
+     * - Événement CreditNoteValidated
+     *
+     * Méthode publique appelée aussi par CommercialWorkflowService::validateCreditNote()
+     * pour le circuit interne (brouillon → en_attente_validation → valide).
+     */
+    public function applyValidationSideEffects(CreditNote $creditNote): void
+    {
+        // Post to GL synchronously — must be in the same transaction
+        $this->accountingService->postCreditNote($creditNote);
+        // [COMPTA-STOCK] Retour en stock automatique
+        $this->accountingService->postCreditNoteStockMovement($creditNote);
+
+        // Fire event — queued listeners handle secondary effects after commit
+        event(new CreditNoteValidated($creditNote));
     }
 
     private function resolveReturnWarehouse(CreditNote $creditNote): ?int
