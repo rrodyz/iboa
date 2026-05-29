@@ -2,15 +2,17 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Migration déférée RH — résout les conflits d'ordre dans les groupes
- * à timestamps identiques (employee_contracts vs employees, payroll_items vs payroll_runs).
+ * à timestamps identiques où la table enfant est créée avant la table parente
+ * (ordre alphabétique du nom de fichier).
  *
- * Ces FK ne peuvent pas être déclarées inline car les tables parentes sont
- * créées dans le même groupe de timestamp, après la table enfant (ordre alphabétique).
+ * Cas corrigés :
+ *  - 155028 : employee_contracts (c < e) avant employees
+ *  - 155029 : employee_allowances (e < p) avant payroll_allowance_types
+ *  - 155030 : payroll_items (i < r) avant payroll_runs
  *
  * Le bloc try/catch garantit la compatibilité :
  *   - Fresh install  : les FK sont ajoutées normalement
@@ -21,15 +23,23 @@ return new class extends Migration
     public function up(): void
     {
         // ── employee_contracts -> employees ───────────────────────────────────
-        // Même timestamp 155028 : create_employee_contracts < create_employees (alpha)
+        // Timestamp 155028 : employee_contracts (c) < employees (s) alpha
         $this->addFkSafe('employee_contracts', function (Blueprint $table) {
             $table->foreign('employee_id')
                   ->references('id')->on('employees')
                   ->cascadeOnDelete();
         });
 
+        // ── employee_allowances -> payroll_allowance_types ────────────────────
+        // Timestamp 155029 : employee_allowances (e) < payroll_allowance_types (p) alpha
+        $this->addFkSafe('employee_allowances', function (Blueprint $table) {
+            $table->foreign('payroll_allowance_type_id')
+                  ->references('id')->on('payroll_allowance_types')
+                  ->cascadeOnDelete();
+        });
+
         // ── payroll_items -> payroll_runs / employees ─────────────────────────
-        // Même timestamp 155030 : create_payroll_items < create_payroll_runs (alpha)
+        // Timestamp 155030 : payroll_items (i) < payroll_runs (r) alpha
         $this->addFkSafe('payroll_items', function (Blueprint $table) {
             $table->foreign('payroll_run_id')
                   ->references('id')->on('payroll_runs')
@@ -47,6 +57,10 @@ return new class extends Migration
             $this->dropFkSafe($table, 'employee_id');
         });
 
+        Schema::table('employee_allowances', function (Blueprint $table) {
+            $this->dropFkSafe($table, 'payroll_allowance_type_id');
+        });
+
         Schema::table('employee_contracts', function (Blueprint $table) {
             $this->dropFkSafe($table, 'employee_id');
         });
@@ -60,11 +74,8 @@ return new class extends Migration
         try {
             Schema::table($table, $callback);
         } catch (\Illuminate\Database\QueryException $e) {
-            // 1826 = Duplicate foreign key constraint name (MySQL)
-            // 1005 = Can't create table (MySQL, parfois levé pour FK dupliquée)
-            if (in_array($e->getCode(), ['HY000']) && str_contains($e->getMessage(), 'Duplicate foreign key')) {
-                // FK déjà présente (DB existante) — on ignore
-                return;
+            if (str_contains($e->getMessage(), 'Duplicate foreign key')) {
+                return; // FK déjà présente (DB existante) — on ignore
             }
             throw $e;
         }
@@ -75,7 +86,7 @@ return new class extends Migration
     {
         try {
             $table->dropForeign([$column]);
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             // FK absente — on ignore
         }
     }

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('employee_allowances', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('payroll_allowance_type_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('payroll_allowance_type_id'); // FK différée — voir add_rh_deferred_foreign_keys
             $table->unsignedBigInteger('amount')->comment('Montant mensuel en FCFA');
             $table->date('start_date');
             $table->date('end_date')->nullable();
