@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('payroll_items', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('payroll_run_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('employee_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('payroll_run_id'); // FK différée — voir add_rh_deferred_foreign_keys
+            $table->unsignedBigInteger('employee_id');    // FK différée — voir add_rh_deferred_foreign_keys
 
             // Éléments de calcul
             $table->unsignedBigInteger('base_salary')->default(0);
