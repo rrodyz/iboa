@@ -48,6 +48,7 @@ class Employee extends Model
     public function documents(): HasMany       { return $this->hasMany(EmployeeDocument::class); }
     public function loans(): HasMany           { return $this->hasMany(EmployeeLoan::class); }
     public function activeLoans(): HasMany     { return $this->hasMany(EmployeeLoan::class)->where('status', 'actif'); }
+    public function attendances(): HasMany     { return $this->hasMany(Attendance::class); }
 
     public function activeContract(): HasOne
     {

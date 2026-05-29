@@ -1001,9 +1001,13 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::get('/contrats', [\App\Http\Controllers\HR\EmployeeController::class, 'contracts'])->name('contrats.index');
     });
 
-    // ── Présences & absences (stub) ───────────────────────────────────────────
+    // ── Présences & absences ──────────────────────────────────────────────────
     Route::middleware('permission:rh.employees.view')->group(function () {
-        Route::get('/presences', fn() => view('rh.presences.index'))->name('presences.index');
+        Route::get('/presences', [\App\Http\Controllers\HR\AttendanceController::class, 'index'])->name('presences.index');
+        Route::get('/presences/saisie', [\App\Http\Controllers\HR\AttendanceController::class, 'create'])->name('presences.create');
+        Route::post('/presences/saisie', [\App\Http\Controllers\HR\AttendanceController::class, 'store'])->name('presences.store');
+        Route::get('/presences/export', [\App\Http\Controllers\HR\AttendanceController::class, 'export'])->name('presences.export');
+        Route::get('/presences/employe/{employee}', [\App\Http\Controllers\HR\AttendanceController::class, 'employee'])->name('presences.employee');
     });
 
     // ── Variables mensuelles (index global) ───────────────────────────────────
