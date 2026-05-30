@@ -12,6 +12,23 @@
 @section('content')
 <div class="space-y-6">
 
+    {{-- ── Workflow progress ──────────────────────────────────────────────────── --}}
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <x-workflow.progress-steps
+            :steps="[
+                ['key' => 'brouillon',          'label' => 'Brouillon',   'icon' => '✏️'],
+                ['key' => 'envoye',             'label' => 'Envoyé',      'icon' => '📬'],
+                ['key' => 'confirme',           'label' => 'Confirmé',    'icon' => '✅'],
+                ['key' => 'approuvee',          'label' => 'Approuvé',    'icon' => '👍'],
+                ['key' => 'partiellement_recu', 'label' => 'Partiel',     'icon' => '📦'],
+                ['key' => 'recu',               'label' => 'Reçu',        'icon' => '🏭'],
+                ['key' => 'cloture',            'label' => 'Clôturé',     'icon' => '🔒'],
+            ]"
+            :current="$purchaseOrder->status"
+            size="sm"
+        />
+    </div>
+
     {{-- ================================================================
          Header
     ================================================================ --}}

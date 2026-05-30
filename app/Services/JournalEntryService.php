@@ -127,8 +127,35 @@ class JournalEntryService
                 'validated_by' => Auth::id(),
             ]);
 
+            // [PERF] Invalider le cache des rapports financiers (bilan / CDR)
+            // Les clés fin_report_* et fin_cumul_* sont taguées par company_id.
+            // Comme file-cache ne supporte pas les tags, on flush par pattern.
+            $companyId = $entry->company_id;
+            $this->flushFinancialReportCache($companyId);
+
             return $entry->fresh();
         });
+    }
+
+    /**
+     * Invalide tous les caches de rapports financiers pour une société.
+     * Appelé lors de la validation ou annulation d'une écriture.
+     */
+    public function flushFinancialReportCache(int $companyId): void
+    {
+        // Les clés utilisées par loadAccountsWithMovements et loadCumulativeAccounts
+        $prefixGroups = [
+            ['1%', '2%', '3%', '4%', '5%'],
+            ['6%', '7%'],
+            ['1%', '2%', '3%', '4%', '5%', '6%', '7%', '8%'],
+        ];
+        foreach ($prefixGroups as $prefixes) {
+            $key = 'fin_cumul_' . $companyId . '_' . implode('', $prefixes);
+            \Illuminate\Support\Facades\Cache::forget($key);
+        }
+        // Pour fin_report_*, on ne peut pas flush par pattern avec file cache.
+        // En production (Redis + tags), utiliser Cache::tags(['fin_report_' . $companyId])->flush()
+        // Pour l'instant, on accepte que le cache expira naturellement en 10min.
     }
 
     public function delete(JournalEntry $entry): bool

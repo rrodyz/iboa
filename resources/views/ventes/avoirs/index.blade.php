@@ -39,7 +39,7 @@
     </div>
 
     {{-- Filtres --}}
-    <form method="GET" class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" data-autosubmit class="bg-white rounded-xl border border-gray-200 p-4">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <input type="text" name="search" value="{{ $filters['search'] ?? '' }}"
                    placeholder="N° avoir, client..."

@@ -52,7 +52,7 @@
 </div>
 
 {{-- Filtres --}}
-<form method="GET" class="bg-white rounded-xl border border-gray-200 p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+<form method="GET" data-autosubmit class="bg-white rounded-xl border border-gray-200 p-4 mb-5 grid grid-cols-2 md:grid-cols-4 gap-3">
     <input type="text" name="search" value="{{ $filters['search'] ?? '' }}"
            placeholder="Nom, matricule, CNSS…"
            class="col-span-2 md:col-span-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">

@@ -51,12 +51,21 @@ class EmployeeController extends Controller
         $employees   = $query->paginate(20)->withQueryString();
         $departments = Department::where('company_id', $company->id)->active()->orderBy('name')->get();
 
-        // ── Indicateurs globaux ──
+        // ── Indicateurs globaux — 1 seule requête avec agrégation conditionnelle ──
+        $counts = Employee::where('company_id', $company->id)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'actif'     THEN 1 ELSE 0 END) as actif,
+                SUM(CASE WHEN status = 'suspendu'  THEN 1 ELSE 0 END) as suspendu,
+                SUM(CASE WHEN status IN ('licencie','demissionne') THEN 1 ELSE 0 END) as quitte
+            ")
+            ->first();
+
         $summary = [
-            'total'    => Employee::where('company_id', $company->id)->count(),
-            'actif'    => Employee::where('company_id', $company->id)->where('status', 'actif')->count(),
-            'suspendu' => Employee::where('company_id', $company->id)->where('status', 'suspendu')->count(),
-            'quitte'   => Employee::where('company_id', $company->id)->whereIn('status', ['licencie', 'demissionne'])->count(),
+            'total'    => (int) $counts->total,
+            'actif'    => (int) $counts->actif,
+            'suspendu' => (int) $counts->suspendu,
+            'quitte'   => (int) $counts->quitte,
         ];
 
         return view('rh.employes.index', compact('employees', 'filters', 'departments', 'summary'));

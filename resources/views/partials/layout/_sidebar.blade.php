@@ -367,6 +367,7 @@ request()->routeIs('achats.*')                                                  
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.dashboard'),             'Tableau de bord',    'tresorerie.dashboard']         : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'),   'Encaissements',      'tresorerie.encaissements*']    : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'), 'Décaissements',      'tresorerie.decaissements*']  : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-clients'),  'Échéancier clients', 'tresorerie.echeancier-clients'] : null,

@@ -698,6 +698,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Trésorerie / Module 8 ───────────────────────────────────────────────────
     Route::prefix('tresorerie')->name('tresorerie.')->group(function () {
 
+        // Dashboard
+        Route::get('/', \App\Http\Controllers\Treasury\TresorerieDashboardController::class)->name('dashboard');
+
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('encaissements/factures',   [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'getInvoices'])->name('encaissements.invoices');
             Route::get('encaissements/export-pdf', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'exportPdf'])->name('encaissements.export-pdf');

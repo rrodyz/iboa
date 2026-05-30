@@ -19,7 +19,7 @@
 </div>
 
 {{-- Filtres --}}
-<form method="GET" class="flex flex-wrap gap-3 mb-5">
+<form method="GET" data-autosubmit class="flex flex-wrap gap-3 mb-5">
     <select name="employee_id" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
         <option value="">Tous les employés</option>
         @foreach($employees as $e)

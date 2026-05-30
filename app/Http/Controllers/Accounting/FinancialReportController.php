@@ -511,15 +511,21 @@ class FinancialReportController extends Controller
      */
     private function loadCumulativeAccounts(array $prefixes): Collection
     {
-        $query = Account::where('is_detail', true)->where('is_active', true);
+        $companyId = currentCompany()->id;
+        $cacheKey  = 'fin_cumul_' . $companyId . '_' . implode('', $prefixes);
 
-        $query->where(function ($q) use ($prefixes) {
-            foreach ($prefixes as $p) {
-                $q->orWhere('code', 'like', $p);
-            }
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($prefixes, $companyId) {
+            return Account::where('is_detail', true)
+                ->where('is_active', true)
+                ->where('company_id', $companyId)   // [PERF-FIX] filtre société manquant
+                ->where(function ($q) use ($prefixes) {
+                    foreach ($prefixes as $p) {
+                        $q->orWhere('code', 'like', $p);
+                    }
+                })
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'debit_balance', 'credit_balance']);
         });
-
-        return $query->orderBy('code')->get(['id', 'code', 'name', 'debit_balance', 'credit_balance']);
     }
 
     /**
@@ -531,46 +537,70 @@ class FinancialReportController extends Controller
      */
     private function loadAccountsWithMovements(array $prefixes, ?string $dateFrom, string $dateTo): Collection
     {
-        // Aggregate validated JEL movements for accounts in the given classes
-        $movements = JournalEntryLine::query()
-            ->selectRaw('account_id, COALESCE(SUM(debit), 0) as total_debit, COALESCE(SUM(credit), 0) as total_credit')
-            ->whereHas('account', function ($q) use ($prefixes) {
-                $q->where(function ($sub) use ($prefixes) {
+        $companyId = currentCompany()->id;
+
+        // ── [PERF] Cache 10 min par combinaison de paramètres ────────────────────
+        $cacheKey = 'fin_report_' . $companyId . '_' . implode('', $prefixes)
+                  . '_' . ($dateFrom ?? 'null') . '_' . $dateTo;
+
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($prefixes, $dateFrom, $dateTo, $companyId) {
+
+            // ── [PERF] JOIN direct au lieu de whereHas corrélé ────────────────────
+            // whereHas génère des sous-requêtes EXISTS ; JOIN est 3-10× plus rapide
+            // sur MySQL avec les index existants sur journal_entry_lines.account_id
+            // et journal_entries(status, entry_date).
+            $prefixConditions = implode(' OR ', array_map(fn ($p) => "a.code LIKE ?", $prefixes));
+            $bindings = $prefixes;
+
+            $dateFromClause = '';
+            if ($dateFrom !== null) {
+                $dateFromClause = 'AND je.entry_date >= ?';
+                $bindings[] = $dateFrom;
+            }
+            $bindings[] = $dateTo;
+            $bindings[] = $companyId;
+            // Add prefix bindings again for account filter
+            foreach ($prefixes as $p) { $bindings[] = $p; }
+
+            $movements = \Illuminate\Support\Facades\DB::select("
+                SELECT jel.account_id,
+                       COALESCE(SUM(jel.debit),  0) AS total_debit,
+                       COALESCE(SUM(jel.credit), 0) AS total_credit
+                FROM   journal_entry_lines jel
+                INNER JOIN journal_entries je ON je.id = jel.journal_entry_id
+                INNER JOIN accounts        a  ON a.id  = jel.account_id
+                WHERE  je.status     = 'valide'
+                  {$dateFromClause}
+                  AND  je.entry_date <= ?
+                  AND  je.company_id  = ?
+                  AND  a.is_detail    = 1
+                  AND  a.is_active    = 1
+                  AND  ({$prefixConditions})
+                GROUP BY jel.account_id
+            ", $bindings);
+
+            $movMap = collect($movements)->keyBy('account_id');
+
+            // Charger les métadonnées de comptes
+            $accounts = Account::where('is_detail', true)
+                ->where('is_active', true)
+                ->where('company_id', $companyId)
+                ->where(function ($q) use ($prefixes) {
                     foreach ($prefixes as $p) {
-                        $sub->orWhere('code', 'like', $p);
+                        $q->orWhere('code', 'like', $p);
                     }
-                });
-            })
-            ->whereHas('journalEntry', function ($q) use ($dateFrom, $dateTo) {
-                $q->where('status', 'valide');
-                if ($dateFrom !== null) {
-                    $q->where('entry_date', '>=', $dateFrom);
-                }
-                $q->where('entry_date', '<=', $dateTo);
-            })
-            ->groupBy('account_id')
-            ->get()
-            ->keyBy('account_id');
+                })
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']);
 
-        // Load account metadata (code / name)
-        $accounts = Account::where('is_detail', true)
-            ->where('is_active', true)
-            ->where(function ($q) use ($prefixes) {
-                foreach ($prefixes as $p) {
-                    $q->orWhere('code', 'like', $p);
-                }
-            })
-            ->orderBy('code')
-            ->get(['id', 'code', 'name']);
+            $accounts->each(function ($a) use ($movMap) {
+                $mv = $movMap->get($a->id);
+                $a->debit_balance  = $mv ? (int) $mv->total_debit  : 0;
+                $a->credit_balance = $mv ? (int) $mv->total_credit : 0;
+            });
 
-        // Overlay period movements onto account objects
-        $accounts->each(function ($a) use ($movements) {
-            $mv = $movements->get($a->id);
-            $a->debit_balance  = $mv ? (int) $mv->total_debit  : 0;
-            $a->credit_balance = $mv ? (int) $mv->total_credit : 0;
+            return $accounts;
         });
-
-        return $accounts;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

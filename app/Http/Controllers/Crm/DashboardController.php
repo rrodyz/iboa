@@ -29,13 +29,20 @@ class DashboardController extends Controller
             ->sum('amount');
         $overdueActivities = CrmActivity::forCompany($companyId)->overdue()->count();
 
-        // Pipeline par stage
+        // Pipeline par stage — 1 seule requête GROUP BY au lieu de N (évite N+1)
+        $stageRows = CrmOpportunity::forCompany($companyId)
+            ->whereNotNull('stage')
+            ->selectRaw('stage, COUNT(*) as cnt, COALESCE(SUM(amount), 0) as total_amount')
+            ->groupBy('stage')
+            ->get()
+            ->keyBy('stage');
+
         $stageStats = [];
         foreach (array_keys(CrmOpportunity::STAGES) as $stage) {
-            $opps = CrmOpportunity::forCompany($companyId)->where('stage', $stage)->get();
+            $row = $stageRows->get($stage);
             $stageStats[$stage] = [
-                'count'  => $opps->count(),
-                'amount' => $opps->sum('amount'),
+                'count'  => $row ? (int) $row->cnt : 0,
+                'amount' => $row ? (float) $row->total_amount : 0.0,
                 'config' => CrmOpportunity::STAGES[$stage],
             ];
         }

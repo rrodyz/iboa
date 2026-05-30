@@ -78,7 +78,7 @@
                 {{-- Mensuel --}}
                 <div x-show="mode === 'monthly'" class="p-3">
                     <p class="text-xs text-gray-400 uppercase tracking-wide mb-2">Choisir le mois</p>
-                    <form method="GET" action="{{ route('rh.paie.livre-paie') }}" class="space-y-2">
+                    <form method="GET" data-autosubmit action="{{ route('rh.paie.livre-paie') }}" class="space-y-2">
                         <div class="grid grid-cols-2 gap-2">
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1">Année</label>
@@ -118,7 +118,7 @@
 </div>
 
 {{-- Filtres --}}
-<form method="GET" class="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex gap-3">
+<form method="GET" data-autosubmit class="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex gap-3">
     <select name="year" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
         <option value="">Toutes les années</option>
         @foreach($years as $y)

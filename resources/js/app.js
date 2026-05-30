@@ -422,3 +422,56 @@ Alpine.data('commandPalette', function () {
 });
 
 Alpine.start();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Auto-submit filter forms (data-autosubmit)
+// Les formulaires de filtres marqués data-autosubmit se soumettent automatiquement
+// quand un <select> ou <input type="date/month"> change, sans cliquer "Filtrer".
+//
+// Usage :
+//   <form method="GET" data-autosubmit>
+//     <select name="status">...</select>
+//     <input type="date" name="date_from">
+//     <input type="text" name="search" data-autosubmit-debounce="600">
+//   </form>
+//
+// Comportement :
+//   - select / date / month / checkbox → soumission immédiate
+//   - input[text] avec data-autosubmit-debounce → soumission après N ms d'inactivité
+//   - Affiche un spinner dans le bouton submit (si présent) pour feedback visuel
+// ═══════════════════════════════════════════════════════════════════════════════
+function initAutoSubmitForms() {
+    document.querySelectorAll('form[data-autosubmit]').forEach(form => {
+        if (form._autosubmitBound) return;  // éviter double binding (Turbo)
+        form._autosubmitBound = true;
+
+        const submitWithFeedback = () => {
+            // Désactiver le bouton submit pendant la navigation
+            const btn = form.querySelector('[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.dataset.origText = btn.textContent;
+                btn.innerHTML = '<svg class="inline w-3.5 h-3.5 mr-1 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Chargement…';
+            }
+            form.submit();
+        };
+
+        // Éléments à soumission immédiate
+        form.querySelectorAll('select, input[type="date"], input[type="month"], input[type="checkbox"], input[type="radio"]').forEach(el => {
+            el.addEventListener('change', submitWithFeedback);
+        });
+
+        // Éléments texte : soumission différée (debounce)
+        form.querySelectorAll('input[type="text"], input[type="search"], input[type="number"]').forEach(el => {
+            let timer;
+            const delay = parseInt(el.dataset.autosubmitDebounce ?? '600', 10);
+            el.addEventListener('input', () => {
+                clearTimeout(timer);
+                timer = setTimeout(submitWithFeedback, delay);
+            });
+        });
+    });
+}
+
+// Init au premier chargement et à chaque navigation Turbo
+document.addEventListener('turbo:load', initAutoSubmitForms);

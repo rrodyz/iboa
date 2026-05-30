@@ -10,6 +10,18 @@
 @section('content')
 <div x-data="payrollShow()" x-init="loadVariables()">
 
+{{-- ── Workflow progress ────────────────────────────────────────────────────── --}}
+<div class="bg-white rounded-xl border border-gray-200 px-5 py-4 mb-5">
+    <x-workflow.progress-steps
+        :steps="[
+            ['key' => 'brouillon', 'label' => 'Brouillon',  'icon' => '✏️'],
+            ['key' => 'valide',    'label' => 'Validé',     'icon' => '✅'],
+            ['key' => 'paye',      'label' => 'Payé',       'icon' => '💰'],
+        ]"
+        :current="$run->status"
+    />
+</div>
+
 {{-- ── En-tête ──────────────────────────────────────────────────────────────── --}}
 <div class="flex items-start justify-between mb-6">
     <div>

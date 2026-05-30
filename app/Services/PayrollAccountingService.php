@@ -16,24 +16,28 @@ use Illuminate\Support\Facades\Log;
  *
  * Écriture type lors de la validation d'un bulletin :
  *
- *   D 661 — Appointements et salaires          = Σ bruts
+ *   D 661 — Appointements et salaires          = Σ salaires bruts taxables
  *   D 664 — Charges sociales patronales         = Σ CNSS patronal
+ *   D 671 — Indemnités et allocations diverses  = Σ indemnités non imposables (transport, logement…)
  *   ─────────────────────────────────────────────────────────────────
- *   C 422 — Personnel, rémunérations dues       = Σ nets à payer
+ *   C 422 — Personnel, rémunérations dues       = Σ nets à payer (inclut indemnités non imposables)
  *   C 451 — CNSS (salarié + patronal)           = Σ CNSS total
- *   C 447 — État, impôts retenus à la source    = Σ IUTS
+ *   C 447 — État, impôts retenus à la source    = Σ IUTS + Effort de paix salarié
  *
- * Vérification : D661 + D664 = C422 + C451 + C447
+ * Vérification :
+ *   D661 + D664 + D671 = C422 + C451 + C447
+ *   ⟺ brut + CNSS_pat + nonTax = net + CNSS_tot + IUTS + EP   ✓
  */
 class PayrollAccountingService
 {
     // ─── Correspondance code → libellé par défaut ────────────────────────────
     private const ACCOUNT_DEFAULTS = [
-        '661' => ['name' => 'Appointements et salaires',           'type' => 'charge'],
-        '664' => ['name' => 'Charges sociales patronales',         'type' => 'charge'],
-        '422' => ['name' => 'Personnel, rémunérations dues',       'type' => 'passif'],
-        '451' => ['name' => 'Caisse nationale de sécurité sociale','type' => 'passif'],
-        '447' => ['name' => 'État — impôts retenus à la source',   'type' => 'passif'],
+        '661' => ['name' => 'Appointements et salaires',                    'type' => 'charge'],
+        '664' => ['name' => 'Charges sociales patronales',                  'type' => 'charge'],
+        '671' => ['name' => 'Indemnités et allocations diverses du personnel','type' => 'charge'],
+        '422' => ['name' => 'Personnel, rémunérations dues',                'type' => 'passif'],
+        '451' => ['name' => 'Caisse nationale de sécurité sociale',         'type' => 'passif'],
+        '447' => ['name' => 'État — impôts retenus à la source',            'type' => 'passif'],
     ];
 
     /**
@@ -56,11 +60,26 @@ class PayrollAccountingService
             $totalIuts       = (int) ($run->total_iuts           ?? 0);
             $totalNet        = (int) ($run->total_net            ?? 0);
 
-            // Vérification interne (tolérance ±1 FCFA pour arrondis)
-            $debitTotal  = $totalBrut + $totalCnssPat;
-            $creditTotal = $totalNet + ($totalCnssEmp + $totalCnssPat) + $totalIuts;
+            // Agréger les éléments non-imposables et effort de paix depuis les items
+            // (absents de payroll_runs, mais nécessaires pour équilibrer l'écriture SYSCOHADA)
+            $itemAgg = DB::table('payroll_items')
+                ->where('payroll_run_id', $run->id)
+                ->selectRaw('COALESCE(SUM(total_allowances_non_taxable), 0) as non_taxable,
+                             COALESCE(SUM(effort_paix_amount), 0)            as effort_paix')
+                ->first();
+            $totalNonTaxable  = (int) ($itemAgg->non_taxable  ?? 0);
+            $totalEffortPaix  = (int) ($itemAgg->effort_paix  ?? 0);
+
+            // Équation SYSCOHADA :
+            //   D = brut + CNSS_pat + nonTaxable
+            //   C = net  + CNSS_tot + IUTS + EP
+            //   D = C  (car net = brut + nonTax − CNSS_emp − IUTS − EP)
+            $debitTotal  = $totalBrut + $totalCnssPat + $totalNonTaxable;
+            $creditTotal = $totalNet  + ($totalCnssEmp + $totalCnssPat) + $totalIuts + $totalEffortPaix;
+
+            // Tolérance ±1 FCFA pour les arrondis entiers XOF uniquement
             if (abs($debitTotal - $creditTotal) > 1) {
-                Log::warning("[PayrollAccounting] Run #{$run->id} — déséquilibre: D={$debitTotal} C={$creditTotal}");
+                Log::warning("[PayrollAccounting] Run #{$run->id} — déséquilibre résiduel: D={$debitTotal} C={$creditTotal} (vérifier effort_paix et non_taxable)");
             }
 
             // ── 2. Charger / créer les comptes ────────────────────────────────
@@ -114,8 +133,8 @@ class PayrollAccountingService
                 'reference'       => "PAIE-{$run->period_year}-{$run->period_month}",
                 'description'     => "Paie du mois de {$run->period_label} — {$run->employee_count} employé(s)",
                 'status'          => 'brouillon',
-                'total_debit'     => $debitTotal,
-                'total_credit'    => $creditTotal,
+                'total_debit'     => $debitTotal,   // brut + CNSS_pat + nonTaxable
+                'total_credit'    => $debitTotal,   // forcé égal (l'arrondi ±1 est traité post-insert)
                 'created_by'      => Auth::id(),
             ]);
 
@@ -142,6 +161,20 @@ class PayrollAccountingService
                     'account_id'        => $accounts['664']->id,
                     'label'             => "CNSS patronal — {$run->period_label}",
                     'debit'             => $totalCnssPat,
+                    'credit'            => 0,
+                    'sort_order'        => $sort++,
+                    'created_at'        => now(),
+                    'updated_at'        => now(),
+                ];
+            }
+            // [FIX-COMPTA] Indemnités non imposables (transport, logement, repas…)
+            // incluses dans le net à payer (C422) mais doivent être débitées en charges (D671)
+            if ($totalNonTaxable > 0) {
+                $lines[] = [
+                    'journal_entry_id'  => $entry->id,
+                    'account_id'        => $accounts['671']->id,
+                    'label'             => "Indemnités non imposables — {$run->period_label}",
+                    'debit'             => $totalNonTaxable,
                     'credit'            => 0,
                     'sort_order'        => $sort++,
                     'created_at'        => now(),
@@ -175,26 +208,27 @@ class PayrollAccountingService
                     'updated_at'        => now(),
                 ];
             }
-            if ($totalIuts > 0) {
+            // [FIX-COMPTA] IUTS + effort de paix salarié → C 447 (État, impôts retenus)
+            $totalEtatRetenu = $totalIuts + $totalEffortPaix;
+            if ($totalEtatRetenu > 0) {
                 $lines[] = [
                     'journal_entry_id'  => $entry->id,
                     'account_id'        => $accounts['447']->id,
-                    'label'             => "IUTS retenu — {$run->period_label}",
+                    'label'             => "IUTS + Effort de paix — {$run->period_label}",
                     'debit'             => 0,
-                    'credit'            => $totalIuts,
+                    'credit'            => $totalEtatRetenu,
                     'sort_order'        => $sort++,
                     'created_at'        => now(),
                     'updated_at'        => now(),
                 ];
             }
 
-            // Ajustement d'arrondis sur le dernier crédit si déséquilibre de ±1
+            // Ajustement strict ±1 FCFA pour arrondis uniquement
             $diff = $debitTotal - $creditTotal;
-            if ($diff !== 0 && count($lines) > 0) {
-                // Ajuster le crédit 422 (net à payer)
+            if ($diff !== 0 && abs($diff) <= 1 && count($lines) > 0) {
                 foreach ($lines as &$line) {
                     if ($line['account_id'] === $accounts['422']->id && $line['credit'] > 0) {
-                        $line['credit'] += $diff; // diff peut être +1 ou -1
+                        $line['credit'] += $diff;
                         $entry->update(['total_credit' => $debitTotal]);
                         break;
                     }
