@@ -23,8 +23,11 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 
-# Claude Code local session
+# Claude Code — fichiers locaux (sessions, settings)
 .claude/
+# Mais les skills sont du code d'équipe → versionnés
+!.claude/skills/
+!.claude/skills/**
 
 # Windows path leak (stray dump)
 C:tmproutes.txt
