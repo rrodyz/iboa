@@ -185,16 +185,87 @@ GL différé à la validation de la facture — comportement conforme SYSCOHADA 
 
 ---
 
+---
+
+## Axe 8 — Tests (session complémentaire — 30 mai 2026)
+
+### Résultat final
+
+```
+Tests:    44 passed (110 assertions)
+Duration: 5.43s
+0 échec. 0 test ignoré.
+```
+
+### Corrections apportées pour atteindre 44/44
+
+#### Migrations cross-DB (SQLite → MySQL)
+
+5 migrations de performance utilisaient `SHOW INDEX FROM \`table\`` (MySQL uniquement)
+et `Blueprint::dropIndexIfExists()` (inexistant) :
+
+| Migration | Problème | Fix |
+|-----------|---------|-----|
+| `2026_04_18_120216_add_performance_indexes.php` | `SHOW INDEX FROM` | `Schema::hasIndex()` |
+| `2026_05_01_204422_add_missing_indexes_for_performance.php` | `SHOW INDEX FROM` + `dropIndexIfExists()` | `Schema::hasIndex()` |
+| `2026_05_08_002155_add_missing_fk_indexes.php` | `SHOW INDEX FROM` | `Schema::hasIndex()` |
+| `2026_05_08_142434_add_company_id_indexes_and_brand_id.php` | `SHOW INDEX FROM` | `Schema::hasIndex()` |
+| `2026_05_08_145130_add_allocation_indexes_and_unique_constraints.php` | `SHOW INDEX FROM` | `Schema::hasIndex()` |
+
+#### Migration validation workflow — garde SQLite
+
+`2026_05_28_100001_add_validation_workflow_to_sales_tables.php` contenait 5 instructions
+`ALTER TABLE … MODIFY COLUMN … ENUM(…)` non supportées sur SQLite.
+Fix : `$isSqlite = DB::getDriverName() === 'sqlite';` avec garde `if (! $isSqlite)`.
+
+#### BUG-4 — GL déséquilibré sur factures sans items
+
+`ventilateByFamilyAccount()` et `ventilateTaxByRate()` retournaient des buckets vides
+quand la facture n'avait pas d'items → `AccountingService::post()` rejetait l'écriture
+avec « Écriture comptable déséquilibrée ».
+
+Fix (`app/Services/AccountingService.php`) : paramètre `$fallbackAmount` ajouté aux deux
+méthodes ; utilisé quand les buckets sont vides ou tous à 0.
+
+#### BUG-5 — Statut paiement `payee` au lieu de `partiellement_payee`
+
+`net_to_pay` est une colonne `NOT NULL DEFAULT '0'`. L'opérateur `??` ne se déclenchait
+pas sur 0 (seulement sur null) → `$netToPay = 0` → tout paiement soldait la facture.
+
+Fix (`app/Services/ClientPaymentService.php`) : `??` → `?:` (Elvis, se déclenche sur falsy).
+
+#### Factories manquantes
+
+- `database/factories/CompanyFactory.php` créé (champ `name`, `country = 'BF'`, `city`)
+- `database/factories/UserFactory.php` mis à jour : `company_id => Company::factory()`
+
+Sans cela, `currentCompany()` levait `ModelNotFoundException` au rendering du layout ERP
+(GET /profile → 404 silencieux masqué par le handler `NotFoundHttpException`).
+
+#### Tests mis à jour
+
+| Fichier | Raison |
+|---------|--------|
+| `ExampleTest.php` | Route `/` → redirect `/login` (pas 200) |
+| `Auth/RegistrationTest.php` | `/register` → 404 (inscription publique désactivée dans cet ERP) |
+| `Auth/AuthenticationTest.php` | Suppression `assertRedirect(route('dashboard'))` — UserHomeRoute est role-based |
+| `ProfileTest.php` | Nécessite une Company en DB (layout ERP appelle `currentCompany()`) |
+| `InvoiceWorkflowTest.php` | `createAdmin()` associe l'utilisateur à la company-fixture (avec exercice fiscal) |
+| `QuoteWorkflowTest.php` | `quoteAdmin()` idem |
+
+---
+
 ## Points en attente (hors scope de cet audit)
 
 | Item | Priorité | Description |
 |------|----------|-------------|
-| Tests unitaires | Moyenne | Aucun test automatisé — PHPUnit/Pest non configuré |
-| Module rapprochements bancaires | Basse | Interface présente mais non connectée aux relevés bancaires |
+| Clôture exercice — report à nouveau automatique | Haute | FiscalYearController partiellement implémenté |
+| Réconciliation bancaire | Moyenne | Interface présente mais rapprochement auto non implémenté |
 | Balance âgée fournisseurs | Basse | Vue clients présente, vue fournisseurs absente |
 | Module caisse | Basse | Routes présentes mais contrôleur minimal |
 | Notifications push | Basse | Canal push non configuré (email uniquement) |
 | Export DADS / DAS2 | Basse | Non implémenté (déclaration annuelle des salaires) |
+| Tests Dusk E2E | Basse | Couverture actuelle Pest/PHPUnit uniquement |
 
 ---
 
@@ -219,4 +290,23 @@ GL différé à la validation de la facture — comportement conforme SYSCOHADA 
 
 ---
 
-*Rapport généré automatiquement le 2026-05-30 par audit ERP IBOA.*
+| `app/Services/AccountingService.php` | BUG-4 : fallback GL balance (session 2) |
+| `app/Services/ClientPaymentService.php` | BUG-5 : Elvis ?? → ?: net_to_pay (session 2) |
+| `database/factories/CompanyFactory.php` | Nouveau — factory manquant (session 2) |
+| `database/factories/UserFactory.php` | company_id auto via CompanyFactory (session 2) |
+| `database/migrations/2026_04_18_120216_add_performance_indexes.php` | SQLite compat (session 2) |
+| `database/migrations/2026_05_01_204422_add_missing_indexes_for_performance.php` | SQLite compat (session 2) |
+| `database/migrations/2026_05_08_002155_add_missing_fk_indexes.php` | SQLite compat (session 2) |
+| `database/migrations/2026_05_08_142434_add_company_id_indexes_and_brand_id.php` | SQLite compat (session 2) |
+| `database/migrations/2026_05_08_145130_add_allocation_indexes_and_unique_constraints.php` | SQLite compat (session 2) |
+| `database/migrations/2026_05_28_100001_add_validation_workflow_to_sales_tables.php` | SQLite compat ENUM (session 2) |
+| `tests/Feature/ExampleTest.php` | Adapté au comportement ERP (session 2) |
+| `tests/Feature/Auth/AuthenticationTest.php` | Adapté UserHomeRoute (session 2) |
+| `tests/Feature/Auth/RegistrationTest.php` | Inscription désactivée 404 (session 2) |
+| `tests/Feature/ProfileTest.php` | Corrigé Company fixture (session 2) |
+| `tests/Feature/InvoiceWorkflowTest.php` | createAdmin() lie company-fixture (session 2) |
+| `tests/Feature/QuoteWorkflowTest.php` | quoteAdmin() lie company-fixture (session 2) |
+
+---
+
+*Rapport généré automatiquement le 2026-05-30 par audit ERP IBOA (2 sessions).*
