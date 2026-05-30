@@ -65,6 +65,11 @@ export default {
     // les templates Blade quand la couleur est une variable PHP.
     // Ces patterns couvrent : CRM kanban, badges de statuts, composants ui.stat/badge.
     safelist: [
+        // [FIX-VITE-SVG] Classes avec valeurs arbitraires sur SVG — le serveur dev Vite
+        // ne les détecte pas toujours via le scanner JIT. Listées explicitement ici.
+        'w-[18px]', 'h-[18px]',
+        'w-3.5', 'h-3.5',   // spinner autosubmit (resources/js/app.js)
+
         // CRM kanban stages : sky, blue, violet, amber, emerald, red
         { pattern: /^(bg|text|border|ring)-(sky|blue|violet|amber|emerald|red|indigo|gray|orange|teal|cyan)-(50|100|200|400|500|600|700|800)$/ },
 

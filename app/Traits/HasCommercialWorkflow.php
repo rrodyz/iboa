@@ -297,7 +297,7 @@ trait HasCommercialWorkflow
      */
     public function assertCanValidate(): void
     {
-        $company = \App\Models\currentCompany();
+        $company = currentCompany();
 
         // Les super_admins et utilisateurs avec 'sales.bypass_self_validation'
         // peuvent toujours valider, quel que soit le mode.

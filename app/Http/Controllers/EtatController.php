@@ -39,11 +39,13 @@ class EtatController extends Controller
 
     public function journalVentes(Request $request): mixed
     {
-        $from     = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
-        $to       = $request->input('to',   now()->format('Y-m-d'));
-        $clientId = $request->input('client_id');
+        $from      = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
+        $to        = $request->input('to',   now()->format('Y-m-d'));
+        $clientId  = $request->input('client_id');
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
-        $query = Invoice::whereIn('status', $this->salesStatuses)
+        $query = Invoice::where('company_id', $companyId)
+            ->whereIn('status', $this->salesStatuses)
             ->whereBetween('issued_at', [$from, $to . ' 23:59:59'])
             ->with('client:id,name')
             ->orderBy('issued_at')
@@ -102,7 +104,7 @@ class EtatController extends Controller
                     ['label' => 'N° Facture', 'align' => 'l'],
                     ['label' => 'Date',       'align' => 'c'],
                     ['label' => 'Client',     'align' => 'l'],
-                    ['label' => 'Statut',     'align' => 'c'],
+                    ['label' => 'Statut',     'align' => 'c', 'raw' => true], // HTML badge — valeurs contrôlées par statusColor/statusLabel
                     ['label' => 'HT',         'align' => 'r'],
                     ['label' => 'Remise',     'align' => 'r'],
                     ['label' => 'TVA',        'align' => 'r'],
@@ -372,10 +374,12 @@ class EtatController extends Controller
 
     public function impayes(Request $request): mixed
     {
-        $asOf     = $request->input('as_of', now()->format('Y-m-d'));
-        $clientId = $request->input('client_id');
+        $asOf      = $request->input('as_of', now()->format('Y-m-d'));
+        $clientId  = $request->input('client_id');
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
-        $query = Invoice::whereIn('status', ['envoyee', 'partiellement_payee', 'en_retard', 'validee'])
+        $query = Invoice::where('company_id', $companyId)
+            ->whereIn('status', ['envoyee', 'partiellement_payee', 'en_retard', 'validee'])
             ->where('remaining_amount', '>', 0)
             ->whereNotNull('due_at')
             ->with('client:id,name,phone')
@@ -434,7 +438,7 @@ class EtatController extends Controller
                     ['label' => 'Total TTC',     'align' => 'r'],
                     ['label' => 'Réglé',         'align' => 'r'],
                     ['label' => 'Restant dû',    'align' => 'r'],
-                    ['label' => 'Retard',        'align' => 'c'],
+                    ['label' => 'Retard',        'align' => 'c', 'raw' => true],
                 ],
                 rows: $rows->map(fn($r) => [
                     $r->number,
@@ -471,12 +475,14 @@ class EtatController extends Controller
 
     public function etatTva(Request $request): mixed
     {
-        $from = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
-        $to   = $request->input('to',   now()->format('Y-m-d'));
+        $from      = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
+        $to        = $request->input('to',   now()->format('Y-m-d'));
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
         // TVA collectée — depuis les lignes de factures clients
         $tvaCollectee = DB::table('invoice_items as ii')
             ->join('invoices as i', 'i.id', '=', 'ii.invoice_id')
+            ->where('i.company_id', $companyId)
             ->whereIn('i.status', $this->salesStatuses)
             ->whereBetween('i.issued_at', [$from, $to . ' 23:59:59'])
             ->selectRaw('ii.tax_rate_value as taux, SUM(ii.line_total_ht) as base_ht, SUM(ii.line_tax) as montant_tva')
@@ -486,6 +492,7 @@ class EtatController extends Controller
 
         // TVA déductible — depuis les factures fournisseurs
         $tvaDeductible = DB::table('supplier_invoices')
+            ->where('company_id', $companyId)
             ->whereIn('status', ['validee', 'partiellement_payee', 'payee'])
             ->whereBetween('received_at', [$from, $to . ' 23:59:59'])
             ->selectRaw('SUM(subtotal_ht) as base_ht, SUM(total_tax) as montant_tva')
@@ -539,7 +546,7 @@ class EtatController extends Controller
 
             return $this->exportPdf('État de TVA', $from, $to,
                 headers: [
-                    ['label' => 'Type',        'align' => 'l'],
+                    ['label' => 'Type',        'align' => 'l', 'raw' => true], // <strong> pour "TVA Déductible"
                     ['label' => 'Taux',        'align' => 'c'],
                     ['label' => 'Base HT',     'align' => 'r'],
                     ['label' => 'Montant TVA', 'align' => 'r'],
@@ -568,12 +575,14 @@ class EtatController extends Controller
 
     public function listeFactures(Request $request): mixed
     {
-        $from     = $request->input('from', now()->startOfYear()->format('Y-m-d'));
-        $to       = $request->input('to',   now()->format('Y-m-d'));
-        $clientId = $request->input('client_id');
-        $status   = $request->input('status');
+        $from      = $request->input('from', now()->startOfYear()->format('Y-m-d'));
+        $to        = $request->input('to',   now()->format('Y-m-d'));
+        $clientId  = $request->input('client_id');
+        $status    = $request->input('status');
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
-        $query = Invoice::whereBetween('issued_at', [$from, $to . ' 23:59:59'])
+        $query = Invoice::where('company_id', $companyId)
+            ->whereBetween('issued_at', [$from, $to . ' 23:59:59'])
             ->with('client:id,name')
             ->orderByDesc('issued_at')
             ->orderByDesc('number');
@@ -623,7 +632,7 @@ class EtatController extends Controller
                     ['label' => 'Date',       'align' => 'c'],
                     ['label' => 'Échéance',   'align' => 'c'],
                     ['label' => 'Client',     'align' => 'l'],
-                    ['label' => 'Statut',     'align' => 'c'],
+                    ['label' => 'Statut',     'align' => 'c', 'raw' => true],
                     ['label' => 'HT',         'align' => 'r'],
                     ['label' => 'TTC',        'align' => 'r'],
                     ['label' => 'Réglé',      'align' => 'r'],
@@ -673,12 +682,14 @@ class EtatController extends Controller
 
     public function listeDevis(Request $request): mixed
     {
-        $from     = $request->input('from', now()->startOfYear()->format('Y-m-d'));
-        $to       = $request->input('to',   now()->format('Y-m-d'));
-        $clientId = $request->input('client_id');
-        $status   = $request->input('status');
+        $from      = $request->input('from', now()->startOfYear()->format('Y-m-d'));
+        $to        = $request->input('to',   now()->format('Y-m-d'));
+        $clientId  = $request->input('client_id');
+        $status    = $request->input('status');
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
-        $query = Quote::whereBetween('issued_at', [$from, $to . ' 23:59:59'])
+        $query = Quote::where('company_id', $companyId)
+            ->whereBetween('issued_at', [$from, $to . ' 23:59:59'])
             ->with('client:id,name')
             ->orderByDesc('issued_at')
             ->orderByDesc('number');
@@ -725,7 +736,7 @@ class EtatController extends Controller
                     ['label' => 'Date',      'align' => 'c'],
                     ['label' => 'Validité',  'align' => 'c'],
                     ['label' => 'Client',    'align' => 'l'],
-                    ['label' => 'Statut',    'align' => 'c'],
+                    ['label' => 'Statut',    'align' => 'c', 'raw' => true],
                     ['label' => 'HT',        'align' => 'r'],
                     ['label' => 'TTC',       'align' => 'r'],
                 ],
@@ -769,12 +780,14 @@ class EtatController extends Controller
 
     public function listeCommandes(Request $request): mixed
     {
-        $from     = $request->input('from', now()->startOfYear()->format('Y-m-d'));
-        $to       = $request->input('to',   now()->format('Y-m-d'));
-        $clientId = $request->input('client_id');
-        $status   = $request->input('status');
+        $from      = $request->input('from', now()->startOfYear()->format('Y-m-d'));
+        $to        = $request->input('to',   now()->format('Y-m-d'));
+        $clientId  = $request->input('client_id');
+        $status    = $request->input('status');
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
-        $query = Order::whereBetween('issued_at', [$from, $to . ' 23:59:59'])
+        $query = Order::where('company_id', $companyId)
+            ->whereBetween('issued_at', [$from, $to . ' 23:59:59'])
             ->with('client:id,name')
             ->orderByDesc('issued_at')
             ->orderByDesc('number');
@@ -819,7 +832,7 @@ class EtatController extends Controller
                     ['label' => 'N° Commande', 'align' => 'l'],
                     ['label' => 'Date',        'align' => 'c'],
                     ['label' => 'Client',      'align' => 'l'],
-                    ['label' => 'Statut',      'align' => 'c'],
+                    ['label' => 'Statut',      'align' => 'c', 'raw' => true],
                     ['label' => 'HT',          'align' => 'r'],
                     ['label' => 'TTC',         'align' => 'r'],
                 ],

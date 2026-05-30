@@ -87,7 +87,8 @@ tfoot td.r { text-align: right; }
             @foreach($headers as $i => $h)
             @php $val = is_array($row) ? ($row[$i] ?? '') : (object_get($row, $h['key'] ?? '') ?? ''); @endphp
             <td class="{{ ($h['align'] ?? 'l') === 'r' ? 'r' : (($h['align'] ?? 'l') === 'c' ? 'c' : '') }}">
-                {!! $val !!}
+                {{-- [SEC-XSS] Échapper par défaut ; passer 'raw' => true dans $headers pour du HTML voulu (badges status) --}}
+                @if(!empty($h['raw'])){!! $val !!}@else{{ $val }}@endif
             </td>
             @endforeach
         </tr>

@@ -191,16 +191,23 @@ tfoot td.r { text-align: right; }
                 <th>Échéance</th>
                 <th class="r">Montant facture</th>
                 <th class="r">Montant imputé</th>
+                <th class="r">Reste à payer</th>
             </tr>
         </thead>
         <tbody>
             @foreach($payment->allocations as $alloc)
+            @php
+                $resteApayer = max(0, ($alloc->invoice?->remaining_amount ?? 0));
+            @endphp
             <tr>
                 <td>{{ $alloc->invoice?->number ?? '—' }}</td>
                 <td>{{ $alloc->invoice?->issued_at?->format('d/m/Y') ?? '—' }}</td>
                 <td>{{ $alloc->invoice?->due_at?->format('d/m/Y') ?? '—' }}</td>
                 <td class="r">{{ number_format($alloc->invoice?->total_ttc ?? 0, 0, ',', ' ') }}</td>
                 <td class="r" style="font-weight:bold; color:#065F46;">{{ number_format($alloc->amount, 0, ',', ' ') }}</td>
+                <td class="r" style="font-weight:bold; color:{{ $resteApayer > 0 ? '#DC2626' : '#059669' }};">
+                    {{ $resteApayer > 0 ? number_format($resteApayer, 0, ',', ' ') : 'Soldée' }}
+                </td>
             </tr>
             @endforeach
         </tbody>
@@ -208,6 +215,10 @@ tfoot td.r { text-align: right; }
             <tr>
                 <td colspan="4">Total imputé</td>
                 <td class="r">{{ number_format($payment->allocated_amount, 0, ',', ' ') }} FCFA</td>
+                @php $totalReste = $payment->allocations->sum(fn($a) => max(0, $a->invoice?->remaining_amount ?? 0)); @endphp
+                <td class="r" style="color:{{ $totalReste > 0 ? '#DC2626' : '#059669' }};">
+                    {{ $totalReste > 0 ? number_format($totalReste, 0, ',', ' ').' FCFA' : 'Tout soldé' }}
+                </td>
             </tr>
         </tfoot>
     </table>

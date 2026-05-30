@@ -208,7 +208,7 @@ class ClientPaymentController extends Controller
     /**
      * Generate and download the payment receipt as PDF.
      */
-    public function recu(ClientPayment $encaissement): mixed
+    public function recu(ClientPayment $encaissement, Request $request): mixed
     {
         $this->authorize('view', $encaissement);
         $payment        = $this->repository->findWithDetails($encaissement->id);
@@ -218,7 +218,11 @@ class ClientPaymentController extends Controller
         $pdf = Pdf::loadView('tresorerie.encaissements.pdf.receipt', compact('payment', 'company', 'amountInWords'))
             ->setPaper([0, 0, 419.53, 595.28]); // A5 portrait
 
-        return $pdf->download('recu_' . $payment->number . '_' . now()->format('Ymd') . '.pdf');
+        $filename = 'recu_' . $payment->number . '_' . now()->format('Ymd') . '.pdf';
+
+        return $request->boolean('preview')
+            ? $pdf->stream($filename)
+            : $pdf->download($filename);
     }
 
     /**

@@ -2,7 +2,10 @@
 
 namespace App\Observers;
 
+use App\Models\JournalEntry;
+use App\Services\AccountingService;
 use App\Services\AuditService;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Observer générique pour ClientPayment et SupplierPayment.
@@ -13,7 +16,10 @@ use App\Services\AuditService;
  */
 class PaymentObserver
 {
-    public function __construct(private AuditService $audit) {}
+    public function __construct(
+        private AuditService     $audit,
+        private AccountingService $accounting,
+    ) {}
 
     public function created($payment): void
     {
@@ -55,5 +61,32 @@ class PaymentObserver
             'amount' => (float) $payment->amount,
             'status' => $payment->status ?? null,
         ], []);
+
+        // [FIX-COMPTA-SUPPRESSION] Contre-passer automatiquement l'écriture GL
+        // lorsqu'un paiement est soft-deleté, pour éviter des soldes fantômes.
+        $journalEntryId = $payment->journal_entry_id ?? null;
+        if (!$journalEntryId) {
+            return;
+        }
+
+        $entry = JournalEntry::find($journalEntryId);
+        if (!$entry || $entry->reversed_by_entry_id) {
+            return; // déjà contre-passée ou introuvable
+        }
+
+        try {
+            $this->accounting->reverseEntry(
+                $entry,
+                'Annulation paiement supprimé ' . ($payment->number ?? '')
+            );
+        } catch (\Throwable $e) {
+            // On journalise l'erreur sans bloquer la suppression
+            Log::error('PaymentObserver: échec contre-passation JE lors suppression', [
+                'payment_id'       => $payment->id,
+                'payment_number'   => $payment->number,
+                'journal_entry_id' => $journalEntryId,
+                'error'            => $e->getMessage(),
+            ]);
+        }
     }
 }

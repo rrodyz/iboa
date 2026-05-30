@@ -58,6 +58,8 @@ class AccountingService
         'produits_inventaire' => ['7097', 'Produits sur inventaire',         'produit', 7],
         'pertes_inventaire'   => ['6097', 'Pertes sur inventaire',           'charge',  6],
         'virements_internes'  => ['585',  'Virements de fonds',              'actif',   5],
+        // [BUG-2] Retenue à la source : créance sur l'État (impôt prélevé par le client)
+        'retenues_etat'       => ['4473', 'État — retenues à la source',      'actif',   4],
     ];
 
     // =========================================================================
@@ -66,24 +68,39 @@ class AccountingService
 
     /**
      * Facture client validée.
-     *   DR 411  Clients         = TTC
-     *   DR 7085 Remises accordées = DISCOUNT (si > 0) — équilibre l'écriture
-     *   CR 7011 Ventes          = HT (avant remise)
-     *   CR 4431 TVA collectée   = TAX (si > 0)
      *
-     * Démonstration de l'équilibre :
-     *   TTC = HT + TAX − DISCOUNT
-     *   DR  = TTC + DISCOUNT = HT + TAX = CR  ✓
+     *   Sans retenue à la source :
+     *   DR 411  Clients           = TTC
+     *   DR 7085 Remises accordées = DISCOUNT (si > 0)
+     *   CR 7011 Ventes            = HT (avant remise)
+     *   CR 4431 TVA collectée     = TAX (si > 0)
+     *   Équilibre : TTC + DISCOUNT = HT + TAX ✓
+     *
+     *   Avec retenue à la source (client soumis à retenue) :
+     *   DR 411  Clients           = net_to_pay (= TTC − retenue)
+     *   DR 4473 État — RAS        = withholding_amount
+     *   DR 7085 Remises accordées = DISCOUNT (si > 0)
+     *   CR 7011 Ventes            = HT (avant remise)
+     *   CR 4431 TVA collectée     = TAX (si > 0)
+     *   Équilibre : net_to_pay + retenue + DISCOUNT = TTC + DISCOUNT = HT + TAX ✓
+     *
+     * [BUG-2] La retenue est une créance sur l'État (le client reverse l'impôt à la DGI
+     * en notre nom). Le compte 4473 reste au bilan jusqu'au remboursement ou compensation.
      */
     public function postClientInvoice(Invoice $invoice): ?JournalEntry
     {
         $company = $this->company($invoice->company_id);
         if (!$company) return null;
 
-        $ttc      = (int) $invoice->total_ttc;
-        $ht       = (int) $invoice->subtotal_ht;
-        $tax      = (int) $invoice->total_tax;
-        $discount = (int) ($invoice->total_discount ?? 0);
+        $ttc         = (int) $invoice->total_ttc;
+        $ht          = (int) $invoice->subtotal_ht;
+        $tax         = (int) $invoice->total_tax;
+        $discount    = (int) ($invoice->total_discount ?? 0);
+        $withholding = (int) ($invoice->withholding_amount ?? 0);
+        $netToPay    = ($withholding > 0)
+            ? (int) ($invoice->net_to_pay ?? max(0, $ttc - $withholding))
+            : $ttc;
+
         if ($ttc <= 0) return null;
 
         // [COMPTA-FAMILLE] Charger les comptes de vente associés aux familles + taxes par taux
@@ -91,9 +108,20 @@ class AccountingService
 
         $defaultSaleAccount = $this->account($company, 'ventes');
 
+        // DR 411 Clients = net_to_pay (montant que le client versera réellement)
         $lines = [
-            $this->line($this->account($company, 'clients'), 'Facture '.$invoice->number, $ttc, 0),
+            $this->line($this->account($company, 'clients'), 'Facture '.$invoice->number, $netToPay, 0),
         ];
+
+        // [BUG-2] DR 4473 État — Retenues à la source (créance récupérable sur la DGI)
+        if ($withholding > 0) {
+            $lines[] = $this->line(
+                $this->account($company, 'retenues_etat'),
+                'Retenue à la source '.$invoice->number,
+                $withholding,
+                0
+            );
+        }
 
         // Ventilation du HT par compte de vente (selon famille de l'article)
         $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultSaleAccount->id, 'sale_account_id');

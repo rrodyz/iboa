@@ -125,13 +125,11 @@ class OrderService
                 'validated_at' => now(),
             ]);
 
-            // Reserve stock for all stockable items so that concurrent orders
-            // cannot oversell the same quantity.
-            $this->reserveStock($order->fresh());
-
             $fresh = $order->fresh();
 
-            // Fire event — listeners can handle stock notifications, CRM updates, etc.
+            // Fire event — ReserveStockOnOrderConfirmed listener handles stock
+            // reservation; other listeners can handle notifications, CRM updates, etc.
+            // Running synchronously inside this transaction guarantees atomicity.
             event(new OrderConfirmed($fresh));
 
             return $fresh;

@@ -780,4 +780,114 @@ class InvoiceService
 
         return [$details, $total];
     }
+
+    // =========================================================================
+    // [BUG-1] convertProforma — Conversion proforma → facture standard
+    // =========================================================================
+
+    /**
+     * Convertit une facture proforma en facture standard définitive.
+     *
+     * Flow:
+     *   1. Vérifie que la facture est bien de type 'proforma' et dans un état modifiable.
+     *   2. Crée une nouvelle facture standard (type 'standard', status 'emise') avec
+     *      les mêmes items/montants/client.
+     *   3. Déclenche les effets de validation (GL + stock + événement InvoiceValidated).
+     *   4. Passe la proforma originelle à 'annulee' avec lien parent_invoice_id.
+     *
+     * La proforma reste dans l'historique pour audit mais n'a aucun impact comptable.
+     */
+    public function convertProforma(Invoice $proforma): Invoice
+    {
+        if ($proforma->type !== 'proforma') {
+            throw new \RuntimeException('Seules les factures de type « proforma » peuvent être converties.');
+        }
+
+        if (!in_array($proforma->status, ['brouillon', 'emise', 'envoyee'])) {
+            throw new \RuntimeException(sprintf(
+                'La proforma %s (statut : %s) ne peut plus être convertie.',
+                $proforma->number,
+                $proforma->status
+            ));
+        }
+
+        return DB::transaction(function () use ($proforma) {
+            // Lock the proforma row to prevent concurrent conversion.
+            $proforma = Invoice::lockForUpdate()->findOrFail($proforma->id);
+
+            if ($proforma->type !== 'proforma' || !in_array($proforma->status, ['brouillon', 'emise', 'envoyee'])) {
+                throw new \RuntimeException('La proforma ne peut plus être convertie (état modifié simultanément).');
+            }
+
+            $proforma->load('items', 'client.taxRates');
+            $company = \App\Models\Company::findOrFail($proforma->company_id);
+
+            // ── 1. Créer la nouvelle facture standard ─────────────────────────
+            $newInvoice = Invoice::create([
+                'company_id'              => $proforma->company_id,
+                'client_id'               => $proforma->client_id,
+                'fiscal_year_id'          => $proforma->fiscal_year_id ?? $company->current_fiscal_year_id,
+                'order_id'                => $proforma->order_id,
+                'delivery_note_id'        => $proforma->delivery_note_id,
+                'number'                  => $this->sequenceService->nextNumber($company, 'facture'),
+                'type'                    => 'standard',
+                'status'                  => 'brouillon',
+                'issued_at'               => now()->toDateString(),
+                'due_at'                  => $this->defaultDueAt(now(), $proforma->client?->payment_term_id),
+                'subtotal_ht'             => $proforma->subtotal_ht,
+                'total_discount'          => $proforma->total_discount,
+                'global_discount_amount'  => $proforma->global_discount_amount,
+                'global_discount_percent' => $proforma->global_discount_percent,
+                'total_tax'               => $proforma->total_tax,
+                'total_ttc'               => $proforma->total_ttc,
+                'withholding_details'     => $proforma->withholding_details,
+                'withholding_amount'      => $proforma->withholding_amount,
+                'net_to_pay'              => $proforma->net_to_pay,
+                'remaining_amount'        => $proforma->net_to_pay ?? $proforma->total_ttc,
+                'notes'                   => $proforma->notes,
+                'payment_method'          => $proforma->payment_method,
+                'parent_invoice_id'       => null,
+                'created_by'              => Auth::id(),
+            ]);
+
+            // Copier les lignes de la proforma
+            foreach ($proforma->items as $i => $item) {
+                $newInvoice->items()->create([
+                    'product_id'       => $item->product_id,
+                    'description'      => $item->description,
+                    'unit_id'          => $item->unit_id,
+                    'quantity'         => $item->quantity,
+                    'unit_price'       => $item->unit_price,
+                    'discount_percent' => $item->discount_percent,
+                    'tax_rate_id'      => $item->tax_rate_id,
+                    'tax_rate_value'   => $item->tax_rate_value,
+                    'line_total_ht'    => $item->line_total_ht,
+                    'line_tax'         => $item->line_tax,
+                    'line_total_ttc'   => $item->line_total_ttc,
+                    'sort_order'       => $i,
+                ]);
+            }
+
+            // ── 2. Valider immédiatement la nouvelle facture (émission + GL + stock) ──
+            // La validation passe en 'emise' et déclenche postClientInvoice + postSaleStockMovement.
+            $newInvoice->update(['status' => 'emise', 'validated_at' => now(), 'validated_by' => Auth::id()]);
+            $newInvoice = $newInvoice->fresh(['items.product.family.saleAccount', 'items.taxRate.collectedAccount', 'client']);
+            $this->applyValidationSideEffects($newInvoice);
+
+            // ── 3. Annuler la proforma originelle ─────────────────────────────
+            $proforma->update([
+                'status'            => 'annulee',
+                'parent_invoice_id' => $newInvoice->id,
+                'notes'             => rtrim((string) $proforma->notes) . "\n\n"
+                    . sprintf(
+                        '[CONVERTI le %s par %s → Facture %s]',
+                        now()->format('d/m/Y H:i'),
+                        Auth::user()?->name ?? 'système',
+                        $newInvoice->number
+                    ),
+            ]);
+
+            return $newInvoice->fresh();
+        });
+    }
 }

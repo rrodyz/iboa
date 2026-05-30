@@ -21,20 +21,25 @@ use App\Policies\ClientPaymentPolicy;
 use App\Policies\ClientPolicy;
 use App\Policies\CreditNotePolicy;
 use App\Policies\DeliveryNotePolicy;
+use App\Policies\EmployeePolicy;
 use App\Policies\InventorySessionPolicy;
 use App\Policies\InvoicePolicy;
+use App\Policies\JournalEntryPolicy;
 use App\Policies\OrderPolicy;
+use App\Policies\PayrollRunPolicy;
 use App\Policies\ProductPolicy;
 use App\Policies\PurchaseOrderPolicy;
 use App\Policies\RolePolicy;
 use App\Policies\StockMovementPolicy;
 use App\Policies\SupplierInvoicePolicy;
+use App\Policies\SupplierPaymentPolicy;
 use App\Policies\SupplierPolicy;
 use App\Policies\UserPolicy;
 use App\Repositories\CompanyRepository;
 use App\Repositories\ProductRepository;
 use App\Events\CreditNoteValidated;
 use App\Events\InvoiceValidated;
+use App\Events\OrderConfirmed;
 use App\Events\PaymentReceived;
 use App\Events\StockAlertTriggered;
 use App\Events\SupplierInvoiceValidated;
@@ -42,6 +47,7 @@ use App\Events\SupplierPaymentCreated;
 use App\Listeners\NotifyLowStock;
 use App\Listeners\NotifyCreditNoteValidated;
 use App\Listeners\NotifySupplierInvoiceValidated;
+use App\Listeners\ReserveStockOnOrderConfirmed;
 use App\Listeners\SendInvoiceToClient;
 use App\Listeners\SyncClientBalanceOnInvoice;
 use App\Listeners\SyncSupplierBalanceOnInvoice;
@@ -88,6 +94,9 @@ class AppServiceProvider extends ServiceProvider
         });
 
         // ── Event → Listener bindings ──────────────────────────────────────────
+        // Commandes
+        Event::listen(OrderConfirmed::class,            ReserveStockOnOrderConfirmed::class);
+
         // Ventes
         Event::listen(InvoiceValidated::class,          SendInvoiceToClient::class);
         Event::listen(InvoiceValidated::class,          SyncClientBalanceOnInvoice::class);
@@ -136,6 +145,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AuditLog::class,        AuditLogPolicy::class);
         // [SEC-PHASE2] AttachmentPolicy avec methodes personnalisees (viewAttachmentsOf, create, download, delete)
         Gate::policy(\App\Models\Attachment::class, \App\Policies\AttachmentPolicy::class);
+
+        // [AUDIT-POL] Policies manquantes — entités financières et RH critiques
+        Gate::policy(\App\Models\JournalEntry::class,   JournalEntryPolicy::class);
+        Gate::policy(\App\Models\Employee::class,       EmployeePolicy::class);
+        Gate::policy(\App\Models\PayrollRun::class,     PayrollRunPolicy::class);
+        Gate::policy(\App\Models\SupplierPayment::class, SupplierPaymentPolicy::class);
 
         // [MED-4] Observers d'audit — trace dans audit_logs les opérations critiques.
         \App\Models\Invoice::observe(\App\Observers\InvoiceObserver::class);

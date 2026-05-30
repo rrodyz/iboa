@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Accounting;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\FiscalYear;
 use App\Models\JournalEntry;
+use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +64,40 @@ class FecExportController extends Controller
             ->orderBy('number')
             ->get();
 
+        // [BUG-3] Construire une map référence → tiers (clients 411, fournisseurs 401)
+        // pour renseigner CompAuxNum et CompAuxLib dans le FEC.
+        // On collecte toutes les références d'écritures puis on fait 2 requêtes groupées.
+        $allRefs = $entries->pluck('reference')->filter()->unique()->values()->toArray();
+
+        // Map number → [code, name] pour clients et fournisseurs
+        $clientMap   = Client::whereIn('code', $allRefs)
+            ->orWhereIn(DB::raw('code'), function ($q) use ($allRefs, $company) {
+                // Cherche aussi par numéro de facture client
+                $q->select('number')
+                  ->from('invoices')
+                  ->where('company_id', $company->id)
+                  ->whereIn('number', $allRefs);
+            })
+            ->pluck('code', 'code')
+            ->toArray();
+
+        // Rebuild: ref d'écriture → [client_code, client_name]
+        $invoiceToClient = DB::table('invoices as i')
+            ->join('clients as c', 'c.id', '=', 'i.client_id')
+            ->where('i.company_id', $company->id)
+            ->whereIn('i.number', $allRefs)
+            ->select('i.number as ref', 'c.code as tiers_code', 'c.name as tiers_lib')
+            ->get()
+            ->keyBy('ref');
+
+        $supplierInvToSupplier = DB::table('supplier_invoices as si')
+            ->join('suppliers as s', 's.id', '=', 'si.supplier_id')
+            ->where('si.company_id', $company->id)
+            ->whereIn('si.number', $allRefs)
+            ->select('si.number as ref', 's.code as tiers_code', 's.name as tiers_lib')
+            ->get()
+            ->keyBy('ref');
+
         $rows = [];
         // Header
         $rows[] = [
@@ -71,17 +107,37 @@ class FecExportController extends Controller
         ];
 
         foreach ($entries as $entry) {
+            $ref = $entry->reference ?? '';
+
             foreach ($entry->lines as $line) {
+                $accountCode = $line->account?->code ?? '';
+
+                // [BUG-3] Renseigner CompAuxNum / CompAuxLib pour les comptes de tiers
+                $compAuxNum = '';
+                $compAuxLib = '';
+
+                if (str_starts_with($accountCode, '411') && $ref) {
+                    // Compte client : chercher dans les factures clients
+                    $tiers      = $invoiceToClient->get($ref);
+                    $compAuxNum = $tiers?->tiers_code ?? '';
+                    $compAuxLib = $tiers?->tiers_lib  ?? '';
+                } elseif (str_starts_with($accountCode, '401') && $ref) {
+                    // Compte fournisseur : chercher dans les factures fournisseurs
+                    $tiers      = $supplierInvToSupplier->get($ref);
+                    $compAuxNum = $tiers?->tiers_code ?? '';
+                    $compAuxLib = $tiers?->tiers_lib  ?? '';
+                }
+
                 $rows[] = [
                     $entry->journalType?->code ?? '',
                     $entry->journalType?->name ?? '',
                     $entry->number,
                     $entry->entry_date?->format('Ymd') ?? '',
-                    $line->account?->code ?? '',
+                    $accountCode,
                     $line->account?->name ?? '',
-                    '',                                       // CompAuxNum (tiers — laissé vide ici)
-                    '',                                       // CompAuxLib
-                    $entry->reference ?? '',
+                    $compAuxNum,
+                    $compAuxLib,
+                    $ref,
                     $entry->entry_date?->format('Ymd') ?? '',
                     $line->label ?? $entry->description,
                     $this->fmtAmount($line->debit),

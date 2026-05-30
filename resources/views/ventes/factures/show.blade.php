@@ -56,6 +56,12 @@
                 <span class="badge {{ $statusBadges[$invoice->status] ?? 'badge-gray' }}">
                     {{ $statusLabels[$invoice->status] ?? $invoice->status }}
                 </span>
+                {{-- [UI-1] Badge PROFORMA visible sur les factures de type proforma --}}
+                @if($invoice->type === 'proforma')
+                <span class="badge bg-orange-100 text-orange-800 border border-orange-300 font-bold tracking-wider uppercase" title="Document non comptable — doit être converti en facture standard">
+                    PROFORMA
+                </span>
+                @endif
                 @if($isOverdue)
                     <span class="badge bg-red-600 text-white font-bold">EN RETARD</span>
                 @endif

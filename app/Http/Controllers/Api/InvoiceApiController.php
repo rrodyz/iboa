@@ -12,7 +12,13 @@ class InvoiceApiController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = Invoice::with(['client'])->latest('issued_at');
+        // [SEC-API] Isolation multi-tenant : on ne renvoie que les factures
+        // de la société de l'utilisateur authentifié.
+        $companyId = $request->user()->company_id;
+
+        $query = Invoice::with(['client'])
+            ->where('company_id', $companyId)
+            ->latest('issued_at');
 
         if ($request->filled('status')) {
             $query->whereIn('status', explode(',', $request->status));
@@ -40,8 +46,13 @@ class InvoiceApiController extends Controller
         return InvoiceResource::collection($query->paginate($perPage));
     }
 
-    public function show(Invoice $invoice): InvoiceResource
+    public function show(Request $request, Invoice $invoice): InvoiceResource
     {
+        // [SEC-API] Vérifier que la facture appartient bien à la société du token.
+        if ($invoice->company_id !== $request->user()->company_id) {
+            abort(403, 'Accès refusé à cette ressource.');
+        }
+
         $invoice->load(['client', 'items']);
         return new InvoiceResource($invoice);
     }
