@@ -75,9 +75,6 @@ return new class extends Migration
 
     private function hasIndex(string $table, string $indexName): bool
     {
-        return count(DB::select(
-            "SHOW INDEX FROM `{$table}` WHERE Key_name = ?",
-            [$indexName]
-        )) > 0;
+        return Schema::hasIndex($table, $indexName);
     }
 };

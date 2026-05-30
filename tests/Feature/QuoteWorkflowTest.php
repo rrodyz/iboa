@@ -15,8 +15,11 @@ uses(\Tests\Concerns\RefreshDatabase::class);
 
 function quoteAdmin(): User
 {
-    $role = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
-    $u    = User::factory()->create();
+    $role    = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
+    // Associate the admin with the test-fixture company so SetCurrentCompany
+    // injects a company that has a current_fiscal_year_id set.
+    $company = quoteCompany();
+    $u       = User::factory()->create(['company_id' => $company->id]);
     $u->assignRole($role);
     return $u;
 }

@@ -11,13 +11,14 @@ test('login screen can be rendered', function () {
 test('users can authenticate using the login screen', function () {
     $user = User::factory()->create();
 
-    $response = $this->post('/login', [
+    $this->post('/login', [
         'email' => $user->email,
         'password' => 'password',
     ]);
 
+    // The ERP uses role-based routing (UserHomeRoute) so we only assert
+    // that the user is authenticated, not the specific redirect target.
     $this->assertAuthenticated();
-    $response->assertRedirect(route('dashboard', absolute: false));
 });
 
 test('users can not authenticate with invalid password', function () {

@@ -39,34 +39,25 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            $table->dropIndexIfExists('invoices_order_id_index');
-            $table->dropIndexIfExists('invoices_delivery_note_id_index');
+            if (Schema::hasIndex('invoices', 'invoices_order_id_index'))
+                $table->dropIndex('invoices_order_id_index');
+            if (Schema::hasIndex('invoices', 'invoices_delivery_note_id_index'))
+                $table->dropIndex('invoices_delivery_note_id_index');
         });
         Schema::table('client_payment_allocations', function (Blueprint $table) {
-            $table->dropIndexIfExists('client_payment_allocations_invoice_id_index');
-            $table->dropIndexIfExists('client_payment_allocations_client_payment_id_index');
+            if (Schema::hasIndex('client_payment_allocations', 'client_payment_allocations_invoice_id_index'))
+                $table->dropIndex('client_payment_allocations_invoice_id_index');
+            if (Schema::hasIndex('client_payment_allocations', 'client_payment_allocations_client_payment_id_index'))
+                $table->dropIndex('client_payment_allocations_client_payment_id_index');
         });
         Schema::table('receptions', function (Blueprint $table) {
-            $table->dropIndexIfExists('receptions_purchase_order_id_index');
+            if (Schema::hasIndex('receptions', 'receptions_purchase_order_id_index'))
+                $table->dropIndex('receptions_purchase_order_id_index');
         });
     }
 
     private function hasIndex(string $table, string $index): bool
     {
-        $driver = \Illuminate\Support\Facades\DB::getDriverName();
-
-        if ($driver === 'sqlite') {
-            $rows = \Illuminate\Support\Facades\DB::select(
-                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
-                [$table, $index]
-            );
-        } else {
-            $rows = \Illuminate\Support\Facades\DB::select(
-                "SHOW INDEX FROM `{$table}` WHERE Key_name = ?",
-                [$index]
-            );
-        }
-
-        return count($rows) > 0;
+        return Schema::hasIndex($table, $index);
     }
 };

@@ -124,7 +124,9 @@ class AccountingService
         }
 
         // Ventilation du HT par compte de vente (selon famille de l'article)
-        $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultSaleAccount->id, 'sale_account_id');
+        // Le montant $ht est passé comme fallback pour éviter une écriture déséquilibrée
+        // si la facture n'a pas de lignes (ex. factures créées sans articles).
+        $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultSaleAccount->id, 'sale_account_id', $ht);
         foreach ($ventilation as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Facture '.$invoice->number, 0, $amount);
         }
@@ -132,7 +134,7 @@ class AccountingService
         // [COMPTA-TVA] Ventilation de la TVA par taux (compte dédié sur TaxRate sinon 4431 global)
         if ($tax > 0) {
             $defaultTvaAccount = $this->account($company, 'tva_collectee');
-            $tvaVentilation = $this->ventilateTaxByRate($invoice->items, $defaultTvaAccount->id, 'collected_account_id');
+            $tvaVentilation = $this->ventilateTaxByRate($invoice->items, $defaultTvaAccount->id, 'collected_account_id', $tax);
             foreach ($tvaVentilation as $accountId => $amount) {
                 $lines[] = $this->lineByAccountId($accountId, 'TVA '.$invoice->number, 0, $amount);
             }
@@ -213,7 +215,7 @@ class AccountingService
         $lines = [];
 
         // Ventilation du HT par compte d'achat (selon famille de l'article)
-        $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultPurchaseAccount->id, 'purchase_account_id');
+        $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultPurchaseAccount->id, 'purchase_account_id', $ht);
         foreach ($ventilation as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Fact. fourn. '.$invoice->number, $amount, 0);
         }
@@ -223,7 +225,7 @@ class AccountingService
         // [COMPTA-TVA] Ventilation de la TVA déductible par taux
         if ($tax > 0) {
             $defaultTvaAccount = $this->account($company, 'tva_deductible');
-            $tvaVentilation = $this->ventilateTaxByRate($invoice->items, $defaultTvaAccount->id, 'deductible_account_id');
+            $tvaVentilation = $this->ventilateTaxByRate($invoice->items, $defaultTvaAccount->id, 'deductible_account_id', $tax);
             foreach ($tvaVentilation as $accountId => $amount) {
                 $lines[] = $this->lineByAccountId($accountId, 'TVA '.$invoice->number, $amount, 0);
             }
@@ -299,7 +301,7 @@ class AccountingService
         $lines = [];
 
         // Ventilation : DR compte vente famille (contrepasse la vente initiale)
-        $ventilation = $this->ventilateByFamilyAccount($creditNote->items, $defaultSaleAccount->id, 'sale_account_id');
+        $ventilation = $this->ventilateByFamilyAccount($creditNote->items, $defaultSaleAccount->id, 'sale_account_id', $ht);
         foreach ($ventilation as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Avoir '.$creditNote->number, $amount, 0);
         }
@@ -308,7 +310,7 @@ class AccountingService
 
         if ($tax > 0) {
             $defaultTvaAccount = $this->account($company, 'tva_collectee');
-            $tvaVentilation = $this->ventilateTaxByRate($creditNote->items, $defaultTvaAccount->id, 'collected_account_id');
+            $tvaVentilation = $this->ventilateTaxByRate($creditNote->items, $defaultTvaAccount->id, 'collected_account_id', $tax);
             foreach ($tvaVentilation as $accountId => $amount) {
                 $lines[] = $this->lineByAccountId($accountId, 'TVA avoir '.$creditNote->number, $amount, 0);
             }
@@ -346,14 +348,14 @@ class AccountingService
         ];
 
         // Ventilation : CR compte achat famille (réduit l'achat initial)
-        $ventilation = $this->ventilateByFamilyAccount($return->items, $defaultPurchaseAccount->id, 'purchase_account_id');
+        $ventilation = $this->ventilateByFamilyAccount($return->items, $defaultPurchaseAccount->id, 'purchase_account_id', $ht);
         foreach ($ventilation as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Retour fourn. '.$return->number, 0, $amount);
         }
 
         if ($tax > 0) {
             $defaultTvaAccount = $this->account($company, 'tva_deductible');
-            $tvaVentilation = $this->ventilateTaxByRate($return->items, $defaultTvaAccount->id, 'deductible_account_id');
+            $tvaVentilation = $this->ventilateTaxByRate($return->items, $defaultTvaAccount->id, 'deductible_account_id', $tax);
             foreach ($tvaVentilation as $accountId => $amount) {
                 $lines[] = $this->lineByAccountId($accountId, 'TVA '.$return->number, 0, $amount);
             }
@@ -829,7 +831,7 @@ class AccountingService
      * @param  string    $accountField       'collected_account_id' ou 'deductible_account_id'
      * @return array<int,int>                [accountId => totalTva, ...]
      */
-    private function ventilateTaxByRate($items, int $fallbackAccountId, string $accountField): array
+    private function ventilateTaxByRate($items, int $fallbackAccountId, string $accountField, int $fallbackAmount = 0): array
     {
         $buckets = [];
         foreach ($items as $item) {
@@ -838,6 +840,10 @@ class AccountingService
 
             $accountId = $item->taxRate?->{$accountField} ?? $fallbackAccountId;
             $buckets[$accountId] = ($buckets[$accountId] ?? 0) + $tva;
+        }
+        // Fallback quand aucun article ne contribue à la TVA
+        if ((empty($buckets) || array_sum($buckets) === 0) && $fallbackAmount > 0) {
+            $buckets[$fallbackAccountId] = $fallbackAmount;
         }
         return $buckets;
     }
@@ -852,7 +858,7 @@ class AccountingService
      * @param  string    $accountField       'sale_account_id' ou 'purchase_account_id'
      * @return array<int,int>                [accountId => totalHt, ...]
      */
-    private function ventilateByFamilyAccount($items, int $fallbackAccountId, string $accountField): array
+    private function ventilateByFamilyAccount($items, int $fallbackAccountId, string $accountField, int $fallbackAmount = 0): array
     {
         $buckets = [];
         foreach ($items as $item) {
@@ -863,8 +869,11 @@ class AccountingService
             $buckets[$accountId] = ($buckets[$accountId] ?? 0) + $ht;
         }
 
-        // Garantit au moins une ligne pour ne jamais générer une écriture asymétrique
-        if (empty($buckets)) {
+        // Si aucun article ne contribue (items vides ou montants nuls),
+        // utiliser le montant total de repli pour que l'écriture reste équilibrée.
+        if ((empty($buckets) || array_sum($buckets) === 0) && $fallbackAmount > 0) {
+            $buckets[$fallbackAccountId] = $fallbackAmount;
+        } elseif (empty($buckets)) {
             $buckets[$fallbackAccountId] = 0;
         }
 

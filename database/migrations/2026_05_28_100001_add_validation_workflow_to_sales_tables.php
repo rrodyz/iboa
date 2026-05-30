@@ -16,10 +16,15 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // SQLite does not support ALTER TABLE MODIFY COLUMN or ENUM — skip raw statements.
+        $isSqlite = DB::getDriverName() === 'sqlite';
+
         // ── 1. quotes ──────────────────────────────────────────────────────────
-        DB::statement("ALTER TABLE quotes MODIFY COLUMN status ENUM(
-            'brouillon','en_attente_validation','envoye','accepte','refuse','expire','annule','converti','valide'
-        ) NOT NULL DEFAULT 'brouillon'");
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE quotes MODIFY COLUMN status ENUM(
+                'brouillon','en_attente_validation','envoye','accepte','refuse','expire','annule','converti','valide'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('quotes', function (Blueprint $table) {
             if (! Schema::hasColumn('quotes', 'submitted_by')) {
@@ -42,10 +47,12 @@ return new class extends Migration
         });
 
         // ── 2. orders ──────────────────────────────────────────────────────────
-        DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM(
-            'brouillon','en_attente_validation','confirme','en_preparation',
-            'partiellement_livre','livre','facture','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM(
+                'brouillon','en_attente_validation','confirme','en_preparation',
+                'partiellement_livre','livre','facture','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('orders', function (Blueprint $table) {
             if (! Schema::hasColumn('orders', 'submitted_by')) {
@@ -68,9 +75,11 @@ return new class extends Migration
         });
 
         // ── 3. delivery_notes ──────────────────────────────────────────────────
-        DB::statement("ALTER TABLE delivery_notes MODIFY COLUMN status ENUM(
-            'brouillon','en_attente_validation','valide','livre','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE delivery_notes MODIFY COLUMN status ENUM(
+                'brouillon','en_attente_validation','valide','livre','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('delivery_notes', function (Blueprint $table) {
             if (! Schema::hasColumn('delivery_notes', 'submitted_by')) {
@@ -93,10 +102,12 @@ return new class extends Migration
         });
 
         // ── 4. invoices ────────────────────────────────────────────────────────
-        DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM(
-            'brouillon','en_attente_validation','emise','envoyee',
-            'partiellement_payee','payee','en_retard','annulee'
-        ) NOT NULL DEFAULT 'brouillon'");
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM(
+                'brouillon','en_attente_validation','emise','envoyee',
+                'partiellement_payee','payee','en_retard','annulee'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('invoices', function (Blueprint $table) {
             if (! Schema::hasColumn('invoices', 'submitted_by')) {
@@ -119,9 +130,11 @@ return new class extends Migration
         });
 
         // ── 5. credit_notes ────────────────────────────────────────────────────
-        DB::statement("ALTER TABLE credit_notes MODIFY COLUMN status ENUM(
-            'brouillon','en_attente_validation','valide','applique','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE credit_notes MODIFY COLUMN status ENUM(
+                'brouillon','en_attente_validation','valide','applique','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('credit_notes', function (Blueprint $table) {
             if (! Schema::hasColumn('credit_notes', 'submitted_by')) {
@@ -156,26 +169,30 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Restore original ENUM values
-        DB::statement("ALTER TABLE quotes MODIFY COLUMN status ENUM(
-            'brouillon','envoye','accepte','refuse','expire','annule','converti','valide'
-        ) NOT NULL DEFAULT 'brouillon'");
+        $isSqlite = DB::getDriverName() === 'sqlite';
 
-        DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM(
-            'brouillon','confirme','en_preparation','partiellement_livre','livre','facture','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+        // Restore original ENUM values (MySQL only)
+        if (! $isSqlite) {
+            DB::statement("ALTER TABLE quotes MODIFY COLUMN status ENUM(
+                'brouillon','envoye','accepte','refuse','expire','annule','converti','valide'
+            ) NOT NULL DEFAULT 'brouillon'");
 
-        DB::statement("ALTER TABLE delivery_notes MODIFY COLUMN status ENUM(
-            'brouillon','valide','livre','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+            DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM(
+                'brouillon','confirme','en_preparation','partiellement_livre','livre','facture','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
 
-        DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM(
-            'brouillon','emise','envoyee','partiellement_payee','payee','en_retard','annulee'
-        ) NOT NULL DEFAULT 'brouillon'");
+            DB::statement("ALTER TABLE delivery_notes MODIFY COLUMN status ENUM(
+                'brouillon','valide','livre','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
 
-        DB::statement("ALTER TABLE credit_notes MODIFY COLUMN status ENUM(
-            'brouillon','valide','applique','annule'
-        ) NOT NULL DEFAULT 'brouillon'");
+            DB::statement("ALTER TABLE invoices MODIFY COLUMN status ENUM(
+                'brouillon','emise','envoyee','partiellement_payee','payee','en_retard','annulee'
+            ) NOT NULL DEFAULT 'brouillon'");
+
+            DB::statement("ALTER TABLE credit_notes MODIFY COLUMN status ENUM(
+                'brouillon','valide','applique','annule'
+            ) NOT NULL DEFAULT 'brouillon'");
+        }
 
         Schema::table('quotes',         fn($t) => $t->dropColumn(['submitted_by','submitted_at','rejected_by','rejected_at','rejection_reason']));
         Schema::table('orders',         fn($t) => $t->dropColumn(['submitted_by','submitted_at','rejected_by','rejected_at','rejection_reason']));

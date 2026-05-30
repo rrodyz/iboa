@@ -123,8 +123,11 @@ class ClientPaymentService
                 // [FIX-WITHHOLDING-PAY] Compute remaining against NET_TO_PAY (= total_ttc - withholding),
                 // not raw total_ttc — otherwise an invoice with retenue à la source can never reach
                 // "payée" because the client only pays the net portion (the State collects the withholding).
+                // Use ?: (not ??) because net_to_pay defaults to 0 in the DB schema (NOT NULL),
+                // so a null check alone would not catch un-initialized invoices.
                 $newPaid       = $invoice->paid_amount + $amount;
-                $netToPay      = (int) ($invoice->net_to_pay ?? max(0, $invoice->total_ttc - ($invoice->withholding_amount ?? 0)));
+                $netToPay      = (int) $invoice->net_to_pay
+                                 ?: max(0, (int) $invoice->total_ttc - (int) ($invoice->withholding_amount ?? 0));
                 $newRemaining  = max(0, $netToPay - $newPaid);
                 $invoice->update([
                     'paid_amount'      => $newPaid,
@@ -324,7 +327,8 @@ class ClientPaymentService
 
             // Update invoice
             $newPaid      = (int) $invoice->paid_amount + $amount;
-            $netToPay     = (int) ($invoice->net_to_pay ?? max(0, $invoice->total_ttc - ($invoice->withholding_amount ?? 0)));
+            $netToPay     = (int) $invoice->net_to_pay
+                            ?: max(0, (int) $invoice->total_ttc - (int) ($invoice->withholding_amount ?? 0));
             $newRemaining = max(0, $netToPay - $newPaid);
             $invoice->update([
                 'paid_amount'      => $newPaid,

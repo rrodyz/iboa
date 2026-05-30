@@ -89,17 +89,7 @@ return new class extends Migration
             return;
         }
 
-        $driver   = \DB::getDriverName();
-        $rawRows  = $driver === 'sqlite'
-            ? \DB::select("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?", [$table])
-            : \DB::select("SHOW INDEX FROM `{$table}`");
-
-        $existing = collect($rawRows)
-            ->pluck($driver === 'sqlite' ? 'name' : 'Key_name')
-            ->unique()
-            ->toArray();
-
-        if (in_array($name, $existing, true)) {
+        if (Schema::hasIndex($table, $name)) {
             return;
         }
 

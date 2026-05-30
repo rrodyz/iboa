@@ -1,7 +1,8 @@
 <?php
 
-it('returns a successful response', function () {
+it('redirects unauthenticated users to login page', function () {
+    // The ERP root URL redirects to /login for unauthenticated visitors.
     $response = $this->get('/');
 
-    $response->assertStatus(200);
+    $response->assertRedirect('/login');
 });
