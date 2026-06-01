@@ -262,6 +262,39 @@ window.toast = (message, type = 'success') => {
     window.dispatchEvent(new CustomEvent('toast', { detail: { msg: message, type } }));
 };
 
+// ── [PRODUCT-SEARCH] Helpers globaux du combobox produit ──────────────────────
+// Utilisés par resources/views/ventes/partials/_product_combobox.blade.php
+// Définis une seule fois ici (les <script> dans un <template x-for> ne s'exécutent pas).
+
+// Échappe le HTML pour éviter toute injection dans x-html.
+window.psEscape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[c]));
+
+// Filtre les produits par désignation, référence, code-barres ou catégorie.
+window.psFilter = (products, query) => {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) return products;
+    return products.filter((p) =>
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.reference && p.reference.toLowerCase().includes(q)) ||
+        (p.barcode && String(p.barcode).toLowerCase().includes(q)) ||
+        (p.family && p.family.name && p.family.name.toLowerCase().includes(q))
+    );
+};
+
+// Met en surbrillance la portion recherchée (retourne du HTML échappé + <mark>).
+window.psHighlight = (text, query) => {
+    const safe = window.psEscape(text);
+    const q = (query || '').trim();
+    if (!q) return safe;
+    const escQ = window.psEscape(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return safe.replace(
+        new RegExp('(' + escQ + ')', 'gi'),
+        '<mark class="bg-amber-200/80 text-gray-900 rounded-[3px] px-0.5">$1</mark>'
+    );
+};
+
 // ── Sidebar global state — store persistant entre les navigations Turbo ───────
 Alpine.store('sidebar', {
     open:      false,

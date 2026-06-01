@@ -74,7 +74,7 @@ class QuoteController extends Controller
 
         $clients        = Client::active()->orderBy('name')
             ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days', 'is_tax_exempt']);
-        $products       = Product::active()->sellable()->with('taxRate:id,rate')->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id', 'is_stockable']);
+        $products       = Product::active()->sellable()->with(['taxRate:id,rate', 'family:id,name'])->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'barcode', 'sale_price', 'tax_rate_id', 'is_stockable', 'family_id']);
         $selectedClient = $request->query('client_id');
         $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
         $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
@@ -107,7 +107,7 @@ class QuoteController extends Controller
         $quote    = $this->service->repository->findWithDetails($devis->id);
         $clients  = Client::active()->orderBy('name')
             ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days', 'is_tax_exempt']);
-        $products = Product::active()->sellable()->with('taxRate:id,rate')->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id', 'is_stockable']);
+        $products = Product::active()->sellable()->with(['taxRate:id,rate', 'family:id,name'])->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'barcode', 'sale_price', 'tax_rate_id', 'is_stockable', 'family_id']);
         $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
         $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 

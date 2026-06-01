@@ -79,7 +79,7 @@ class InvoiceController extends Controller
             ->with(['taxRates' => fn($q) => $q->where('type', 'retenue')])
             ->orderBy('name')
             ->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
-        $products       = Product::active()->sellable()->with('taxRate:id,rate')->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id', 'is_stockable']);
+        $products       = Product::active()->sellable()->with(['taxRate:id,rate', 'family:id,name'])->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'barcode', 'sale_price', 'tax_rate_id', 'is_stockable', 'family_id']);
         $selectedClient = $request->query('client_id');
 
         // Map { clientId: [{name, short_name, rate}, ...] } pour le calcul JS des retenues
@@ -144,7 +144,7 @@ class InvoiceController extends Controller
             ->with(['taxRates' => fn($q) => $q->where('type', 'retenue')])
             ->orderBy('name')
             ->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
-        $products = Product::active()->sellable()->with('taxRate:id,rate')->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id', 'is_stockable']);
+        $products = Product::active()->sellable()->with(['taxRate:id,rate', 'family:id,name'])->withSum('productStocks as stock_qty', 'quantity')->orderBy('name')->get(['id', 'name', 'reference', 'barcode', 'sale_price', 'tax_rate_id', 'is_stockable', 'family_id']);
 
         $clientWithholding = $clients->mapWithKeys(fn($c) => [
             $c->id => $c->taxRates->map(fn($t) => [
