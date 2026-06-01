@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# A3 ERP — Entrées Cron (Laravel Scheduler)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Ajouter avec : crontab -e  (en tant que www-data)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Laravel Scheduler — tourne toutes les minutes, gère son propre calendrier
+* * * * * www-data php /home/votre-domaine.com/public_html/artisan schedule:run >> /dev/null 2>&1
+
+# Rotation des logs Laravel (en complément du daily driver)
+0 0 * * * www-data find /home/votre-domaine.com/public_html/storage/logs -name "*.log" -mtime +14 -delete
+
+# ── Tâches planifiées déjà définies dans routes/console.php ──────────────────
+# (Gérées automatiquement par le scheduler, NE PAS les ajouter ici en double)
+#
+# 05:30 audit:business          — Audit intégrité métier quotidien
+# 05:45 automation:daily        — Transitions statut + alertes
+# 05:50 audit:sync              — Synchronisation inter-modules
+# 06:00 invoices:mark-overdue   — Marquer factures en retard
+# 06:30 invoices:generate-recurring — Factures récurrentes
+# 08:00 crm:notify-overdue-activities — Alertes CRM

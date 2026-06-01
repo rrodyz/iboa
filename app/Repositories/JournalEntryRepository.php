@@ -58,27 +58,29 @@ class JournalEntryRepository extends BaseRepository
 
     /**
      * Grand livre (account ledger) — all lines for an account, with running balance.
+     *
+     * [PERF-FIX] Remplacé les 3 whereHas() (sous-requêtes corrélées) par un INNER JOIN
+     * sur journal_entries. Le JOIN utilise l'index FK sur journal_entry_lines.journal_entry_id
+     * et permet à MySQL de filtrer les lignes sans DEPENDENT SUBQUERY.
      */
     public function grandLivre(int $accountId, array $filters = []): \Illuminate\Support\Collection
     {
         return \App\Models\JournalEntryLine::query()
+            ->select('journal_entry_lines.*')
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_entry_lines.journal_entry_id')
             ->with(['journalEntry.journalType'])
-            ->where('account_id', $accountId)
+            ->where('journal_entry_lines.account_id', $accountId)
+            ->where('journal_entries.status', 'valide')
             ->when(
                 !empty($filters['date_from']),
-                fn ($q) => $q->whereHas('journalEntry', fn ($je) => $je->whereDate('entry_date', '>=', $filters['date_from']))
+                fn ($q) => $q->whereDate('journal_entries.entry_date', '>=', $filters['date_from'])
             )
             ->when(
                 !empty($filters['date_to']),
-                fn ($q) => $q->whereHas('journalEntry', fn ($je) => $je->whereDate('entry_date', '<=', $filters['date_to']))
+                fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $filters['date_to'])
             )
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'valide'))
-            ->orderBy(function ($sub) {
-                $sub->select('entry_date')
-                    ->from('journal_entries')
-                    ->whereColumn('journal_entries.id', 'journal_entry_lines.journal_entry_id')
-                    ->limit(1);
-            })
+            ->orderBy('journal_entries.entry_date')
+            ->orderBy('journal_entries.id')
             ->get();
     }
 }

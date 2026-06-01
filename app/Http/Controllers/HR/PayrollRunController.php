@@ -6,6 +6,7 @@ use App\Exports\HR\CnssExport;
 use App\Exports\HR\IutsExport;
 use App\Exports\HR\LivreDepaieExport;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\HR\StorePayrollRunRequest;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
@@ -83,13 +84,9 @@ class PayrollRunController extends Controller
         return view('rh.paie.create', compact('suggestMonth', 'suggestYear', 'activeCount'));
     }
 
-    public function store(Request $request)
+    public function store(StorePayrollRunRequest $request)
     {
-        $data = $request->validate([
-            'period_month' => ['required', 'integer', 'between:1,12'],
-            'period_year'  => ['required', 'integer', 'min:2020', 'max:2100'],
-            'notes'        => ['nullable', 'string'],
-        ]);
+        $data = $request->validated();
 
         try {
             $run = $this->service->createRun($data);
