@@ -11,23 +11,29 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('clients', function (Blueprint $table) {
+        // Position d'insertion robuste : on s'ancre sur tax_rate_id s'il existe,
+        // sinon on laisse MySQL ajouter en fin de table (la migration repair_clients
+        // peut être encore en attente dans certains environnements de dev).
+        $anchor = Schema::hasColumn('clients', 'tax_rate_id') ? 'tax_rate_id' : null;
+
+        Schema::table('clients', function (Blueprint $table) use ($anchor) {
             // Exonération TVA — règle métier : si is_tax_exempt = true,
             // aucune TVA n'est appliquée sur aucun document de vente.
-            $table->boolean('is_tax_exempt')
-                  ->default(false)
-                  ->after('tax_rate_id')
-                  ->comment('Client exonéré de TVA (TVA = 0 sur tous les documents)');
+            if (! Schema::hasColumn('clients', 'is_tax_exempt')) {
+                $col = $table->boolean('is_tax_exempt')->default(false)
+                    ->comment('Client exonéré de TVA (TVA = 0 sur tous les documents)');
+                if ($anchor) $col->after($anchor);
+            }
 
-            $table->string('tax_exemption_reason', 200)
-                  ->nullable()
-                  ->after('is_tax_exempt')
-                  ->comment('Motif d\'exonération (ex: Organisme exonéré, Exportation, Zone franche…)');
+            if (! Schema::hasColumn('clients', 'tax_exemption_reason')) {
+                $table->string('tax_exemption_reason', 200)->nullable()
+                    ->comment('Motif d\'exonération (ex: Organisme exonéré, Exportation, Zone franche…)');
+            }
 
-            $table->string('tax_exemption_number', 100)
-                  ->nullable()
-                  ->after('tax_exemption_reason')
-                  ->comment('Numéro du document d\'exonération (attestation DGI, agrément…)');
+            if (! Schema::hasColumn('clients', 'tax_exemption_number')) {
+                $table->string('tax_exemption_number', 100)->nullable()
+                    ->comment('Numéro du document d\'exonération (attestation DGI, agrément…)');
+            }
         });
     }
 
