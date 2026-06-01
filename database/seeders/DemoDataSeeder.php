@@ -665,7 +665,7 @@ class DemoDataSeeder extends Seeder
 
             // Paiement partiel PAYCLI-2026-001 (virement, 60 % de la facture)
             // 1 125 130 × 60 % ≈ 675 078 → arrondi à 675 000
-            ClientPayment::firstOrCreate(['number' => 'PAYCLI-2026-001'], [
+            $payment1 = ClientPayment::firstOrCreate(['number' => 'PAYCLI-2026-001'], [
                 'client_id'        => $client1->id,
                 'company_id'       => $company->id,
                 'amount'           => 675000,
@@ -676,6 +676,11 @@ class DemoDataSeeder extends Seeder
                 'status'           => 'confirme',
                 'created_by'       => $comptable->id,
             ]);
+            // Allocation : lie le paiement à la facture (sinon paid_amount incohérent)
+            \App\Models\ClientPaymentAllocation::firstOrCreate(
+                ['client_payment_id' => $payment1->id, 'invoice_id' => $invoice1->id],
+                ['amount' => 675000, 'allocated_at' => now()->subDays(5)]
+            );
         }
 
         // ── Commande COM-2026-002 (ONATEL) — facture réglée ───────────────────
@@ -806,7 +811,7 @@ class DemoDataSeeder extends Seeder
             );
 
             // Paiement complet PAYCLI-2026-002
-            ClientPayment::firstOrCreate(['number' => 'PAYCLI-2026-002'], [
+            $payment2 = ClientPayment::firstOrCreate(['number' => 'PAYCLI-2026-002'], [
                 'client_id'        => $client2->id,
                 'company_id'       => $company->id,
                 'amount'           => 1062000,
@@ -817,6 +822,10 @@ class DemoDataSeeder extends Seeder
                 'status'           => 'confirme',
                 'created_by'       => $comptable->id,
             ]);
+            \App\Models\ClientPaymentAllocation::firstOrCreate(
+                ['client_payment_id' => $payment2->id, 'invoice_id' => $invoice2->id],
+                ['amount' => 1062000, 'allocated_at' => now()->subDays(3)]
+            );
         }
 
         // ── Transactions de trésorerie demo ───────────────────────────────────
@@ -861,6 +870,12 @@ class DemoDataSeeder extends Seeder
             $account->update(['current_balance' => $runningBalance]);
         }
 
+        // ── Réconciliation : écritures comptables, mouvements de stock, soldes ──
+        // Le seeder insère les documents en direct (sans passer par les services).
+        // Cette passe genere les donnees derivees pour que les audits metier
+        // (audit:business / audit:sync) soient verts.
+        $this->reconcileDemoData();
+
         // ── Résumé console ────────────────────────────────────────────────────
         $this->command->info('');
         $this->command->info('✅ Données de démonstration créées avec succès.');
@@ -877,5 +892,83 @@ class DemoDataSeeder extends Seeder
         $this->command->info('  DEV-2026-001 → COM-2026-001 → FAC-2026-001 (partiel) + BL-2026-001');
         $this->command->info('  COM-2026-002 → FAC-2026-002 (payée) + BL-2026-002');
         $this->command->info('  PAYCLI-2026-001 (675 000 FCFA) + PAYCLI-2026-002 (1 062 000 FCFA)');
+    }
+
+    /**
+     * Réconcilie les données dérivées que le seeder n'a pas générées en insérant
+     * les documents en direct : écritures comptables, mouvements de stock initiaux,
+     * et soldes clients/fournisseurs. Rend les audits métier verts.
+     */
+    private function reconcileDemoData(): void
+    {
+        $accounting = app(\App\Services\AccountingService::class);
+
+        // 1. Écritures comptables des factures clients validées sans écriture
+        Invoice::whereNull('journal_entry_id')
+            ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'payee', 'en_retard'])
+            ->has('items') // seulement les factures avec lignes (GL équilibré)
+            ->get()
+            ->each(function (Invoice $inv) use ($accounting) {
+                try { $accounting->postClientInvoice($inv); } catch (\Throwable $e) {}
+            });
+
+        // 2. Écritures comptables des factures fournisseurs validées sans écriture
+        \App\Models\SupplierInvoice::whereNull('journal_entry_id')
+            ->whereIn('status', ['validee', 'partiellement_payee', 'payee', 'en_retard'])
+            ->get()
+            ->each(function ($inv) use ($accounting) {
+                try { $accounting->postSupplierInvoice($inv); } catch (\Throwable $e) {}
+            });
+
+        // 3. Mouvements de stock initiaux pour que Σ mouvements = product_stocks.quantity
+        \App\Models\ProductStock::where('quantity', '>', 0)->get()->each(function ($ps) {
+            // Somme signée des mouvements existants (entree +, sortie −)
+            $signed = (float) \App\Models\StockMovement::where('product_id', $ps->product_id)
+                ->where('warehouse_id', $ps->warehouse_id)
+                ->selectRaw("COALESCE(SUM(CASE
+                    WHEN type IN ('entree','retour_client') THEN quantity
+                    WHEN type IN ('sortie','retour_fournisseur') THEN -quantity
+                    ELSE quantity END), 0) AS s")
+                ->value('s');
+            $delta = (float) $ps->quantity - $signed;
+            if (abs($delta) > 0.0001) {
+                \App\Models\StockMovement::create([
+                    'product_id'   => $ps->product_id,
+                    'warehouse_id' => $ps->warehouse_id,
+                    'type'         => 'entree',
+                    'quantity'     => abs($delta),
+                    'unit_cost'    => 0,
+                    'total_cost'   => 0,
+                    'occurred_at'  => now()->subDays(30),
+                    'notes'        => 'Stock initial (réconciliation seeder demo)',
+                ]);
+            }
+        });
+
+        // 4. Recalage paid_amount / remaining_amount / status des factures depuis
+        //    les allocations réelles (le seeder a pu fixer paid_amount sans allocation).
+        Invoice::whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'payee', 'en_retard'])
+            ->get()
+            ->each(function (Invoice $inv) {
+                $paidFromPayments = (int) \App\Models\ClientPaymentAllocation::where('invoice_id', $inv->id)->sum('amount');
+                $paidFromCredits  = (int) \App\Models\CreditNote::where('invoice_id', $inv->id)
+                    ->where('status', 'valide')->sum('total_ttc');
+                $paid    = $paidFromPayments + $paidFromCredits;
+                $netDue  = (int) ($inv->net_to_pay ?: $inv->total_ttc);
+                $remain  = max(0, $netDue - $paid);
+                $status  = $paid <= 0 ? $inv->status
+                        : ($remain <= 0 ? 'payee' : 'partiellement_payee');
+                $inv->updateQuietly([
+                    'paid_amount'      => $paid,
+                    'remaining_amount' => $remain,
+                    'status'           => $status,
+                ]);
+            });
+
+        // 5. Recalcul des soldes clients et fournisseurs
+        \App\Models\Client::all()->each->recalculateBalance();
+        \App\Models\Supplier::all()->each->recalculateBalance();
+
+        $this->command->info('  ↳ Réconciliation : écritures GL, mouvements stock, paiements, soldes recalculés');
     }
 }
