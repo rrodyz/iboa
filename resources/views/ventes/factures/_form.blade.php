@@ -177,18 +177,7 @@ window._invoiceFormData = {
                                        x-model="item.description" placeholder="Description..."
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 min-w-[180px]">
                             </td>
-                            <td class="px-3 py-2">
-                                <select :name="'items[' + index + '][product_id]'"
-                                        x-model="item.product_id" @change="onProductChange(index)"
-                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
-                                    <option value="">— Produit —</option>
-                                    <template x-for="p in products" :key="p.id">
-                                        <option :value="p.id"
-                                                x-text="(p.reference ? '[' + p.reference + '] ' : '') + p.name"
-                                                :title="formatFcfa(p.sale_price)"></option>
-                                    </template>
-                                </select>
-                            </td>
+                            @include('ventes.partials._product_combobox', ['accentColor' => 'indigo', 'formName' => 'invoice'])
                             <td class="px-3 py-2">
                                 <input type="number" :name="'items[' + index + '][quantity]'"
                                        x-model.number="item.quantity" min="1" step="1" inputmode="numeric"
@@ -344,6 +333,10 @@ function invoiceFormVentes() {
             discount_percent: parseFloat(i.discount_percent) || 0,
             // Nullish coalescing : 0 est conservé, seul null/undefined → 0 par défaut
             tax_rate_value:   i.tax_rate_value != null ? parseFloat(i.tax_rate_value) : 0,
+            // [PRODUCT-SEARCH] Combobox état
+            _ps_open:   false,
+            _ps_search: '',
+            _ps_rect:   null,
         };
     }
 
@@ -438,6 +431,9 @@ function invoiceFormVentes() {
                 unit_price:       0,
                 discount_percent: 0,
                 tax_rate_value:   0,
+                _ps_open:         false,
+                _ps_search:       '',
+                _ps_rect:         null,
             });
         },
         removeItem(index) {
