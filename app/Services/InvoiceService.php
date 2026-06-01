@@ -51,12 +51,20 @@ class InvoiceService
             // Auto-calculate due_at from PaymentTerm when not explicitly provided
             $this->resolveDueAt($data);
 
+            // [TVA-EXEMPT] Défense serveur : si le client est exonéré de TVA,
+            // forcer tous les taux à 0 indépendamment de ce que le formulaire envoie.
+            $client = isset($data['client_id'])
+                ? \App\Models\Client::with('taxRates')->find($data['client_id'])
+                : null;
+            if ($client?->isTaxExempt()) {
+                $items = $this->zeroOutTax($items);
+            }
+
             [$subtotal, $taxTotal] = $this->calculateTotals($items);
             $discount = (int) ($data['global_discount_amount'] ?? 0);
             $total    = $subtotal + $taxTotal - $discount;
 
             // Retenues à la source depuis les taxes du client
-            $client = isset($data['client_id']) ? \App\Models\Client::with('taxRates')->find($data['client_id']) : null;
             [$withholdingDetails, $withholdingAmount] = $this->computeWithholding($client, $subtotal);
             $netToPay = max(0, $total - $withholdingAmount);
 
@@ -322,6 +330,14 @@ class InvoiceService
 
             $items = $data['items'] ?? null;
             unset($data['items']);
+
+            // [TVA-EXEMPT] Défense serveur sur update : vérifier le client courant
+            // (peut changer si l'utilisateur modifie le champ client en édition).
+            $clientId = $data['client_id'] ?? $invoice->client_id;
+            $client   = \App\Models\Client::find($clientId);
+            if ($client?->isTaxExempt() && $items !== null) {
+                $items = $this->zeroOutTax($items);
+            }
 
             $invoice->update($data);
 
@@ -701,6 +717,21 @@ class InvoiceService
                 'sort_order'       => $i,
             ]);
         }
+    }
+
+    /**
+     * [TVA-EXEMPT] Défense serveur : met tous les taux TVA à 0 sur un tableau d'items.
+     * Appelé quand client.is_tax_exempt = true pour garantir que, même si le formulaire
+     * envoie un tax_rate_value non nul, aucune TVA ne sera stockée en base.
+     */
+    private function zeroOutTax(array $items): array
+    {
+        return array_map(function (array $item) {
+            $item['tax_rate_value'] = 0;
+            $item['tax_rate_id']    = null;
+            $item['line_tax']       = 0;
+            return $item;
+        }, $items);
     }
 
     private function calculateTotals(array $items): array

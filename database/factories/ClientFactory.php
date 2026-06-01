@@ -24,8 +24,9 @@ class ClientFactory extends Factory
             'country'     => 'Burkina Faso',
             'credit_limit'=> $this->faker->randomElement([500_000, 1_000_000, 2_000_000, 5_000_000]),
             'payment_days'=> $this->faker->randomElement([30, 45, 60]),
-            'balance'     => 0,
-            'is_active'   => true,
+            'balance'        => 0,
+            'is_active'      => true,
+            'is_tax_exempt'  => false,
         ];
     }
 }

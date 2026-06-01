@@ -1,4 +1,4 @@
-@php $invoice ??= null; $selectedClient ??= null; $clientWithholding ??= []; @endphp
+@php $invoice ??= null; $selectedClient ??= null; $clientWithholding ??= []; $clientExemptions ??= []; @endphp
 <script>
 window._invoiceFormData = {
     invoice:           @json($invoice ? $invoice->load('items') : null),
@@ -9,6 +9,7 @@ window._invoiceFormData = {
     selectedClient:    @json($selectedClient),
     oldClientId:       @json(old('client_id')),
     clientWithholding: @json($clientWithholding),
+    clientExemptions:  @json($clientExemptions),
 };
 </script>
 <div x-data="invoiceFormVentes()" x-cloak>
@@ -23,6 +24,7 @@ window._invoiceFormData = {
                 <label class="block text-xs font-medium text-gray-700 mb-1">Client <span class="text-red-500">*</span></label>
                 <select name="client_id" required
                         x-model="clientId"
+                        @change="onClientChange()"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="">Sélectionner un client...</option>
                     @foreach($clients as $client)
@@ -33,6 +35,16 @@ window._invoiceFormData = {
                     @endforeach
                 </select>
                 @error('client_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                {{-- Badge exonération TVA --}}
+                <div x-show="isClientTaxExempt"
+                     x-cloak
+                     class="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 w-fit">
+                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    Client exonéré de TVA — TVA forcée à 0% sur toutes les lignes
+                </div>
             </div>
 
             {{-- Date émission --}}
@@ -193,9 +205,28 @@ window._invoiceFormData = {
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
                             </td>
                             <td class="px-3 py-2">
-                                <input type="number" :name="'items[' + index + '][tax_rate_value]'"
-                                       x-model.number="item.tax_rate_value" min="0" max="100" step="1" inputmode="numeric"
-                                       class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                {{-- Quand le client est exonéré : badge 0% non modifiable
+                                     Sinon : sélecteur avec les taux configurés --}}
+                                <template x-if="isClientTaxExempt">
+                                    <div class="w-full border border-amber-200 bg-amber-50 rounded px-2 py-1.5 text-sm text-right text-amber-700 font-medium cursor-not-allowed select-none">
+                                        0 %
+                                        <input type="hidden" :name="'items[' + index + '][tax_rate_value]'" value="0">
+                                    </div>
+                                </template>
+                                <template x-if="!isClientTaxExempt">
+                                    <select :name="'items[' + index + '][tax_rate_value]'"
+                                            x-model.number="item.tax_rate_value"
+                                            class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="0">0 %</option>
+                                        @foreach($taxRatesVente ?? [] as $tr)
+                                            <option value="{{ $tr->rate }}">{{ $tr->rate }} % — {{ $tr->name }}</option>
+                                        @endforeach
+                                        {{-- Fallback si $taxRatesVente non injecté --}}
+                                        @if(empty($taxRatesVente ?? []))
+                                            <option value="18">18 % — TVA standard</option>
+                                        @endif
+                                    </select>
+                                </template>
                             </td>
                             <td class="px-3 py-2 text-right tabular-nums text-gray-700 font-medium text-xs whitespace-nowrap"
                                 x-text="formatFcfa(lineHt(item))"></td>
@@ -291,9 +322,18 @@ window._invoiceFormData = {
 @push('scripts')
 <script>
 function invoiceFormVentes() {
-    const { invoice, products, oldItems, oldGlobalDiscount, oldType, selectedClient, oldClientId, clientWithholding } = window._invoiceFormData;
+    const {
+        invoice, products, oldItems, oldGlobalDiscount, oldType,
+        selectedClient, oldClientId, clientWithholding, clientExemptions
+    } = window._invoiceFormData;
 
     let _nextKey = 1;
+
+    /**
+     * [TVA-FIX] Utiliser `?? 0` (nullish) plutôt que `|| 18` (falsy).
+     * `|| 18` transformait 0% (falsy) en 18%, forçant la TVA même sur les
+     * clients exonérés ou les articles à 0%.
+     */
     function mapItem(i) {
         return {
             _key:             _nextKey++,
@@ -302,7 +342,8 @@ function invoiceFormVentes() {
             quantity:         parseInt(i.quantity, 10) || 1,
             unit_price:       parseFloat(i.unit_price)       || 0,
             discount_percent: parseFloat(i.discount_percent) || 0,
-            tax_rate_value:   parseFloat(i.tax_rate_value)   || 18,
+            // Nullish coalescing : 0 est conservé, seul null/undefined → 0 par défaut
+            tax_rate_value:   i.tax_rate_value != null ? parseFloat(i.tax_rate_value) : 0,
         };
     }
 
@@ -313,27 +354,39 @@ function invoiceFormVentes() {
     } else if (oldItems && oldItems.length) {
         initialItems = oldItems.map(mapItem);
     } else {
-        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 18 })];
+        // [TVA-FIX] Défaut à 0% — l'utilisateur choisit explicitement la TVA
+        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 0 })];
     }
 
-    // invoiceType: old('type') takes priority — ensures the Récurrente panel reopens
-    // after a validation failure when the user had selected that type.
-    const resolvedType = oldType || (invoice ? (invoice.type || 'standard') : 'standard');
-
-    // clientId initial : old('client_id') > invoice.client_id > selectedClient (URL) > ''
-    const initialClientId = String(
-        (oldClientId ?? invoice?.client_id ?? selectedClient ?? '')
-    );
+    const resolvedType    = oldType || (invoice ? (invoice.type || 'standard') : 'standard');
+    const initialClientId = String(oldClientId ?? invoice?.client_id ?? selectedClient ?? '');
 
     return {
-        items:                 initialItems,
+        items:                  initialItems,
         global_discount_amount: parseFloat(invoice ? invoice.global_discount_amount : oldGlobalDiscount) || 0,
-        invoiceType:           resolvedType,
-        products:              products,
-        clientId:              initialClientId,
-        clientWithholding:     clientWithholding || {},
-        submitting:            false,
+        invoiceType:            resolvedType,
+        products:               products,
+        clientId:               initialClientId,
+        clientWithholding:      clientWithholding  || {},
+        clientExemptions:       clientExemptions   || {},
+        submitting:             false,
         _nextKey,
+
+        /** true si le client sélectionné est exonéré de TVA */
+        get isClientTaxExempt() {
+            if (!this.clientId) return false;
+            return !!this.clientExemptions[this.clientId];
+        },
+
+        /** Appelé quand l'utilisateur change de client */
+        onClientChange() {
+            if (this.isClientTaxExempt) {
+                // Mettre toutes les lignes à 0%
+                this.items = this.items.map(item => ({ ...item, tax_rate_value: 0 }));
+            }
+            // Si passage d'exonéré → non-exonéré : NE PAS appliquer 18% automatiquement
+            // L'utilisateur choisit lui-même le taux via le sélecteur.
+        },
 
         get subtotalHt() {
             return this.items.reduce((sum, i) => {
@@ -343,7 +396,8 @@ function invoiceFormVentes() {
         get totalTax() {
             return this.items.reduce((sum, i) => {
                 const ht = i.quantity * i.unit_price * (1 - i.discount_percent / 100);
-                return sum + Math.round(ht * i.tax_rate_value / 100);
+                const taxRate = this.isClientTaxExempt ? 0 : (parseFloat(i.tax_rate_value) || 0);
+                return sum + Math.round(ht * taxRate / 100);
             }, 0);
         },
         get totalTtc() {
@@ -371,9 +425,11 @@ function invoiceFormVentes() {
             return Math.round(item.quantity * item.unit_price * (1 - item.discount_percent / 100));
         },
         lineTtc(item) {
-            return Math.round(this.lineHt(item) * (1 + item.tax_rate_value / 100));
+            const taxRate = this.isClientTaxExempt ? 0 : (parseFloat(item.tax_rate_value) || 0);
+            return Math.round(this.lineHt(item) * (1 + taxRate / 100));
         },
         addItem() {
+            // [TVA-FIX] Défaut à 0 — pas de TVA automatique
             this.items.push({
                 _key:             this._nextKey++,
                 product_id:       '',
@@ -381,7 +437,7 @@ function invoiceFormVentes() {
                 quantity:         1,
                 unit_price:       0,
                 discount_percent: 0,
-                tax_rate_value:   18,
+                tax_rate_value:   0,
             });
         },
         removeItem(index) {
@@ -390,12 +446,20 @@ function invoiceFormVentes() {
         onProductChange(index) {
             const p = this.products.find(p => String(p.id) === String(this.items[index].product_id));
             if (p) {
-                // Only auto-fill description if the field is currently empty
                 if (!this.items[index].description.trim()) {
                     this.items[index].description = p.name;
                 }
-                this.items[index].unit_price     = parseFloat(p.sale_price) || 0;
-                this.items[index].tax_rate_value = parseFloat(p.tax_rate?.rate) || 18;
+                this.items[index].unit_price = parseFloat(p.sale_price) || 0;
+
+                // [TVA-FIX] Si client exonéré → toujours 0%
+                // Sinon → taux du produit, ou 0 si le produit n'en a pas (plus de fallback 18%)
+                if (this.isClientTaxExempt) {
+                    this.items[index].tax_rate_value = 0;
+                } else {
+                    this.items[index].tax_rate_value = p.tax_rate?.rate != null
+                        ? parseFloat(p.tax_rate.rate)
+                        : 0;
+                }
             }
         },
         formatFcfa(n) {

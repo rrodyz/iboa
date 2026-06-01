@@ -43,6 +43,14 @@ class QuoteService
             $data['created_by']   = Auth::id();
             $data['status']       = $data['status'] ?? 'brouillon';
 
+            // [TVA-EXEMPT] Défense serveur : forcer TVA=0 si client exonéré
+            $client = isset($data['client_id'])
+                ? \App\Models\Client::find($data['client_id'])
+                : null;
+            if ($client?->isTaxExempt()) {
+                $items = $this->zeroOutTax($items);
+            }
+
             // Calculate totals from items
             [$subtotal, $taxTotal] = $this->calculateTotals($items);
             $discount = (int) ($data['global_discount_amount'] ?? 0);
@@ -70,6 +78,13 @@ class QuoteService
 
             $items = $data['items'] ?? null;
             unset($data['items']);
+
+            // [TVA-EXEMPT] Défense serveur sur update
+            $clientId = $data['client_id'] ?? $quote->client_id;
+            $client   = \App\Models\Client::find($clientId);
+            if ($client?->isTaxExempt() && $items !== null) {
+                $items = $this->zeroOutTax($items);
+            }
 
             $quote->update($data);
 
@@ -329,6 +344,17 @@ class QuoteService
                 'sort_order'       => $i,
             ]);
         }
+    }
+
+    /** [TVA-EXEMPT] Met tous les taux TVA à 0 sur un tableau d'items. */
+    private function zeroOutTax(array $items): array
+    {
+        return array_map(function (array $item) {
+            $item['tax_rate_value'] = 0;
+            $item['tax_rate_id']    = null;
+            $item['line_tax']       = 0;
+            return $item;
+        }, $items);
     }
 
     private function calculateTotals(array $items): array

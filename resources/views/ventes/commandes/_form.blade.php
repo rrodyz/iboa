@@ -1,4 +1,4 @@
-@php $order ??= null; $selectedClient ??= null; @endphp
+@php $order ??= null; $selectedClient ??= null; $clientExemptions ??= []; @endphp
 <script>
 window._orderFormData = {
     order:             @json($order ? $order->load('items') : null),
@@ -6,6 +6,7 @@ window._orderFormData = {
     oldItems:          @json(old('items', [])),
     oldGlobalDiscount: @json(old('global_discount_amount', 0)),
     selectedClient:    @json($selectedClient),
+    clientExemptions:  @json($clientExemptions),
 };
 </script>
 <div x-data="orderFormVentes()">
@@ -19,6 +20,8 @@ window._orderFormData = {
             <div class="lg:col-span-2">
                 <label class="block text-xs font-medium text-gray-700 mb-1">Client <span class="text-red-500">*</span></label>
                 <select name="client_id" required
+                        x-model="clientId"
+                        @change="onClientChange()"
                         class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     <option value="">Sélectionner un client...</option>
                     @foreach($clients as $client)
@@ -29,6 +32,13 @@ window._orderFormData = {
                     @endforeach
                 </select>
                 @error('client_id') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+                <div x-show="isClientTaxExempt" x-cloak
+                     class="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1 w-fit">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    Client exonéré de TVA — TVA forcée à 0%
+                </div>
             </div>
 
             {{-- Date commande --}}
@@ -221,7 +231,7 @@ window._orderFormData = {
 @push('scripts')
 <script>
 function orderFormVentes() {
-    const { order, products, oldItems, oldGlobalDiscount, selectedClient } = window._orderFormData;
+    const { order, products, oldItems, oldGlobalDiscount, selectedClient, clientExemptions } = window._orderFormData;
 
     let _nextKey = 1;
     function mapItem(i) {
@@ -232,7 +242,8 @@ function orderFormVentes() {
             quantity:         parseInt(i.quantity, 10) || 1,
             unit_price:       parseFloat(i.unit_price)       || 0,
             discount_percent: parseFloat(i.discount_percent) || 0,
-            tax_rate_value:   parseFloat(i.tax_rate_value)   || 18,
+            // [TVA-FIX] ?? 0 : 0% ne doit pas devenir 18%
+            tax_rate_value:   i.tax_rate_value != null ? parseFloat(i.tax_rate_value) : 0,
         };
     }
 
@@ -243,15 +254,28 @@ function orderFormVentes() {
     } else if (oldItems && oldItems.length) {
         initialItems = oldItems.map(mapItem);
     } else {
-        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 18 })];
+        // [TVA-FIX] Défaut à 0%
+        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 0 })];
     }
+
+    // clientId pour détecter l'exonération TVA
+    const initialClientId = String(
+        (order?.client_id ?? selectedClient ?? '')
+    );
 
     return {
         items:                 initialItems,
         global_discount_amount: parseFloat(order ? order.global_discount_amount : oldGlobalDiscount) || 0,
         products:              products,
+        clientId:              initialClientId,
+        clientExemptions:      clientExemptions || {},
         submitting:            false,
         _nextKey,
+
+        get isClientTaxExempt() {
+            if (!this.clientId) return false;
+            return !!(this.clientExemptions[this.clientId]);
+        },
 
         get subtotalHt() {
             return this.items.reduce((sum, i) => {
@@ -277,6 +301,7 @@ function orderFormVentes() {
             return Math.round(this.lineHt(item) * (1 + item.tax_rate_value / 100));
         },
         addItem() {
+            // [TVA-FIX] Défaut à 0% — pas de TVA automatique
             this.items.push({
                 _key:             this._nextKey++,
                 product_id:       '',
@@ -284,21 +309,30 @@ function orderFormVentes() {
                 quantity:         1,
                 unit_price:       0,
                 discount_percent: 0,
-                tax_rate_value:   18,
+                tax_rate_value:   0,
             });
         },
         removeItem(index) {
             this.items.splice(index, 1);
         },
+        onClientChange() {
+            // [TVA-FIX] Si client exonéré : mettre toutes les lignes à 0%
+            if (this.isClientTaxExempt) {
+                this.items = this.items.map(item => ({ ...item, tax_rate_value: 0 }));
+            }
+            // Passage exonéré → normal : NE PAS appliquer 18% automatiquement
+        },
         onProductChange(index) {
             const p = this.products.find(p => String(p.id) === String(this.items[index].product_id));
             if (p) {
-                // Only auto-fill description if the field is empty
                 if (!this.items[index].description.trim()) {
                     this.items[index].description = p.name;
                 }
-                this.items[index].unit_price     = parseFloat(p.sale_price) || 0;
-                this.items[index].tax_rate_value = parseFloat(p.tax_rate?.rate) || 18;
+                this.items[index].unit_price = parseFloat(p.sale_price) || 0;
+                // [TVA-FIX] Client exonéré → 0%, sinon taux du produit (ou 0)
+                this.items[index].tax_rate_value = this.isClientTaxExempt
+                    ? 0
+                    : (p.tax_rate?.rate != null ? parseFloat(p.tax_rate.rate) : 0);
             }
         },
         formatFcfa(n) {

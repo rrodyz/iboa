@@ -275,6 +275,69 @@
                 @enderror
             </div>
 
+            {{-- ═══ EXONÉRATION TVA ════════════════════════════════════════════════ --}}
+            <div class="md:col-span-2 border border-amber-200 bg-amber-50 rounded-xl p-4"
+                 x-data="{ exempt: {{ old('is_tax_exempt', $client->is_tax_exempt ?? false) ? 'true' : 'false' }} }">
+
+                <div class="flex items-start gap-3 mb-3">
+                    <input type="hidden" name="is_tax_exempt" value="0">
+                    <input type="checkbox" id="is_tax_exempt" name="is_tax_exempt" value="1"
+                           x-model="exempt"
+                           {{ old('is_tax_exempt', $client->is_tax_exempt ?? false) ? 'checked' : '' }}
+                           class="mt-0.5 w-4 h-4 text-amber-600 border-gray-300 rounded focus:ring-amber-500">
+                    <div>
+                        <label for="is_tax_exempt" class="text-sm font-semibold text-gray-900 cursor-pointer">
+                            Client exonéré de TVA
+                        </label>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            Quand activé, aucune TVA ne sera appliquée sur devis, commandes, bons de livraison, factures et avoirs pour ce client.
+                        </p>
+                    </div>
+                </div>
+
+                <div x-show="exempt" x-cloak class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                    {{-- Motif d'exonération --}}
+                    <div>
+                        <label for="tax_exemption_reason" class="block text-xs font-medium text-gray-700 mb-1">
+                            Motif d'exonération
+                        </label>
+                        <select id="tax_exemption_reason" name="tax_exemption_reason"
+                                class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 sm:text-sm">
+                            <option value="">— Sélectionner —</option>
+                            @foreach([
+                                'Organisme exonéré (loi)'      => 'Organisme exonéré (loi)',
+                                'Exportation / Zone franche'   => 'Exportation / Zone franche',
+                                'Opération intracommunautaire' => 'Opération intracommunautaire',
+                                'Attestation DGI'              => 'Attestation DGI (Burkina Faso)',
+                                'Agrément gouvernemental'      => 'Agrément gouvernemental',
+                                'Autre'                        => 'Autre',
+                            ] as $val => $label)
+                                <option value="{{ $val }}" {{ old('tax_exemption_reason', $client->tax_exemption_reason ?? '') === $val ? 'selected' : '' }}>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('tax_exemption_reason')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Numéro d'exonération --}}
+                    <div>
+                        <label for="tax_exemption_number" class="block text-xs font-medium text-gray-700 mb-1">
+                            N° du document d'exonération
+                        </label>
+                        <input type="text" id="tax_exemption_number" name="tax_exemption_number"
+                               value="{{ old('tax_exemption_number', $client->tax_exemption_number ?? '') }}"
+                               placeholder="Ex: ATT-DGI-2024-0001"
+                               class="block w-full rounded-lg border-gray-300 shadow-sm focus:border-amber-500 focus:ring-amber-500 sm:text-sm">
+                        @error('tax_exemption_number')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            </div>
+
             {{-- Taux de TVA (multi-sélection) --}}
             @php
                 $selectedTaxIds = old('tax_rate_ids',

@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\Quote;
+use App\Models\TaxRate;
 use App\Services\CommercialWorkflowService;
 use App\Services\QuoteService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -72,11 +73,13 @@ class QuoteController extends Controller
         $this->authorize('create', Quote::class);
 
         $clients        = Client::active()->orderBy('name')
-            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days']);
+            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days', 'is_tax_exempt']);
         $products       = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
         $selectedClient = $request->query('client_id');
+        $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
+        $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 
-        return view('ventes.devis.create', compact('clients', 'products', 'selectedClient'));
+        return view('ventes.devis.create', compact('clients', 'products', 'selectedClient', 'clientExemptions', 'taxRatesVente'));
     }
 
     public function store(StoreQuoteRequest $request)
@@ -103,10 +106,12 @@ class QuoteController extends Controller
     {
         $quote    = $this->service->repository->findWithDetails($devis->id);
         $clients  = Client::active()->orderBy('name')
-            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days']);
+            ->get(['id', 'name', 'trade_name', 'phone', 'mobile', 'email', 'address', 'city', 'default_discount', 'payment_terms', 'payment_days', 'is_tax_exempt']);
         $products = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
+        $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
+        $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 
-        return view('ventes.devis.edit', compact('quote', 'clients', 'products'));
+        return view('ventes.devis.edit', compact('quote', 'clients', 'products', 'clientExemptions', 'taxRatesVente'));
     }
 
     public function update(UpdateQuoteRequest $request, Quote $devis)

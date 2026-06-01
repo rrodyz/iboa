@@ -44,6 +44,10 @@ class Client extends Model
         'category',
         'assigned_to',
         'tax_rate_id',
+        // Exonération TVA
+        'is_tax_exempt',
+        'tax_exemption_reason',
+        'tax_exemption_number',
         'credit_limit',
         'payment_days',
         'payment_terms',
@@ -58,6 +62,7 @@ class Client extends Model
         'default_discount' => 'decimal:2',
         'balance'          => 'integer',
         'is_active'        => 'boolean',
+        'is_tax_exempt'    => 'boolean',
     ];
 
     // -------------------------------------------------------------------------
@@ -140,6 +145,15 @@ class Client extends Model
     public function displayName(): string
     {
         return $this->trade_name ?? $this->name;
+    }
+
+    /**
+     * Retourne true si le client est exonéré de TVA.
+     * Utilisé par les services pour forcer tax_rate_value = 0 côté serveur.
+     */
+    public function isTaxExempt(): bool
+    {
+        return (bool) $this->is_tax_exempt;
     }
 
     /** Vérifier si l'encours dépasse le plafond de crédit. */

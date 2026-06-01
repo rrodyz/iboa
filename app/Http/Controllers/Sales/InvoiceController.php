@@ -12,6 +12,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Invoice;
 use App\Models\Product;
+use App\Models\TaxRate;
 use App\Services\CommercialWorkflowService;
 use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -77,7 +78,7 @@ class InvoiceController extends Controller
         $clients = Client::active()
             ->with(['taxRates' => fn($q) => $q->where('type', 'retenue')])
             ->orderBy('name')
-            ->get(['id', 'name', 'trade_name']);
+            ->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
         $products       = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
         $selectedClient = $request->query('client_id');
 
@@ -90,7 +91,13 @@ class InvoiceController extends Controller
             ])->values(),
         ]);
 
-        return view('ventes.factures.create', compact('clients', 'products', 'selectedClient', 'clientWithholding'));
+        // Map { clientId: bool } — indique au JS si le client est exonéré de TVA
+        $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
+
+        // Taux TVA de type 'tva' pour le sélecteur (exclut les retenues)
+        $taxRatesVente = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
+
+        return view('ventes.factures.create', compact('clients', 'products', 'selectedClient', 'clientWithholding', 'clientExemptions', 'taxRatesVente'));
     }
 
     public function store(StoreInvoiceRequest $request)
@@ -136,7 +143,7 @@ class InvoiceController extends Controller
         $clients  = Client::active()
             ->with(['taxRates' => fn($q) => $q->where('type', 'retenue')])
             ->orderBy('name')
-            ->get(['id', 'name', 'trade_name']);
+            ->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
         $products = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
 
         $clientWithholding = $clients->mapWithKeys(fn($c) => [
@@ -146,9 +153,11 @@ class InvoiceController extends Controller
                 'rate'       => (float) $t->rate,
             ])->values(),
         ]);
+        $clientExemptions  = $clients->pluck('is_tax_exempt', 'id');
+        $taxRatesVente     = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 
         $editLock = $lock; // déjà le verrou actif pour ce user
-        return view('ventes.factures.edit', compact('invoice', 'clients', 'products', 'clientWithholding', 'editLock'));
+        return view('ventes.factures.edit', compact('invoice', 'clients', 'products', 'clientWithholding', 'clientExemptions', 'taxRatesVente', 'editLock'));
     }
 
     public function update(UpdateInvoiceRequest $request, Invoice $facture)

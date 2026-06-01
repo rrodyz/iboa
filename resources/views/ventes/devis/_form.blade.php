@@ -1,6 +1,7 @@
 @php
-    $quote          ??= null;
-    $selectedClient ??= null;
+    $quote            ??= null;
+    $selectedClient   ??= null;
+    $clientExemptions ??= [];
 @endphp
 
 {{-- PHP → JS : données brutes utilisées par Alpine --}}
@@ -13,6 +14,7 @@ window._quoteFormData = {
     oldGlobalDiscount: @json(old('global_discount_amount', 0)),
     oldGlobalPct:      @json(old('global_discount_percent', 0)),
     selectedClientId:  @json(old('client_id', $quote?->client_id ?? $selectedClient)),
+    clientExemptions:  @json($clientExemptions),
 };
 </script>
 
@@ -458,7 +460,7 @@ window._quoteFormData = {
 @push('scripts')
 <script>
 function quoteForm() {
-    const { quote, products, clients, oldItems, oldGlobalDiscount, oldGlobalPct, selectedClientId } = window._quoteFormData;
+    const { quote, products, clients, oldItems, oldGlobalDiscount, oldGlobalPct, selectedClientId, clientExemptions } = window._quoteFormData;
 
     // ── Map clients pour accès rapide par ID
     const clientsMap = {};
@@ -478,7 +480,8 @@ function quoteForm() {
             quantity:         parseInt(i.quantity, 10) || 1,
             unit_price:       parseFloat(i.unit_price)       || 0,
             discount_percent: parseFloat(i.discount_percent) || 0,
-            tax_rate_value:   parseFloat(i.tax_rate_value)   || 18,
+            // [TVA-FIX] ?? 0 au lieu de || 18 : 0% ne doit pas devenir 18%
+            tax_rate_value:   i.tax_rate_value != null ? parseFloat(i.tax_rate_value) : 0,
         };
     }
 
@@ -488,7 +491,8 @@ function quoteForm() {
     } else if (oldItems && oldItems.length) {
         initialItems = oldItems.map(mapItem);
     } else {
-        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 18 })];
+        // [TVA-FIX] Défaut à 0% — l'utilisateur choisit explicitement
+        initialItems = [mapItem({ description: '', quantity: 1, unit_price: 0, discount_percent: 0, tax_rate_value: 0 })];
     }
 
     const initialDiscount = quote
@@ -574,6 +578,7 @@ function quoteForm() {
 
         // ── Actions ───────────────────────────────────────────────────────
         addItem() {
+            // [TVA-FIX] Défaut à 0% — pas de TVA automatique
             this.items.push({
                 _key:             this._nextKey++,
                 product_id:       '',
@@ -581,7 +586,7 @@ function quoteForm() {
                 quantity:         1,
                 unit_price:       0,
                 discount_percent: 0,
-                tax_rate_value:   18,
+                tax_rate_value:   0,
             });
         },
 
@@ -599,19 +604,31 @@ function quoteForm() {
             });
         },
 
+        get isClientTaxExempt() {
+            if (!this.client_id) return false;
+            return !!(clientExemptions || {})[this.client_id];
+        },
+
         onProductChange(index) {
             const p = this.products.find(p => String(p.id) === String(this.items[index].product_id));
             if (p) {
                 if (!this.items[index].description.trim()) {
                     this.items[index].description = p.name;
                 }
-                this.items[index].unit_price     = parseFloat(p.sale_price) || 0;
-                this.items[index].tax_rate_value = parseFloat(p.tax_rate?.rate) || 18;
+                this.items[index].unit_price = parseFloat(p.sale_price) || 0;
+                // [TVA-FIX] Client exonéré → 0%, sinon taux du produit (ou 0 si absent)
+                this.items[index].tax_rate_value = this.isClientTaxExempt
+                    ? 0
+                    : (p.tax_rate?.rate != null ? parseFloat(p.tax_rate.rate) : 0);
             }
         },
 
         onClientChange() {
-            // Rien d'automatique : l'utilisateur choisit via le bouton "Appliquer"
+            // [TVA-FIX] Si client exonéré : mettre toutes les lignes à 0%
+            if (this.isClientTaxExempt) {
+                this.items = this.items.map(item => ({ ...item, tax_rate_value: 0 }));
+            }
+            // Passage exonéré → normal : NE PAS appliquer 18% automatiquement
         },
 
         applyClientDiscount() {

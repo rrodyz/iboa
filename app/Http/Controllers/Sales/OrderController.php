@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\TaxRate;
 use App\Services\CommercialWorkflowService;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
@@ -50,11 +51,13 @@ class OrderController extends Controller
     public function create(Request $request)
     {
         $this->authorize('create', Order::class);
-        $clients        = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
-        $products       = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
-        $selectedClient = $request->query('client_id');
+        $clients          = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
+        $products         = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
+        $selectedClient   = $request->query('client_id');
+        $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
+        $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 
-        return view('ventes.commandes.create', compact('clients', 'products', 'selectedClient'));
+        return view('ventes.commandes.create', compact('clients', 'products', 'selectedClient', 'clientExemptions', 'taxRatesVente'));
     }
 
     public function store(StoreOrderRequest $request)
@@ -78,11 +81,13 @@ class OrderController extends Controller
     public function edit(Order $commande)
     {
         $this->authorize('update', $commande);
-        $order    = $this->service->repository->findWithDetails($commande->id);
-        $clients  = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
-        $products = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
+        $order            = $this->service->repository->findWithDetails($commande->id);
+        $clients          = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name', 'is_tax_exempt']);
+        $products         = Product::active()->sellable()->with('taxRate:id,rate')->orderBy('name')->get(['id', 'name', 'reference', 'sale_price', 'tax_rate_id']);
+        $clientExemptions = $clients->pluck('is_tax_exempt', 'id');
+        $taxRatesVente    = TaxRate::where('type', 'tva')->where('is_active', true)->orderBy('rate')->get(['id', 'name', 'rate']);
 
-        return view('ventes.commandes.edit', compact('order', 'clients', 'products'));
+        return view('ventes.commandes.edit', compact('order', 'clients', 'products', 'clientExemptions', 'taxRatesVente'));
     }
 
     public function update(UpdateOrderRequest $request, Order $commande)
