@@ -36,6 +36,25 @@ trait RefreshDatabase
      */
     public function refreshDatabase()
     {
+        // [SAFEGUARD] Refuse catégoriquement de rafraîchir une base non-SQLite.
+        //
+        // Sinon, lancer `php artisan test` alors que la config est cachée
+        // (`php artisan config:cache`) fait lire DB_CONNECTION=mysql depuis le
+        // cache au lieu du SQLite :memory: de phpunit.xml — et migrate:fresh
+        // DÉTRUIT la vraie base MySQL de développement/production.
+        $conn = config('database.default');
+        $driver = config("database.connections.{$conn}.driver");
+        $database = config("database.connections.{$conn}.database");
+
+        if ($driver !== 'sqlite' || $database !== ':memory:') {
+            throw new \RuntimeException(
+                "REFUS DE RAFRAÎCHIR LA BASE : la connexion de test est « {$conn} » "
+                . "(driver={$driver}, database={$database}) au lieu de sqlite/:memory:. "
+                . "Cause probable : config cachée. Lancez `php artisan config:clear` "
+                . "avant `php artisan test`."
+            );
+        }
+
         // Force-set the environment to 'testing' so the migrate command's
         // confirmToProceed() check returns false without prompting.
         if ($this->app && $this->app->bound('env')) {
