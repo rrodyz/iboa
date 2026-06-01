@@ -130,8 +130,18 @@
                     <div class="flex items-center justify-between gap-2">
                         <div class="min-w-0 flex-1">
                             <p class="text-sm font-medium text-gray-900 truncate leading-tight" x-text="p.name"></p>
-                            <p class="text-xs text-gray-400 mt-0.5 leading-tight"
-                               x-text="(p.reference ? '[' + p.reference + '] · ' : '') + formatFcfa(p.sale_price)"></p>
+                            {{-- Méta : référence • Stock N • prix --}}
+                            <div class="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-xs mt-0.5 leading-tight">
+                                <span class="text-gray-400" x-show="p.reference" x-text="p.reference"></span>
+                                <span class="text-gray-300" x-show="p.reference && p.is_stockable">•</span>
+                                {{-- Badge stock (produits stockables uniquement) --}}
+                                <span x-show="p.is_stockable"
+                                      class="font-medium"
+                                      :class="(parseFloat(p.stock_qty) || 0) > 0 ? 'text-emerald-600' : 'text-rose-500'"
+                                      x-text="'Stock ' + (parseFloat(p.stock_qty) || 0)"></span>
+                                <span class="text-gray-300" x-show="p.reference || p.is_stockable">•</span>
+                                <span class="text-gray-500" x-text="formatFcfa(p.sale_price)"></span>
+                            </div>
                         </div>
                         <svg x-show="String(item.product_id) === String(p.id)"
                              class="w-4 h-4 {{ $chkCls }} flex-shrink-0"
