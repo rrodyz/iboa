@@ -4,8 +4,30 @@
 --}}
 <style>
 /* ── KPI card hover lift ───────────────────────────────────────────────────── */
-.kpi-card { transition: box-shadow .2s, transform .2s; }
-.kpi-card:hover { box-shadow: 0 12px 40px -8px rgba(79,70,229,.16); transform: translateY(-2px); }
+.kpi-card { position: relative; transition: box-shadow .25s cubic-bezier(.22,1,.36,1), transform .25s cubic-bezier(.22,1,.36,1); }
+.kpi-card:hover { transform: translateY(-3px); }
+
+/* ── [PREMIUM] Accent dégradé par thème : liseré supérieur + glow doux + tint ──
+   Chaque carte reçoit une classe kpi-accent-{couleur}. Effet additif, n'altère
+   pas le contenu. Inspiré Stripe / Linear / Zoho. */
+.kpi-card[class*="kpi-accent-"]::before {
+    content:''; position:absolute; inset:0 0 auto 0; height:3px; border-radius:16px 16px 0 0;
+    background: linear-gradient(90deg, var(--kpi-c1), var(--kpi-c2));
+    opacity:.9;
+}
+.kpi-card[class*="kpi-accent-"]::after {
+    content:''; position:absolute; top:-40%; right:-20%; width:180px; height:180px; border-radius:50%;
+    background: radial-gradient(circle, var(--kpi-glow) 0%, transparent 70%);
+    opacity:.5; pointer-events:none; transition:opacity .3s;
+}
+.kpi-card[class*="kpi-accent-"]:hover::after { opacity:.85; }
+.kpi-card[class*="kpi-accent-"]:hover { box-shadow: 0 16px 44px -10px var(--kpi-shadow); }
+
+.kpi-accent-sky    { --kpi-c1:#38bdf8; --kpi-c2:#0ea5e9; --kpi-glow:rgba(56,189,248,.22);  --kpi-shadow:rgba(14,165,233,.22); }
+.kpi-accent-indigo { --kpi-c1:#818cf8; --kpi-c2:#4f46e5; --kpi-glow:rgba(99,102,241,.22);  --kpi-shadow:rgba(79,70,229,.22); }
+.kpi-accent-emerald{ --kpi-c1:#34d399; --kpi-c2:#059669; --kpi-glow:rgba(16,185,129,.22);  --kpi-shadow:rgba(5,150,105,.22); }
+.kpi-accent-violet { --kpi-c1:#a78bfa; --kpi-c2:#7c3aed; --kpi-glow:rgba(139,92,246,.22);  --kpi-shadow:rgba(124,58,237,.22); }
+.kpi-accent-rose   { --kpi-c1:#fb7185; --kpi-c2:#e11d48; --kpi-glow:rgba(244,63,94,.18);   --kpi-shadow:rgba(225,29,72,.18); }
 
 /* ── Animated pulse dot ───────────────────────────────────────────────────── */
 @keyframes pulse-ring { 0%{transform:scale(.8);opacity:.8} 70%{transform:scale(1.8);opacity:0} 100%{transform:scale(.8);opacity:0} }

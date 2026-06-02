@@ -9,7 +9,7 @@
 
     {{-- CA Aujourd'hui --}}
     <div x-data="kpiCounter({{ $revenueJour }})" x-init="init()"
-         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style="animation-delay:.04s">
+         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden kpi-accent-sky" style="animation-delay:.04s">
         <div class="p-5">
             <div class="flex items-start justify-between gap-2 mb-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 leading-tight">CA aujourd'hui</p>
@@ -42,7 +42,7 @@
 
     {{-- CA Ce Mois --}}
     <div x-data="kpiCounter({{ $revenueMois }})" x-init="init()"
-         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style="animation-delay:.08s">
+         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden kpi-accent-indigo" style="animation-delay:.08s">
         <div class="p-5">
             <div class="flex items-start justify-between gap-2 mb-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 leading-tight">CA ce mois</p>
@@ -75,7 +75,7 @@
 
     {{-- Encaissements --}}
     <div x-data="kpiCounter({{ $encaissementsMois }})" x-init="init()"
-         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style="animation-delay:.12s">
+         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden kpi-accent-emerald" style="animation-delay:.12s">
         <div class="p-5">
             <div class="flex items-start justify-between gap-2 mb-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 leading-tight">Encaissements</p>
@@ -108,7 +108,7 @@
 
     {{-- Trésorerie --}}
     <div x-data="kpiCounter({{ $soldeTresorerie }})" x-init="init()"
-         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" style="animation-delay:.16s">
+         class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden kpi-accent-violet" style="animation-delay:.16s">
         <div class="p-5">
             <div class="flex items-start justify-between gap-2 mb-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 leading-tight">Trésorerie</p>
@@ -138,7 +138,7 @@
     </div>
 
     {{-- Alertes --}}
-    <div class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm p-5" style="animation-delay:.2s">
+    <div class="kpi-card fade-up bg-white rounded-2xl border border-gray-100 shadow-sm p-5 kpi-accent-rose" style="animation-delay:.2s">
         <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">Alertes</p>
 
         {{-- Factures retard --}}
