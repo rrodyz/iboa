@@ -76,6 +76,18 @@ class DocumentSequenceService
                     $this->defaultConfig($documentType)
                 );
 
+            // [FIX-DÉFINITIF-NUM] Resynchroniser le compteur sur le plus grand numéro
+            // RÉELLEMENT émis dans la table cible. Indispensable : des documents peuvent
+            // avoir été créés HORS de ce service (seeder de démo, import, SQL manuel),
+            // laissant document_sequences.last_number en retard. Sans cette resync, le
+            // service régénère un numéro déjà pris → SQLSTATE[23000] Duplicate entry.
+            // S'exécute dans le verrou pessimiste, donc cohérent et concurrence-safe.
+            $maxUsed = $this->maxUsedNumber($seq);
+            if ($maxUsed > $seq->last_number) {
+                $seq->last_number = $maxUsed;
+                $seq->save();
+            }
+
             // Mode manuel : on suggère mais on n'incrémente PAS.
             // Le caller doit appeler confirmManual($seq, $number) APRÈS création du document.
             if ($seq->numbering_mode === 'manual') {
