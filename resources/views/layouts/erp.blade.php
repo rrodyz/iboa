@@ -85,8 +85,8 @@
         </script>
         @endif
 
-        {{-- Page Content --}}
-        <main class="flex-1 overflow-y-auto flex flex-col">
+        {{-- Page Content (erp-content = scope du dark mode pour les utilitaires Tailwind) --}}
+        <main class="erp-content flex-1 overflow-y-auto flex flex-col">
             <div class="flex-1 px-4 lg:px-6 py-6 animate-fade-in-up">
                 @yield('content')
             </div>

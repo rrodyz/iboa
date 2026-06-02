@@ -462,3 +462,52 @@ html.dark .badge-orange { background: #431407; color: #FB923C; }
 html.dark .badge-purple { background: #3B0764; color: #C4B5FD; }
 html.dark .badge-teal   { background: #134E4A; color: #2DD4BF; }
 html.dark .badge-sky    { background: #0C1E3C; color: #38BDF8; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — Remappage des utilitaires Tailwind « en dur » dans le contenu.
+   Scopé à .erp-content (<main>) pour ne PAS toucher la sidebar (indigo dédié).
+   Active le dark mode sur TOUTES les vues sans modifier les templates.
+   On ne remappe QUE les neutres (gris/blanc) : les couleurs sémantiques
+   (badges, boutons indigo, alertes) restent intactes.
+═══════════════════════════════════════════════════════════════════════════ */
+/* Surfaces */
+html.dark .erp-content .bg-white { background-color: var(--surface-card) !important; }
+html.dark .erp-content .bg-gray-50,
+html.dark .erp-content .bg-gray-100 { background-color: var(--surface-muted) !important; }
+html.dark .erp-content .bg-gray-50\/30 { background-color: transparent !important; }
+
+/* Texte */
+html.dark .erp-content .text-gray-900,
+html.dark .erp-content .text-gray-800 { color: var(--text-primary) !important; }
+html.dark .erp-content .text-gray-700,
+html.dark .erp-content .text-gray-600 { color: var(--text-secondary) !important; }
+html.dark .erp-content .text-gray-500,
+html.dark .erp-content .text-gray-400,
+html.dark .erp-content .text-gray-300 { color: var(--text-muted) !important; }
+
+/* Bordures */
+html.dark .erp-content .border-gray-200,
+html.dark .erp-content .border-gray-300 { border-color: var(--border) !important; }
+html.dark .erp-content .border-gray-100,
+html.dark .erp-content .border-gray-50 { border-color: var(--border-soft) !important; }
+html.dark .erp-content .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+html.dark .erp-content .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-soft) !important; }
+
+/* Hovers neutres */
+html.dark .erp-content .hover\:bg-gray-50:hover,
+html.dark .erp-content .hover\:bg-gray-100:hover { background-color: var(--surface-muted) !important; }
+
+/* Placeholders & inputs bruts */
+html.dark .erp-content .placeholder-gray-400::placeholder { color: var(--text-muted) !important; }
+html.dark .erp-content input:not([type=checkbox]):not([type=radio]),
+html.dark .erp-content select,
+html.dark .erp-content textarea {
+    background-color: var(--surface-muted) !important;
+    border-color: var(--border) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Ombres adoucies en dark */
+html.dark .erp-content .shadow-sm,
+html.dark .erp-content .shadow,
+html.dark .erp-content .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,.35) !important; }
