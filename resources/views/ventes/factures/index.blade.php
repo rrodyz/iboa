@@ -127,20 +127,20 @@
         </div>
     </div>
 
-    {{-- Table --}}
+    {{-- Table — système .tbl premium (header sticky flottant + dark mode) --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Numéro</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Client</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Émission</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Échéance</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Montant TTC</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Reste à payer</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left">Numéro</th>
+                        <th class="text-left">Client</th>
+                        <th class="text-left hidden md:table-cell">Émission</th>
+                        <th class="text-left hidden lg:table-cell">Échéance</th>
+                        <th class="text-right">Montant TTC</th>
+                        <th class="text-right hidden lg:table-cell">Reste à payer</th>
+                        <th class="text-center">Statut</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
