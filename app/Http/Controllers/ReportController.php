@@ -139,20 +139,28 @@ class ReportController extends Controller
         $query = InvoiceItem::query()
             ->join('invoices', 'invoice_items.invoice_id', '=', 'invoices.id')
             ->join('products', 'invoice_items.product_id', '=', 'products.id')
+            // [SECU/MULTI-TENANT] invoice_items n'a pas de company_id et le scope global
+            // d'Invoice ne s'applique pas à une table jointe → filtrer explicitement.
+            ->where('invoices.company_id', currentCompany()->id)
             ->whereIn('invoices.status', $this->validStatuses)
             ->whereBetween('invoices.issued_at', [$from, $to . ' 23:59:59'])
             ->whereNotNull('invoice_items.product_id')
+            // [MARGES-CMP] Coût par priorité :
+            //   1. invoice_items.unit_cost — coût figé à la validation (historique exact)
+            //   2. products.weighted_avg_cost — CMP courant
+            //   3. products.purchase_price — dernier prix d'achat (repli ultime)
             ->select(
                 'products.id',
                 'products.name',
                 'products.reference',
                 'products.purchase_price',
+                'products.weighted_avg_cost',
                 DB::raw('SUM(invoice_items.quantity) as qty_vendue'),
                 DB::raw('SUM(invoice_items.line_total_ht) as ca_ht'),
-                DB::raw('SUM(invoice_items.quantity * products.purchase_price) as cout_achats'),
-                DB::raw('SUM(invoice_items.line_total_ht - (invoice_items.quantity * products.purchase_price)) as marge_brute')
+                DB::raw('SUM(invoice_items.quantity * COALESCE(NULLIF(invoice_items.unit_cost,0), NULLIF(products.weighted_avg_cost,0), products.purchase_price)) as cout_achats'),
+                DB::raw('SUM(invoice_items.line_total_ht - (invoice_items.quantity * COALESCE(NULLIF(invoice_items.unit_cost,0), NULLIF(products.weighted_avg_cost,0), products.purchase_price))) as marge_brute')
             )
-            ->groupBy('products.id', 'products.name', 'products.reference', 'products.purchase_price');
+            ->groupBy('products.id', 'products.name', 'products.reference', 'products.purchase_price', 'products.weighted_avg_cost');
 
         if ($familyId) {
             $query->where('products.family_id', $familyId);

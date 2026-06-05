@@ -35,38 +35,54 @@ class PeriodLockController extends Controller
             ?: optional(FiscalYear::orderByDesc('starts_at')->first())->id;
 
         $fiscalYear  = $fyId ? FiscalYear::find($fyId) : null;
+        if ($fiscalYear && $fiscalYear->company_id !== null && $fiscalYear->company_id !== $company->id) {
+            $fiscalYear = null; // Silently ignore cross-company access
+        }
         $fiscalYears = FiscalYear::orderByDesc('starts_at')->get();
 
         $months = [];
         if ($fiscalYear) {
             $start = $fiscalYear->starts_at->copy()->startOfMonth();
             $end   = $fiscalYear->ends_at->copy()->endOfMonth();
+
+            // ── Verrous du mois — 1 seule requête, indexée par "année-mois" ──────
+            $locks = AccountingPeriodLock::where('company_id', $company->id)
+                ->whereBetween(DB::raw('(year * 100 + month)'), [
+                    (int) $start->format('Y') * 100 + (int) $start->format('n'),
+                    (int) $end->format('Y')   * 100 + (int) $end->format('n'),
+                ])
+                ->get()
+                ->keyBy(fn ($l) => $l->year . '-' . $l->month);
+
+            // ── Stats écritures — 1 seule requête agrégée par année/mois ─────────
+            $statsByMonth = DB::table('journal_entries')
+                ->where('company_id', $company->id)
+                ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
+                ->whereNull('deleted_at')
+                ->selectRaw('
+                    YEAR(entry_date) as y, MONTH(entry_date) as m,
+                    COUNT(*) as total_count,
+                    SUM(CASE WHEN status = "brouillon" THEN 1 ELSE 0 END) as draft_count,
+                    SUM(CASE WHEN status != "brouillon" THEN total_debit ELSE 0 END) as total_volume
+                ')
+                ->groupBy('y', 'm')
+                ->get()
+                ->keyBy(fn ($r) => ((int) $r->y) . '-' . ((int) $r->m));
+
             $cursor = $start->copy();
             while ($cursor <= $end) {
                 $year  = (int) $cursor->format('Y');
                 $month = (int) $cursor->format('n');
-                $lock  = AccountingPeriodLock::findFor($company->id, $year, $month);
-
-                // Stats : compte d'écritures + montant total ce mois (validées)
-                $stats = DB::table('journal_entries')
-                    ->where('company_id', $company->id)
-                    ->whereYear('entry_date', $year)
-                    ->whereMonth('entry_date', $month)
-                    ->whereNull('deleted_at')
-                    ->selectRaw('
-                        COUNT(*) as total_count,
-                        SUM(CASE WHEN status = "brouillon" THEN 1 ELSE 0 END) as draft_count,
-                        SUM(CASE WHEN status != "brouillon" THEN total_debit ELSE 0 END) as total_volume
-                    ')
-                    ->first();
+                $key   = $year . '-' . $month;
+                $stats = $statsByMonth->get($key);
 
                 $months[] = [
                     'year'         => $year,
                     'month'        => $month,
                     'label'        => $cursor->translatedFormat('F Y'),
-                    'lock'         => $lock,
-                    'total_count'  => (int) ($stats->total_count ?? 0),
-                    'draft_count'  => (int) ($stats->draft_count ?? 0),
+                    'lock'         => $locks->get($key),
+                    'total_count'  => (int) ($stats->total_count  ?? 0),
+                    'draft_count'  => (int) ($stats->draft_count  ?? 0),
                     'total_volume' => (int) ($stats->total_volume ?? 0),
                 ];
                 $cursor->addMonth();

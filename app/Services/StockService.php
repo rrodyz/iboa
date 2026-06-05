@@ -249,6 +249,28 @@ class StockService
         }
         $stock->quantity = $newQty;
         $stock->save();
+
+        // [CMP-SYNC] Propager le CMP au niveau produit (moyenne pondérée tous dépôts)
+        // pour que les rapports (marges) et fallbacks disposent d'un coût fiable.
+        $this->syncProductWeightedAvgCost((int) $stock->product_id);
+    }
+
+    /**
+     * Recalcule product.weighted_avg_cost = CMP pondéré par quantité sur tous les dépôts.
+     * Champ dénormalisé utilisé par les rapports de marge et comme fallback de coût.
+     */
+    private function syncProductWeightedAvgCost(int $productId): void
+    {
+        $agg = ProductStock::where('product_id', $productId)
+            ->where('quantity', '>', 0)
+            ->selectRaw('SUM(quantity * avg_cost) AS total_cost, SUM(quantity) AS total_qty')
+            ->first();
+
+        if ($agg && (float) $agg->total_qty > 0 && (float) $agg->total_cost > 0) {
+            Product::where('id', $productId)->update([
+                'weighted_avg_cost' => round((float) $agg->total_cost / (float) $agg->total_qty, 2),
+            ]);
+        }
     }
 
     /**

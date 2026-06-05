@@ -16,6 +16,7 @@ class InvoiceItem extends Model
         'unit_id',
         'quantity',
         'unit_price',
+        'unit_cost',
         'discount_percent',
         'tax_rate_id',
         'tax_rate_value',
@@ -28,6 +29,7 @@ class InvoiceItem extends Model
     protected $casts = [
         'quantity'         => 'decimal:4',
         'unit_price'       => 'integer',
+        'unit_cost'        => 'decimal:2',
         'discount_percent' => 'decimal:2',
         'tax_rate_value'   => 'decimal:2',
         'line_total_ht'    => 'integer',

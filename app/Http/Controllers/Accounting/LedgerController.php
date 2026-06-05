@@ -467,10 +467,12 @@ class LedgerController extends Controller
         $type     = $request->input('type', 'all'); // 'clients', 'fournisseurs', 'all'
 
         // Load tiers accounts (class 4 detail accounts)
+        // Pas de filtre is_active : un tiers désactivé avec un solde impayé doit
+        // apparaître dans la balance (relance, lettrage). Les comptes sans mouvement
+        // sont écartés plus bas par le filtre debit/credit > 0.
         $accountsQuery = Account::where('company_id', $company->id)
             ->where('code', 'like', '4%')
-            ->where('is_detail', true)
-            ->where('is_active', true);
+            ->where('is_detail', true);
 
         if ($type === 'clients') {
             $accountsQuery->where('code', 'like', '41%');

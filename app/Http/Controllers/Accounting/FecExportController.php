@@ -54,6 +54,7 @@ class FecExportController extends Controller
 
         $company = currentCompany();
         $fy      = FiscalYear::findOrFail($data['fiscal_year_id']);
+        abort_if($fy->company_id !== null && $fy->company_id !== $company->id, 403);
 
         $entries = JournalEntry::with(['journalType', 'lines.account', 'validatedBy'])
             ->where('company_id', $company->id)

@@ -232,6 +232,7 @@ class FinancialReportController extends Controller
 
         $companyId = Auth::user()->company_id;
         $fy        = FiscalYear::findOrFail($request->fiscal_year_id);
+        abort_if($fy->company_id !== null && $fy->company_id !== $companyId, 403);
         $netResult = $this->computeNetResult($fy);
 
         // Vérifier que la somme des affectations = résultat net
@@ -335,14 +336,16 @@ class FinancialReportController extends Controller
     {
         $company = currentCompany();
 
-        // Cash (class 5)
+        // Cash (class 5) — même périmètre que les autres totaux : tous les comptes
+        // de détail (un compte désactivé avec solde fait toujours partie de la situation).
         $cashAccounts = Account::where('is_detail', true)
-            ->where('is_active', true)
             ->where('code', 'like', '5%')
             ->orderBy('code')
             ->get(['id', 'code', 'name', 'debit_balance', 'credit_balance']);
         $cashAccounts->each(fn($a) => $a->net = $a->debit_balance - $a->credit_balance);
         $totalTresorerie = $cashAccounts->sum('net');
+        // Liste : n'afficher que les comptes avec un solde (total inchangé).
+        $cashAccounts = $cashAccounts->filter(fn($a) => $a->net !== 0)->values();
 
         // Receivables (411)
         $totalClients = (int) Account::where('is_detail', true)
@@ -515,8 +518,9 @@ class FinancialReportController extends Controller
         $cacheKey  = 'fin_cumul_' . $companyId . '_' . implode('', $prefixes);
 
         return \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($prefixes, $companyId) {
+            // Pas de filtre is_active : un compte désactivé avec un solde fait
+            // partie du bilan (sinon Actif ≠ Passif). Seul is_detail importe.
             return Account::where('is_detail', true)
-                ->where('is_active', true)
                 ->where('company_id', $companyId)   // [PERF-FIX] filtre société manquant
                 ->where(function ($q) use ($prefixes) {
                     foreach ($prefixes as $p) {
@@ -550,8 +554,13 @@ class FinancialReportController extends Controller
             // sur MySQL avec les index existants sur journal_entry_lines.account_id
             // et journal_entries(status, entry_date).
             $prefixConditions = implode(' OR ', array_map(fn ($p) => "a.code LIKE ?", $prefixes));
-            $bindings = $prefixes;
 
+            // Bindings dans l'ordre EXACT des ? dans la requête SQL :
+            //   1. je.entry_date >= ? (dateFrom — optionnel)
+            //   2. je.entry_date <= ? (dateTo)
+            //   3. je.company_id  = ? (companyId)
+            //   4. a.code LIKE ?  × N (prefixes)
+            $bindings = [];
             $dateFromClause = '';
             if ($dateFrom !== null) {
                 $dateFromClause = 'AND je.entry_date >= ?';
@@ -559,7 +568,6 @@ class FinancialReportController extends Controller
             }
             $bindings[] = $dateTo;
             $bindings[] = $companyId;
-            // Add prefix bindings again for account filter
             foreach ($prefixes as $p) { $bindings[] = $p; }
 
             $movements = \Illuminate\Support\Facades\DB::select("
@@ -574,16 +582,15 @@ class FinancialReportController extends Controller
                   AND  je.entry_date <= ?
                   AND  je.company_id  = ?
                   AND  a.is_detail    = 1
-                  AND  a.is_active    = 1
                   AND  ({$prefixConditions})
                 GROUP BY jel.account_id
             ", $bindings);
 
             $movMap = collect($movements)->keyBy('account_id');
 
-            // Charger les métadonnées de comptes
+            // Charger les métadonnées de comptes (pas de filtre is_active :
+            // un compte désactivé avec mouvements fait partie des états).
             $accounts = Account::where('is_detail', true)
-                ->where('is_active', true)
                 ->where('company_id', $companyId)
                 ->where(function ($q) use ($prefixes) {
                     foreach ($prefixes as $p) {

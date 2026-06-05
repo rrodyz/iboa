@@ -186,11 +186,31 @@
     @endphp
 
     {{-- Grand total bar --}}
-    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+    <div class="bg-white rounded-xl border border-gray-200 px-4 py-3"
+         x-data="{
+             allOpen: false,
+             toggleAll() {
+                 this.allOpen = !this.allOpen;
+                 document.querySelectorAll('[data-gl-account]').forEach(el => {
+                     el._x_dataStack[0].open = this.allOpen;
+                 });
+             }
+         }">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <span class="text-gray-500">
                 <span class="font-semibold text-gray-900">{{ $accountGroups->count() }}</span> compte(s) avec mouvements
             </span>
+
+            {{-- Tout déplier / replier --}}
+            <button type="button" @click="toggleAll()"
+                    class="inline-flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 border border-violet-200 hover:border-violet-400 rounded-lg px-3 py-1.5 transition-colors">
+                <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="allOpen ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+                <span x-text="allOpen ? 'Tout replier' : 'Tout déplier'">Tout déplier</span>
+            </button>
+
             <span class="ml-auto flex flex-wrap gap-4 tabular-nums">
                 <span class="text-blue-700 font-semibold">
                     Total D : {{ number_format($grandDebit, 0, ',', ' ') }}
@@ -224,52 +244,71 @@
     @endif
 
     {{-- Account card — collapsible --}}
-    @php $bal = $group['total_debit'] - $group['total_credit']; @endphp
+    @php
+        $bal      = $group['total_debit'] - $group['total_credit'];
+        $maxLines = 8;   // lignes visibles avant "Voir tout"
+        $preview  = $group['lines']->take($maxLines);
+        $hasMore  = $group['lines']->count() > $maxLines;
+        $moreCount = $group['lines']->count() - $maxLines;
+    @endphp
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden"
-         x-data="{ open: true }">
+         x-data="{ open: false }"
+         data-gl-account>
 
         {{-- Account header (click to toggle) --}}
-        <div class="px-4 py-3 bg-gray-50 border-b border-gray-100">
+        <button type="button" @click="open = !open"
+                class="w-full px-4 py-3 bg-gray-50 border-b border-gray-100 hover:bg-gray-100 transition-colors text-left">
             <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-3 min-w-0">
-                    {{-- Toggle button --}}
-                    <button type="button" @click="open = !open"
-                            class="flex-shrink-0 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-200">
-                        <svg class="w-4 h-4 transition-transform duration-200" :class="open ? 'rotate-0' : '-rotate-90'"
-                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                        </svg>
-                    </button>
-                    <a href="{{ route('comptabilite.grand-livre', array_merge(request()->query(), ['account_id' => $group['account']->id])) }}"
-                       class="font-mono font-bold text-violet-700 hover:underline flex-shrink-0">
-                        {{ $group['account']->code }}
-                    </a>
+                    <svg class="w-4 h-4 flex-shrink-0 text-gray-400 transition-transform duration-200"
+                         :class="open ? 'rotate-0' : '-rotate-90'"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <span class="font-mono font-bold text-violet-700 flex-shrink-0">{{ $group['account']->code }}</span>
                     <span class="text-gray-800 font-medium truncate">{{ $group['account']->name }}</span>
-                    <span class="flex-shrink-0 text-xs text-gray-400">{{ $group['lines']->count() }} ligne(s)</span>
+                    <span class="flex-shrink-0 text-xs text-gray-400 bg-gray-200 rounded-full px-2 py-0.5">
+                        {{ $group['lines']->count() }} ligne(s)
+                    </span>
                 </div>
-                <div class="flex-shrink-0 flex gap-4 text-xs tabular-nums">
-                    <span class="text-blue-700">D: {{ number_format($group['total_debit'], 0, ',', ' ') }}</span>
-                    <span class="text-red-700">C: {{ number_format($group['total_credit'], 0, ',', ' ') }}</span>
+                <div class="flex-shrink-0 flex gap-4 text-xs tabular-nums" @click.stop>
+                    <span class="text-blue-700 font-semibold">D: {{ number_format($group['total_debit'], 0, ',', ' ') }}</span>
+                    <span class="text-red-700 font-semibold">C: {{ number_format($group['total_credit'], 0, ',', ' ') }}</span>
                     @if($bal != 0)
                     <span class="{{ $bal >= 0 ? 'text-green-700' : 'text-orange-700' }} font-semibold">
-                        Solde: {{ number_format(abs($bal), 0, ',', ' ') }} {{ $bal >= 0 ? 'D' : 'C' }}
+                        {{ number_format(abs($bal), 0, ',', ' ') }} {{ $bal >= 0 ? 'D' : 'C' }}
                     </span>
                     @else
                     <span class="text-gray-400 font-semibold">Équilibré</span>
                     @endif
                 </div>
             </div>
-        </div>
+        </button>
 
-        {{-- Lines table (collapsible) --}}
+        {{-- Lines table (collapsible) — aperçu limité --}}
         <div x-show="open"
              x-transition:enter="transition ease-out duration-150"
-             x-transition:enter-start="opacity-0 -translate-y-1"
-             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
              x-transition:leave="transition ease-in duration-100"
-             x-transition:leave-start="opacity-100 translate-y-0"
-             x-transition:leave-end="opacity-0 -translate-y-1">
-            @include('comptabilite._grand-livre-table', ['lines' => $group['lines']])
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+            @include('comptabilite._grand-livre-table', ['lines' => $preview])
+
+            @if($hasMore)
+            <div class="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                <span class="text-xs text-gray-500">
+                    Affichage limité à {{ $maxLines }} lignes sur {{ $group['lines']->count() }}
+                </span>
+                <a href="{{ route('comptabilite.grand-livre', array_merge(request()->query(), ['account_id' => $group['account']->id])) }}"
+                   class="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors">
+                    Voir les {{ $moreCount }} ligne(s) restante(s)
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+            @endif
         </div>
     </div>
     @endforeach

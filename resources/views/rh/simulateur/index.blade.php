@@ -213,6 +213,19 @@
                         @if($hint)<p class="text-xs text-gray-400 mt-0.5">{{ $hint }}</p>@endif
                     </div>
                     @endforeach
+
+                    {{-- Ancienneté (% du salaire de base) — modèle Sage Paie RH --}}
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Ancienneté</label>
+                        <div class="relative">
+                            <input type="number" x-model.number="form.anciennete_pct"
+                                   @input.debounce.500ms="simulate()"
+                                   min="0" max="25" step="0.5" placeholder="0"
+                                   class="w-full pl-3 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400">
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-0.5">BF : 2 %/an, plafond 25 %. Décompose base / prime d'ancienneté.</p>
+                    </div>
                 </div>
             </div>
 
@@ -409,6 +422,7 @@
     <input type="hidden" name="prime_imposable"      id="pdf_prime_imposable">
     <input type="hidden" name="prime_non_imposable"  id="pdf_prime_non_imposable">
     <input type="hidden" name="avances"              id="pdf_avances">
+    <input type="hidden" name="anciennete_pct"       id="pdf_anciennete_pct">
     <input type="hidden" name="categorie_label"      id="pdf_categorie_label">
 </form>
 @endsection
@@ -424,6 +438,7 @@ function simulateur() {
             prime_imposable:     0,
             prime_non_imposable: 0,
             avances:             0,
+            anciennete_pct:      0,
         },
         result:       null,
         loading:      false,
@@ -504,6 +519,7 @@ function simulateur() {
             document.getElementById('pdf_prime_imposable').value    = this.form.prime_imposable || 0;
             document.getElementById('pdf_prime_non_imposable').value= this.form.prime_non_imposable || 0;
             document.getElementById('pdf_avances').value            = this.form.avances || 0;
+            document.getElementById('pdf_anciennete_pct').value     = this.form.anciennete_pct || 0;
             document.getElementById('pdf_categorie_label').value    = this.selectedLabel || '';
             document.getElementById('pdf-export-form').submit();
             // Reset le spinner apres un delai (la soumission ouvre un onglet)

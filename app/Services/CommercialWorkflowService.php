@@ -79,6 +79,12 @@ class CommercialWorkflowService
         $dn->assertCanValidate();
 
         DB::transaction(function () use ($dn, $motif) {
+            // [CONCURRENCE] Verrou + re-check statut frais : empêche la double
+            // validation (double-clic) → double sortie de stock.
+            $dn = DeliveryNote::lockForUpdate()->findOrFail($dn->id);
+            if (! $dn->isValidatable()) {
+                throw new \RuntimeException("Ce document a déjà été traité (statut : {$dn->status}).");
+            }
             $dn->validateDocument('valide', $motif);
             // [FIX-BL-STOCK] Créer les mouvements de sortie de stock après validation interne.
             $this->deliveryNoteService->applyStockOut($dn->fresh());
@@ -98,6 +104,13 @@ class CommercialWorkflowService
         $invoice->assertCanValidate();
 
         DB::transaction(function () use ($invoice, $motif) {
+            // [CONCURRENCE] Verrou + re-check statut frais : empêche la double
+            // validation (double-clic) → double comptabilisation GL + double sortie stock.
+            $invoice = Invoice::lockForUpdate()->findOrFail($invoice->id);
+            if (! $invoice->isValidatable()) {
+                throw new \RuntimeException("Cette facture a déjà été traitée (statut : {$invoice->status}).");
+            }
+
             // Définir due_at si manquant avant de valider
             if (!$invoice->due_at) {
                 $invoice->update([
@@ -125,6 +138,12 @@ class CommercialWorkflowService
         $cn->assertCanValidate();
 
         DB::transaction(function () use ($cn, $motif) {
+            // [CONCURRENCE] Verrou + re-check statut frais : empêche la double
+            // validation (double-clic) → double comptabilisation GL + double retour stock.
+            $cn = CreditNote::lockForUpdate()->findOrFail($cn->id);
+            if (! $cn->isValidatable()) {
+                throw new \RuntimeException("Cet avoir a déjà été traité (statut : {$cn->status}).");
+            }
             $cn->validateDocument('valide', $motif);
             // [FIX-AVOIR-COMPTA] Appliquer les effets secondaires comptables/stock/événement.
             $this->creditNoteService->applyValidationSideEffects($cn->fresh(['client', 'company']));

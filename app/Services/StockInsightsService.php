@@ -50,6 +50,7 @@ class StockInsightsService
         $belowMinCount = (int) DB::table('product_stocks as ps')
             ->join('products as p', 'p.id', '=', 'ps.product_id')
             ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->where('p.stock_min', '>', 0)
             ->whereRaw('(ps.quantity - ps.reserved_quantity) < p.stock_min')
             ->whereRaw('(ps.quantity - ps.reserved_quantity) > 0')
@@ -58,6 +59,7 @@ class StockInsightsService
         $reorderCount = (int) DB::table('product_stocks as ps')
             ->join('products as p', 'p.id', '=', 'ps.product_id')
             ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->where('p.reorder_point', '>', 0)
             ->whereRaw('(ps.quantity - ps.reserved_quantity) <= p.reorder_point')
             ->distinct('ps.product_id')->count('ps.product_id');
@@ -67,9 +69,11 @@ class StockInsightsService
         $expiringCount = $this->expiringLotsQuery(self::EXPIRY_WINDOW_DEFAULT)->count();
         $expiredCount  = $this->expiredLotsQuery()->count();
 
-        // Réservations en cours (qté réservée totale)
+        // Réservations en cours (qté réservée totale) — même périmètre que la valorisation
         $reservedValue = (int) DB::table('product_stocks as ps')
             ->join('products as p', 'p.id', '=', 'ps.product_id')
+            ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->selectRaw('COALESCE(SUM(ps.reserved_quantity * COALESCE(ps.avg_cost, p.weighted_avg_cost, p.purchase_price, 0)), 0) AS v')
             ->value('v');
 
@@ -115,6 +119,7 @@ class StockInsightsService
         return DB::table('stock_movements as m')
             ->join('products as p', 'p.id', '=', 'm.product_id')
             ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->whereMonth('m.occurred_at', now()->month)
             ->whereYear('m.occurred_at', now()->year)
             ->select(
@@ -178,7 +183,7 @@ class StockInsightsService
                 'ps.warehouse_id', 'w.name as warehouse_name',
                 'ps.quantity', 'ps.avg_cost', 'ps.last_movement_at',
                 DB::raw('(ps.quantity * COALESCE(ps.avg_cost, p.weighted_avg_cost, p.purchase_price, 0)) AS immobilized_value'),
-                DB::raw('DATEDIFF(NOW(), COALESCE(ps.last_movement_at, p.created_at)) AS days_idle')
+                DB::raw('IF(ps.last_movement_at IS NULL, NULL, DATEDIFF(NOW(), ps.last_movement_at)) AS days_idle')
             )
             ->orderByDesc('immobilized_value');
     }
@@ -195,6 +200,7 @@ class StockInsightsService
             ->join('products as p', 'p.id', '=', 'l.product_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
             ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->where('l.quantity', '>', 0)
             ->whereNotNull('l.expiry_date')
             ->whereBetween('l.expiry_date', [$now, $limit])
@@ -334,6 +340,7 @@ class StockInsightsService
             ->join('products as p', 'p.id', '=', 'l.product_id')
             ->leftJoin('warehouses as w', 'w.id', '=', 'l.warehouse_id')
             ->where('p.is_active', 1)
+            ->whereNull('p.deleted_at')
             ->where('l.quantity', '>', 0)
             ->whereNotNull('l.expiry_date')
             ->where('l.expiry_date', '<', $now)

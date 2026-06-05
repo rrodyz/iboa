@@ -650,8 +650,8 @@ function payrollShow() {
         },
 
         saveVariable() {
-            if (!this.newVar.employee_id) { alert('Choisissez un employé.'); return; }
-            if (!this.newVar.amount)      { alert('Saisissez un montant.'); return; }
+            if (!this.newVar.employee_id) { window.toast('Choisissez un employé.', 'error'); return; }
+            if (!this.newVar.amount)      { window.toast('Saisissez un montant.', 'error'); return; }
             this.saving = true;
             fetch('{{ route('rh.paie.variables.store', $run) }}', {
                 method: 'POST',
@@ -660,22 +660,32 @@ function payrollShow() {
             })
             .then(r => r.json())
             .then(data => {
-                if (data.error) { alert(data.error); return; }
+                if (data.error) { window.toast(data.error, 'error'); return; }
                 this.variables.push(data.variable);
                 this.newVar = { employee_id:'', type:'hs_25', label:'', qty:0, unit:'heures', amount:0, is_gain:true, is_taxable:true, is_social_charged:true };
                 this.showVarForm = false;
+                window.toast('Variable ajoutée.', 'success');
             })
             .finally(() => this.saving = false);
         },
 
-        deleteVariable(id) {
-            if (!confirm('Supprimer cette variable ?')) return;
-            fetch(`{{ url('rh/paie/'.$run->id.'/variables') }}/${id}`, {
+        async deleteVariable(id) {
+            const ok = await window.erpConfirm({
+                message: 'Supprimer cette variable ?',
+                confirmLabel: 'Supprimer',
+                isDanger: true,
+            });
+            if (!ok) return;
+            const resp = await fetch(`{{ url('rh/paie/'.$run->id.'/variables') }}/${id}`, {
                 method: 'DELETE',
                 headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-            }).then(() => {
-                this.variables = this.variables.filter(v => v.id !== id);
             });
+            if (resp.ok) {
+                this.variables = this.variables.filter(v => v.id !== id);
+                window.toast('Variable supprimée.', 'success');
+            } else {
+                window.toast('Erreur lors de la suppression.', 'error');
+            }
         },
 
         empName(id) {

@@ -37,16 +37,6 @@
         </div>
     </div>
 
-    {{-- ── Flash ───────────────────────────────────────────────────────────────── --}}
-    @if(session('success'))
-    <div class="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm">
-        <svg class="w-5 h-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
-        {{ session('success') }}
-    </div>
-    @endif
-
     {{-- ── Stats ───────────────────────────────────────────────────────────────── --}}
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
         @foreach([
@@ -109,22 +99,22 @@
     </form>
 
     {{-- ── Tableau ─────────────────────────────────────────────────────────────── --}}
-    <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50 border-b border-gray-200">
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Matricule</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Employé</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Début</th>
-                        <th class="px-4 py-3 text-left font-semibold text-gray-700">Fin</th>
-                        <th class="px-4 py-3 text-right font-semibold text-gray-700">Salaire base</th>
-                        <th class="px-4 py-3 text-center font-semibold text-gray-700">Statut</th>
-                        <th class="px-4 py-3 text-center font-semibold text-gray-700">Actions</th>
+                        <th class="text-left">Matricule</th>
+                        <th class="text-left">Employé</th>
+                        <th class="text-left">Type</th>
+                        <th class="text-left">Début</th>
+                        <th class="text-left">Fin</th>
+                        <th class="text-right">Salaire base</th>
+                        <th class="text-center">Statut</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($contracts as $contract)
                     @php
                         $badgeClass = match($contract->status) {
@@ -140,28 +130,28 @@
                             default   => ucfirst($contract->status),
                         };
                     @endphp
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 font-mono text-xs text-gray-500">
+                    <tr>
+                        <td class="font-mono text-xs text-gray-500">
                             {{ $contract->employee?->matricule ?? '—' }}
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
                                class="font-medium text-gray-900 hover:text-indigo-600 transition-colors">
                                 {{ $contract->employee?->full_name ?? '—' }}
                             </a>
-                            @if($contract->employee?->department)
-                            <div class="text-xs text-gray-400">{{ $contract->employee->department }}</div>
+                            @if($contract->employee?->department?->name)
+                            <div class="text-xs text-gray-400">{{ $contract->employee->department->name }}</div>
                             @endif
                         </td>
-                        <td class="px-4 py-3">
-                            <span class="text-xs px-2 py-0.5 rounded font-semibold bg-blue-50 text-blue-700 border border-blue-100">
+                        <td>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
                                 {{ $contract->type }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-gray-600 tabular-nums">
+                        <td class="tabular-nums text-gray-600">
                             {{ $contract->start_date?->format('d/m/Y') ?? '—' }}
                         </td>
-                        <td class="px-4 py-3 text-gray-600 tabular-nums">
+                        <td class="tabular-nums text-gray-600">
                             @if($contract->end_date)
                                 {{ $contract->end_date->format('d/m/Y') }}
                                 @if($contract->status === 'actif' && $contract->end_date->isPast())
@@ -173,32 +163,45 @@
                                 <span class="text-gray-400">Indéterminée</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right font-mono font-medium text-gray-900 tabular-nums">
+                        <td class="text-right font-mono font-medium tabular-nums">
                             {{ number_format($contract->base_salary, 0, ',', ' ') }} F
                         </td>
-                        <td class="px-4 py-3 text-center">
+                        <td class="text-center">
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badgeClass }}">
                                 {{ $badgeLabel }}
                             </span>
                         </td>
-                        <td class="px-4 py-3">
-                            <div class="flex items-center justify-center gap-2">
+                        <td class="text-center">
+                            <div class="flex items-center justify-center gap-1.5">
                                 {{-- Voir employé --}}
                                 <a href="{{ route('rh.employes.show', $contract->employee_id) }}"
-                                   class="p-1 rounded text-indigo-500 hover:bg-indigo-50 transition-colors"
+                                   class="p-1.5 rounded-lg text-indigo-500 hover:bg-indigo-50 transition-colors"
                                    title="Voir l'employé">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                     </svg>
                                 </a>
+                                {{-- PDF contrat --}}
+                                <a href="{{ route('rh.contrats.pdf', $contract) }}"
+                                   class="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                                   title="Télécharger PDF"
+                                   data-loading data-loading-text="Génération PDF...">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                </a>
                                 @if($contract->status === 'actif')
                                 {{-- Terminer --}}
                                 <form method="POST" action="{{ route('rh.contrats.terminate', $contract) }}"
-                                      onsubmit="return confirm('Terminer ce contrat ?')" class="inline">
+                                      data-confirm="Terminer ce contrat ?"
+                                      data-confirm-title="Terminer le contrat"
+                                      data-confirm-label="Terminer"
+                                      data-confirm-danger="false"
+                                      class="inline">
                                     @csrf @method('PATCH')
                                     <button type="submit"
-                                            class="p-1 rounded text-amber-500 hover:bg-amber-50 transition-colors"
+                                            class="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors"
                                             title="Terminer le contrat">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -207,10 +210,13 @@
                                 </form>
                                 {{-- Résilier --}}
                                 <form method="POST" action="{{ route('rh.contrats.resilier', $contract) }}"
-                                      onsubmit="return confirm('Résilier ce contrat ? Cette action est irréversible.')" class="inline">
+                                      data-confirm="Résilier ce contrat ? Cette action est irréversible."
+                                      data-confirm-title="Résilier le contrat"
+                                      data-confirm-label="Résilier"
+                                      class="inline">
                                     @csrf @method('PATCH')
                                     <button type="submit"
-                                            class="p-1 rounded text-red-500 hover:bg-red-50 transition-colors"
+                                            class="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
                                             title="Résilier le contrat">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -220,10 +226,12 @@
                                 @else
                                 {{-- Supprimer (terminé / résilié uniquement) --}}
                                 <form method="POST" action="{{ route('rh.contrats.destroy', $contract) }}"
-                                      onsubmit="return confirm('Supprimer définitivement ce contrat ?')" class="inline">
+                                      data-confirm="Supprimer définitivement ce contrat ?"
+                                      data-confirm-title="Supprimer le contrat"
+                                      class="inline">
                                     @csrf @method('DELETE')
                                     <button type="submit"
-                                            class="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                             title="Supprimer ce contrat">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -237,8 +245,8 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="8" class="px-4 py-12 text-center">
-                            <div class="flex flex-col items-center gap-2 text-gray-400">
+                        <td colspan="8" class="px-4 py-12 text-center text-gray-400">
+                            <div class="flex flex-col items-center gap-2">
                                 <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                           d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -252,9 +260,8 @@
             </table>
         </div>
 
-        {{-- Pagination --}}
         @if($contracts->hasPages())
-        <div class="px-4 py-3 border-t border-gray-200">
+        <div class="px-4 py-3 border-t border-gray-100">
             {{ $contracts->links() }}
         </div>
         @endif

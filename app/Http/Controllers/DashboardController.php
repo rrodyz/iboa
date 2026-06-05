@@ -251,6 +251,78 @@ class DashboardController extends Controller
         ));
     }
 
+    /**
+     * Endpoint JSON léger — actualisation automatique toutes les 60s.
+     * Retourne uniquement les KPIs volatils (pas les charts, pas les listes).
+     * Cache 60s : réduit la charge serveur même sous polling intensif.
+     */
+    public function kpisJson(): \Illuminate\Http\JsonResponse
+    {
+        $now   = now();
+        $month = $now->month;
+        $year  = $now->year;
+
+        $data = Cache::remember("dashboard.kpis.live.{$year}.{$month}", 60, function () use ($now, $year, $month) {
+            $invoiceStatuses = ['emise', 'envoyee', 'partiellement_payee', 'payee', 'en_retard'];
+            $prevMonth       = $now->copy()->subMonth();
+
+            $ivKpi = DB::table('invoices')
+                ->whereIn('status', $invoiceStatuses)
+                ->selectRaw("
+                    SUM(CASE WHEN DATE(issued_at) = ? THEN total_ttc ELSE 0 END)                                   AS rev_jour,
+                    SUM(CASE WHEN DATE(issued_at) = ? THEN total_ttc ELSE 0 END)                                   AS rev_prev_jour,
+                    SUM(CASE WHEN YEAR(issued_at)=? AND MONTH(issued_at)=? THEN total_ttc ELSE 0 END)              AS rev_mois,
+                    SUM(CASE WHEN YEAR(issued_at)=? AND MONTH(issued_at)=? THEN total_ttc ELSE 0 END)              AS rev_prev_mois
+                ", [
+                    $now->toDateString(),
+                    $now->copy()->subDay()->toDateString(),
+                    $year, $month,
+                    $prevMonth->year, $prevMonth->month,
+                ])->first();
+
+            $overdueKpi = DB::table('invoices')
+                ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
+                ->where('due_at', '<', now())
+                ->selectRaw('COUNT(*) as cnt, COALESCE(SUM(remaining_amount), 0) as montant')
+                ->first();
+
+            $encKpi = DB::table('client_payments')
+                ->where('status', 'confirme')
+                ->whereYear('payment_date', $year)
+                ->whereMonth('payment_date', $month)
+                ->selectRaw('COALESCE(SUM(amount), 0) AS enc_mois')
+                ->first();
+
+            $miscKpi = DB::selectOne("
+                SELECT
+                    (SELECT COUNT(*) FROM product_stocks WHERE quantity <= 0)                                    AS rupture_stock,
+                    (SELECT COALESCE(SUM(current_balance),0) FROM cash_accounts WHERE is_active=1)              AS solde_tresorerie,
+                    (SELECT COUNT(*) FROM orders WHERE status IN ('confirme','en_preparation','partiellement_livre') AND deleted_at IS NULL) AS nb_commandes
+            ");
+
+            $revJour     = (int) $ivKpi->rev_jour;
+            $prevJour    = (int) $ivKpi->rev_prev_jour;
+            $revMois     = (int) $ivKpi->rev_mois;
+            $prevMois    = (int) $ivKpi->rev_prev_mois;
+
+            return [
+                'rev_jour'          => $revJour,
+                'rev_mois'          => $revMois,
+                'enc_mois'          => (int) $encKpi->enc_mois,
+                'factures_retard'   => (int) $overdueKpi->cnt,
+                'montant_retard'    => (int) $overdueKpi->montant,
+                'rupture_stock'     => (int) $miscKpi->rupture_stock,
+                'solde_tresorerie'  => (int) $miscKpi->solde_tresorerie,
+                'nb_commandes'      => (int) $miscKpi->nb_commandes,
+                'trend_jour'        => $this->trend($revJour, $prevJour),
+                'trend_mois'        => $this->trend($revMois, $prevMois),
+                'refreshed_at'      => $now->format('H:i:s'),
+            ];
+        });
+
+        return response()->json($data);
+    }
+
     private function trend(float $current, float $previous): array
     {
         if ($previous <= 0) {

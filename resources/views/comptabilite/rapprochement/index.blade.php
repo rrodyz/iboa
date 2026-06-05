@@ -52,42 +52,42 @@
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N°</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Compte bancaire</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Période</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Date relevé</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Solde relevé</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Solde compta</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Écart</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Statut</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left">N°</th>
+                        <th class="text-left">Compte bancaire</th>
+                        <th class="text-left">Période</th>
+                        <th class="text-left">Date relevé</th>
+                        <th class="text-right">Solde relevé</th>
+                        <th class="text-right">Solde compta</th>
+                        <th class="text-right">Écart</th>
+                        <th class="text-left">Statut</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($reconciliations as $rec)
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 font-mono font-semibold text-violet-600">{{ $rec->number }}</td>
-                        <td class="px-4 py-3 text-gray-700">{{ $rec->cashAccount?->name }}</td>
-                        <td class="px-4 py-3 text-gray-500 text-xs">
+                    <tr>
+                        <td class="font-mono font-semibold text-violet-600">{{ $rec->number }}</td>
+                        <td class="text-gray-700">{{ $rec->cashAccount?->name }}</td>
+                        <td class="text-gray-500 text-xs">
                             {{ $rec->period_start?->format('d/m/Y') }} → {{ $rec->period_end?->format('d/m/Y') }}
                         </td>
-                        <td class="px-4 py-3 text-gray-700">{{ $rec->statement_date?->format('d/m/Y') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ number_format($rec->closing_balance, 0, ',', ' ') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ number_format($rec->book_balance, 0, ',', ' ') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold {{ $rec->difference == 0 ? 'text-green-600' : 'text-red-600' }}">
+                        <td class="text-gray-700">{{ $rec->statement_date?->format('d/m/Y') }}</td>
+                        <td class="text-right tabular-nums text-gray-700">{{ number_format($rec->closing_balance, 0, ',', ' ') }}</td>
+                        <td class="text-right tabular-nums text-gray-700">{{ number_format($rec->book_balance, 0, ',', ' ') }}</td>
+                        <td class="text-right tabular-nums font-semibold {{ $rec->difference == 0 ? 'text-green-600' : 'text-red-600' }}">
                             {{ $rec->difference == 0 ? '✓ 0' : number_format($rec->difference, 0, ',', ' ') }}
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             @php $colors = ['brouillon' => 'bg-gray-100 text-gray-700', 'valide' => 'bg-green-100 text-green-700']; @endphp
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $colors[$rec->status] ?? 'bg-gray-100 text-gray-700' }}">
                                 {{ $rec->statusLabel() }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="text-right">
                             <a href="{{ route('comptabilite.rapprochement.show', $rec) }}" class="text-violet-600 hover:text-violet-800 text-xs font-medium">Voir →</a>
                         </td>
                     </tr>

@@ -45,16 +45,37 @@ class IntegrationController extends Controller
     {
         $integrations = ApiIntegration::withCount(['logs', 'externalTransactions'])->get();
 
-        // 7-day activity for sparkline
-        $sevenDays = collect(range(6, 0))->map(function ($daysAgo) {
-            $date = now()->subDays($daysAgo)->format('Y-m-d');
+        // 7-day activity for sparkline — agrégé en 2 requêtes groupées (au lieu de 28)
+        $since = now()->subDays(6)->startOfDay();
+
+        $logsByDay = ApiLog::where('created_at', '>=', $since)
+            ->selectRaw('DATE(created_at) as d')
+            ->selectRaw('COUNT(*) as calls')
+            ->selectRaw('SUM(success = 1) as success')
+            ->selectRaw('SUM(success = 0) as failed')
+            ->groupBy('d')
+            ->get()
+            ->keyBy('d');
+
+        $txByDay = ExternalTransaction::where('created_at', '>=', $since)
+            ->where('status', 'confirmed')
+            ->selectRaw('DATE(created_at) as d')
+            ->selectRaw('SUM(amount) as amount')
+            ->groupBy('d')
+            ->get()
+            ->keyBy('d');
+
+        $sevenDays = collect(range(6, 0))->map(function ($daysAgo) use ($logsByDay, $txByDay) {
+            $day  = now()->subDays($daysAgo);
+            $date = $day->format('Y-m-d');
+            $l    = $logsByDay->get($date);
             return [
                 'date'    => $date,
-                'label'   => now()->subDays($daysAgo)->format('d/m'),
-                'calls'   => ApiLog::whereDate('created_at', $date)->count(),
-                'success' => ApiLog::whereDate('created_at', $date)->where('success', true)->count(),
-                'failed'  => ApiLog::whereDate('created_at', $date)->where('success', false)->count(),
-                'amount'  => (float) ExternalTransaction::whereDate('created_at', $date)->where('status', 'confirmed')->sum('amount'),
+                'label'   => $day->format('d/m'),
+                'calls'   => (int)   ($l->calls   ?? 0),
+                'success' => (int)   ($l->success ?? 0),
+                'failed'  => (int)   ($l->failed  ?? 0),
+                'amount'  => (float) ($txByDay->get($date)->amount ?? 0),
             ];
         });
 

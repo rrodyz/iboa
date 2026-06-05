@@ -35,7 +35,7 @@ use App\Services\DocumentSequenceService;
  *   7011 Ventes de marchandises       (produit)
  *   6011 Achats de marchandises       (charge)
  *   4431 TVA facturée (collectée)     (passif)
- *   4455 TVA récupérable sur achats   (actif)
+ *   4432 TVA récupérable sur achats   (actif)  — SYSCOHADA correct (4455 = État autres taxes)
  *   7085 Remises/retours sur ventes   (produit)
  *   521  Banques                      (actif)
  *   571  Caisse                       (actif)
@@ -49,7 +49,7 @@ class AccountingService
         'ventes'              => ['7011', 'Ventes de marchandises',          'produit', 7],
         'achats'              => ['6011', 'Achats de marchandises',          'charge',  6],
         'tva_collectee'       => ['4431', 'TVA facturée sur ventes',         'passif',  4],
-        'tva_deductible'      => ['4455', 'TVA récupérable sur achats',      'actif',   4],
+        'tva_deductible'      => ['4432', 'TVA récupérable sur achats',      'actif',   4],
         'retours_ventes'      => ['7085', 'Remises accordées et retours',    'produit', 7],
         'banque'              => ['521',  'Banques, chèques postaux',        'actif',   5],
         'caisse'              => ['571',  'Caisse',                          'actif',   5],
@@ -194,7 +194,7 @@ class AccountingService
     /**
      * Facture fournisseur validée.
      *   DR 6011 Achats      = HT
-     *   DR 4455 TVA déd.   = TAX (si > 0)
+     *   DR 4432 TVA déd.   = TAX (si > 0)
      *   CR 401 Fournisseurs = TTC
      */
     public function postSupplierInvoice(SupplierInvoice $invoice): ?JournalEntry
@@ -327,7 +327,7 @@ class AccountingService
      * Retour fournisseur validé.
      *   DR 401 Fournisseurs = TTC   (réduit notre dette)
      *   CR 6011 Achats      = HT
-     *   CR 4455 TVA déd.   = TAX (si > 0)
+     *   CR 4432 TVA déd.   = TAX (si > 0)
      */
     public function postSupplierReturn(SupplierReturn $return): ?JournalEntry
     {
@@ -395,7 +395,18 @@ class AccountingService
             $product = $item->product;
             if (!$product || !$product->is_stockable) continue;
 
-            $cost = (int) round((float) $item->quantity * (float) ($product->purchase_price ?? 0));
+            // [MARGES-CMP] Valoriser la sortie de stock au CMP figé sur la ligne
+            // (snapshotItemCosts s'exécute avant cette méthode), repli CMP produit
+            // puis prix d'achat. Aligne la compta sur la valorisation CMP du stock.
+            $unitCost = (float) ($item->unit_cost ?: 0);
+            if ($unitCost <= 0) {
+                $unitCost = (float) ($product->weighted_avg_cost ?: 0);
+            }
+            if ($unitCost <= 0) {
+                $unitCost = (float) ($product->purchase_price ?? 0);
+            }
+
+            $cost = (int) round((float) $item->quantity * $unitCost);
             if ($cost <= 0) continue;
 
             $accountId = $product->family?->stock_account_id ?? $defaultStockAccount->id;

@@ -408,6 +408,10 @@ class InvoiceService
             return;
         }
 
+        // [MARGES-CMP] Figer le coût unitaire (CMP) de chaque ligne au moment de la
+        // validation → marges historiques exactes, indépendantes du CMP futur.
+        $this->snapshotItemCosts($invoice);
+
         // Post to GL synchronously — must be in the same transaction
         $this->accountingService->postClientInvoice($invoice);
         // [COMPTA-STOCK] Sortie de stock automatique
@@ -415,6 +419,34 @@ class InvoiceService
 
         // Fire event — queued listener sends email after commit
         event(new InvoiceValidated($invoice));
+    }
+
+    /**
+     * [MARGES-CMP] Fige le coût unitaire de chaque ligne au CMP courant du produit
+     * (repli prix d'achat). Appelé une seule fois à la validation : le coût ne
+     * doit jamais être recalculé ensuite (marge historique stable).
+     */
+    private function snapshotItemCosts(Invoice $invoice): void
+    {
+        $invoice->loadMissing('items.product');
+
+        foreach ($invoice->items as $item) {
+            // Ne pas réécraser un snapshot déjà figé (idempotence).
+            if ((float) $item->unit_cost > 0) {
+                continue;
+            }
+            $product = $item->product;
+            if (! $product) {
+                continue;
+            }
+            $cost = (float) ($product->weighted_avg_cost ?: 0);
+            if ($cost <= 0) {
+                $cost = (float) ($product->purchase_price ?? 0);
+            }
+            if ($cost > 0) {
+                $item->updateQuietly(['unit_cost' => round($cost, 2)]);
+            }
+        }
     }
 
     /**

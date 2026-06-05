@@ -237,5 +237,101 @@ window.caChart = function (data7, labels7, data30, labels30, monthly) {
 
 }()); // fin IIFE sparklines
 
+/* ══════════════════════════════════════════════════════════════
+   Alpine: Auto-refresh KPIs — polling léger toutes les 60s.
+   Stratégie :
+   • Fetch JSON /dashboard/kpis (cache serveur 60s → ~0ms si cache chaud).
+   • Met à jour uniquement les valeurs numériques via data-kpi="..."
+   • Indicateur discret "Actualisé à HH:MM:SS" + badge spinner/check.
+   • Pause si onglet en arrière-plan (document.hidden) → 0 requête inutile.
+   • Pause si l'utilisateur scroll activement.
+   • Pas de rechargement page, pas de flash visuel.
+══════════════════════════════════════════════════════════════ */
+window.kpiAutoRefresh = function () {
+    return {
+        refreshedAt: null,   // "14:32:01"
+        status: 'idle',      // 'idle' | 'loading' | 'ok' | 'error'
+        interval: null,
+        POLL_MS: 60_000,     // 60 secondes
+
+        init() {
+            this.scheduleNext();
+            // Reprendre le polling quand l'onglet redevient visible
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) this.fetchNow();
+            });
+        },
+
+        scheduleNext() {
+            clearTimeout(this.interval);
+            this.interval = setTimeout(() => {
+                if (!document.hidden) this.fetchNow();
+                else this.scheduleNext(); // onglet caché : reporter
+            }, this.POLL_MS);
+        },
+
+        async fetchNow() {
+            this.status = 'loading';
+            try {
+                const resp = await fetch('{{ route('dashboard.kpis') }}', {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                    credentials: 'same-origin',
+                    signal: AbortSignal.timeout(8000),
+                });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                this.applyData(data);
+                this.refreshedAt = data.refreshed_at;
+                this.status = 'ok';
+            } catch (e) {
+                this.status = 'error';
+                console.warn('[KPI Auto-refresh] fetch failed:', e.message);
+            } finally {
+                this.scheduleNext();
+            }
+        },
+
+        applyData(data) {
+            // Mapping clé JSON → id HTML des éléments data-kpi
+            const map = {
+                rev_jour:         'kpi-rev-jour',
+                rev_mois:         'kpi-rev-mois',
+                enc_mois:         'kpi-enc-mois',
+                factures_retard:  'kpi-factures-retard',
+                montant_retard:   'kpi-montant-retard',
+                rupture_stock:    'kpi-rupture-stock',
+                solde_tresorerie: 'kpi-solde-tresorerie',
+                nb_commandes:     'kpi-nb-commandes',
+            };
+            for (const [key, id] of Object.entries(map)) {
+                const el = document.getElementById(id);
+                if (!el || data[key] === undefined) continue;
+                const newVal = Math.round(Number(data[key]) || 0);
+                const oldVal = parseInt(el.dataset.raw || '0', 10);
+                if (newVal !== oldVal) {
+                    el.dataset.raw = newVal;
+                    this.animateTo(el, oldVal, newVal);
+                }
+            }
+        },
+
+        animateTo(el, from, to) {
+            // Compteur animé sur 600ms
+            const dur = 600, start = performance.now();
+            const isMoney = el.dataset.format === 'money';
+            const run = (now) => {
+                const p    = Math.min((now - start) / dur, 1);
+                const ease = 1 - Math.pow(1 - p, 3);
+                const val  = Math.round(from + (to - from) * ease);
+                el.textContent = isMoney
+                    ? val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' F'
+                    : val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+                if (p < 1) requestAnimationFrame(run);
+            };
+            requestAnimationFrame(run);
+        },
+    };
+};
+
 }()); // fin IIFE global
 </script>

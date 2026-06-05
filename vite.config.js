@@ -9,13 +9,26 @@ export default defineConfig(({ command }) => ({
         }),
     ],
     build: {
-        // Minification agressive en production
+        // Cible ES2020 : navigateurs modernes = bundle 5-8% plus léger (no legacy polyfills)
+        target: 'es2020',
+        // Minification agressive en production (esbuild = 20× plus rapide que terser)
         minify: 'esbuild',
+        esbuildOptions: {
+            // Supprime console.log en prod (hors console.error/warn)
+            drop: ['debugger'],
+            // Pure annotations pour tree-shaking agressif
+            pure: ['console.log', 'console.info', 'console.debug'],
+        },
         // Pas de sourcemaps en production (réduit la taille ~30%)
         sourcemap: false,
         // Seuil d'avertissement chunk (1 Mo)
         chunkSizeWarningLimit: 1024,
         rollupOptions: {
+            treeshake: {
+                // [PERF] Supprime les exports non utilisés dans les librairies
+                moduleSideEffects: 'no-external',
+                preset: 'smallest',
+            },
             output: {
                 // Code splitting : sépare les vendors des scripts page
                 manualChunks(id) {
@@ -25,6 +38,10 @@ export default defineConfig(({ command }) => ({
                 },
             },
         },
+    },
+    // Optimise les dépendances en mode dev (pre-bundle = démarrage rapide)
+    optimizeDeps: {
+        include: ['alpinejs', 'apexcharts', '@hotwired/turbo'],
     },
     // Compression CSS (supprime commentaires, espaces)
     css: {

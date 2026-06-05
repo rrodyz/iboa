@@ -4,42 +4,43 @@
 <meta charset="UTF-8"/>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: DejaVu Sans, sans-serif; font-size: 9pt; color: #111827; }
+body { font-family: DejaVu Sans, sans-serif; font-size: 8.5pt; color: #111827; }
 
-.page { padding: 10mm 12mm; max-width: 148mm; margin: 0 auto; }
+/* ── [FIT-A5] Marges resserrées pour tenir sur une seule feuille A5 ── */
+.page { padding: 7mm 10mm; max-width: 148mm; margin: 0 auto; }
 
 /* ── En-tête société ── */
-.header { display: table; width: 100%; margin-bottom: 6mm; }
+.header { display: table; width: 100%; margin-bottom: 4mm; }
 .h-logo { display: table-cell; vertical-align: top; width: 55%; }
-.h-logo .company-name { font-size: 13pt; font-weight: bold; color: #065F46; }
-.h-logo .company-sub  { font-size: 8pt; color: #6B7280; margin-top: 2px; }
-.h-right { display: table-cell; vertical-align: top; text-align: right; font-size: 8pt; color: #374151; }
+.h-logo .company-name { font-size: 11pt; font-weight: bold; color: #065F46; }
+.h-logo .company-sub  { font-size: 7.5pt; color: #6B7280; margin-top: 1px; }
+.h-right { display: table-cell; vertical-align: top; text-align: right; font-size: 7.5pt; color: #374151; }
 
 /* ── Titre reçu ── */
 .receipt-title {
     background: #065F46;
     color: #fff;
     text-align: center;
-    padding: 5px 0;
-    font-size: 13pt;
+    padding: 4px 0;
+    font-size: 11pt;
     font-weight: bold;
     letter-spacing: 1px;
-    margin-bottom: 5mm;
+    margin-bottom: 3.5mm;
     border-radius: 3px;
 }
 .receipt-subtitle {
     text-align: center;
-    font-size: 9pt;
+    font-size: 8pt;
     color: #6B7280;
-    margin-bottom: 5mm;
+    margin-bottom: 3.5mm;
 }
 
 /* ── Bloc principal ── */
-.info-grid { display: table; width: 100%; margin-bottom: 5mm; }
-.info-col  { display: table-cell; width: 50%; vertical-align: top; padding-right: 5mm; }
-.info-col:last-child { padding-right: 0; padding-left: 5mm; }
-.info-label { font-size: 7.5pt; color: #6B7280; margin-bottom: 1px; }
-.info-value { font-size: 9pt; font-weight: bold; color: #111827; }
+.info-grid { display: table; width: 100%; margin-bottom: 3.5mm; }
+.info-col  { display: table-cell; width: 50%; vertical-align: top; padding-right: 4mm; }
+.info-col:last-child { padding-right: 0; padding-left: 4mm; }
+.info-label { font-size: 7pt; color: #6B7280; margin-bottom: 1px; }
+.info-value { font-size: 8.5pt; font-weight: bold; color: #111827; }
 
 /* ── Montant principal ── */
 .amount-block {
@@ -47,18 +48,18 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9pt; color: #111827; }
     border: 2px solid #34D399;
     border-radius: 5px;
     text-align: center;
-    padding: 6mm 4mm;
-    margin-bottom: 5mm;
+    padding: 3.5mm 4mm;
+    margin-bottom: 3.5mm;
 }
-.amount-label { font-size: 8pt; color: #065F46; margin-bottom: 2px; }
-.amount-value { font-size: 22pt; font-weight: bold; color: #065F46; }
-.amount-letters { font-size: 8pt; color: #047857; font-style: italic; margin-top: 2px; }
+.amount-label { font-size: 7.5pt; color: #065F46; margin-bottom: 1px; }
+.amount-value { font-size: 18pt; font-weight: bold; color: #065F46; }
+.amount-letters { font-size: 7.5pt; color: #047857; font-style: italic; margin-top: 1px; }
 
 /* ── Mode de paiement ── */
-.pm-block { text-align: center; margin-bottom: 5mm; }
+.pm-block { text-align: center; margin-bottom: 3.5mm; }
 .pm-badge {
-    display: inline-block; padding: 3px 10px; border-radius: 20px;
-    font-size: 9pt; font-weight: bold;
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 8.5pt; font-weight: bold;
 }
 .pm-especes      { background: #F3F4F6; color: #374151; }
 .pm-virement     { background: #DBEAFE; color: #1E40AF; }
@@ -67,30 +68,30 @@ body { font-family: DejaVu Sans, sans-serif; font-size: 9pt; color: #111827; }
 .pm-default      { background: #E5E7EB; color: #374151; }
 
 /* ── Tableau des factures lettrées ── */
-.alloc-title { font-size: 8.5pt; font-weight: bold; color: #065F46; margin-bottom: 2mm; border-bottom: 1px solid #D1FAE5; padding-bottom: 1mm; }
-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 5mm; }
+.alloc-title { font-size: 8pt; font-weight: bold; color: #065F46; margin-bottom: 1.5mm; border-bottom: 1px solid #D1FAE5; padding-bottom: 0.5mm; }
+table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-bottom: 3.5mm; }
 thead tr { background: #D1FAE5; }
-th { padding: 3px 5px; font-weight: bold; font-size: 7.5pt; text-align: left; }
+th { padding: 2.5px 4px; font-weight: bold; font-size: 7pt; text-align: left; }
 th.r { text-align: right; }
 tbody tr { border-bottom: 0.5px solid #D1FAE5; }
-td { padding: 2.5px 5px; }
+td { padding: 2px 4px; }
 td.r { text-align: right; font-variant-numeric: tabular-nums; }
-tfoot td { font-weight: bold; padding: 3px 5px; border-top: 1px solid #065F46; }
+tfoot td { font-weight: bold; padding: 2.5px 4px; border-top: 1px solid #065F46; }
 tfoot td.r { text-align: right; }
 
 /* ── Solde non imputé ── */
-.unalloc { background: #FEF9C3; border: 1px solid #FCD34D; border-radius: 3px; padding: 3mm 4mm; font-size: 8pt; margin-bottom: 5mm; color: #92400E; }
+.unalloc { background: #FEF9C3; border: 1px solid #FCD34D; border-radius: 3px; padding: 2mm 3mm; font-size: 7.5pt; margin-bottom: 3.5mm; color: #92400E; }
 
 /* ── Signature ── */
-.sig-block { display: table; width: 100%; margin-top: 6mm; }
+.sig-block { display: table; width: 100%; margin-top: 4mm; }
 .sig-cell  { display: table-cell; width: 50%; }
-.sig-label { font-size: 7.5pt; color: #6B7280; margin-bottom: 8mm; }
+.sig-label { font-size: 7pt; color: #6B7280; margin-bottom: 6mm; }
 .sig-line  { border-top: 1px solid #9CA3AF; width: 80%; }
 
 /* ── Pied de page ── */
-.footer { border-top: 1px solid #D1FAE5; margin-top: 5mm; padding-top: 2mm; font-size: 7pt; color: #9CA3AF; text-align: center; }
+.footer { border-top: 1px solid #D1FAE5; margin-top: 4mm; padding-top: 2mm; font-size: 6.5pt; color: #9CA3AF; text-align: center; }
 
-.acompte-tag { background: #FEF3C7; color: #92400E; font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 3mm; }
+.acompte-tag { background: #FEF3C7; color: #92400E; font-size: 7.5pt; font-weight: bold; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-bottom: 2.5mm; }
 </style>
 </head>
 <body>

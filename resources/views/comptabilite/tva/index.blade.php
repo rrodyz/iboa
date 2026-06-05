@@ -52,45 +52,45 @@
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N°</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Période</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Type</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">TVA Collectée</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">TVA Déductible</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">TVA Due</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Reste à payer</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Statut</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left">N°</th>
+                        <th class="text-left">Période</th>
+                        <th class="text-left">Type</th>
+                        <th class="text-right">TVA Collectée</th>
+                        <th class="text-right">TVA Déductible</th>
+                        <th class="text-right">TVA Due</th>
+                        <th class="text-right">Reste à payer</th>
+                        <th class="text-left">Statut</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($declarations as $d)
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3 font-mono font-semibold text-violet-600">{{ $d->number }}</td>
-                        <td class="px-4 py-3">
+                    <tr>
+                        <td class="font-mono font-semibold text-violet-600">{{ $d->number }}</td>
+                        <td>
                             <p class="font-medium text-gray-800">{{ $d->period_label }}</p>
                             <p class="text-xs text-gray-400">{{ $d->period_start?->format('d/m/Y') }} → {{ $d->period_end?->format('d/m/Y') }}</p>
                         </td>
-                        <td class="px-4 py-3 text-gray-500 capitalize">{{ $d->period_type }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ number_format($d->tva_collectee, 0, ',', ' ') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ number_format($d->tva_deductible, 0, ',', ' ') }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold {{ $d->tva_due > 0 ? 'text-red-600' : 'text-gray-400' }}">
+                        <td class="text-gray-500 capitalize">{{ $d->period_type }}</td>
+                        <td class="text-right tabular-nums text-gray-700">{{ number_format($d->tva_collectee, 0, ',', ' ') }}</td>
+                        <td class="text-right tabular-nums text-gray-700">{{ number_format($d->tva_deductible, 0, ',', ' ') }}</td>
+                        <td class="text-right tabular-nums font-semibold {{ $d->tva_due > 0 ? 'text-red-600' : 'text-gray-400' }}">
                             {{ $d->tva_due > 0 ? number_format($d->tva_due, 0, ',', ' ') : '—' }}
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums font-semibold {{ $d->remaining > 0 ? 'text-orange-600' : 'text-green-600' }}">
+                        <td class="text-right tabular-nums font-semibold {{ $d->remaining > 0 ? 'text-orange-600' : 'text-green-600' }}">
                             {{ $d->remaining > 0 ? number_format($d->remaining, 0, ',', ' ') : '✓ 0' }}
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             @php $colors = ['brouillon' => 'bg-gray-100 text-gray-700', 'soumis' => 'bg-blue-100 text-blue-700', 'paye' => 'bg-green-100 text-green-700']; @endphp
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $colors[$d->status] ?? 'bg-gray-100 text-gray-700' }}">
                                 {{ $d->statusLabel() }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="text-right">
                             <a href="{{ route('comptabilite.tva.show', $d) }}" class="text-violet-600 hover:text-violet-800 text-xs font-medium">Voir →</a>
                         </td>
                     </tr>

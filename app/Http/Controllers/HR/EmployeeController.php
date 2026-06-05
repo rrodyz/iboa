@@ -11,6 +11,7 @@ use App\Models\EmployeeContract;
 use App\Models\PayrollAllowanceType;
 use App\Models\PayrollSetting;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -319,7 +320,7 @@ class EmployeeController extends Controller
     {
         $company = currentCompany();
 
-        $query = \App\Models\EmployeeContract::with('employee')
+        $query = \App\Models\EmployeeContract::with('employee.department')
             ->whereHas('employee', fn($q) => $q->where('company_id', $company->id))
             ->when($request->status, fn($q, $s) => $q->where('status', $s))
             ->when($request->type,   fn($q, $t) => $q->where('type', $t))
@@ -374,6 +375,30 @@ class EmployeeController extends Controller
         $employe->contracts()->create(array_merge($data, ['status' => 'actif']));
 
         return redirect()->route('rh.contrats.index')->with('success', 'Contrat ajouté avec succès.');
+    }
+
+    /**
+     * Générer le PDF du contrat de travail (CDI/CDD — conforme Code Travail BF).
+     */
+    public function contractPdf(\App\Models\EmployeeContract $contract)
+    {
+        $employee = $contract->employee()->with('department')->firstOrFail();
+        $company  = currentCompany();
+
+        // Sécurité : contrat appartient bien à la société courante
+        abort_if($employee->company_id !== $company->id, 403);
+
+        $pdf = Pdf::loadView('rh.contrats.pdf', [
+            'contract' => $contract,
+            'employee' => $employee,
+            'company'  => $company,
+        ])->setPaper('a4', 'portrait');
+
+        $filename = 'Contrat_'.$contract->type.'_'
+            .str_replace(' ', '_', $employee->full_name).'_'
+            .$contract->start_date->format('Y-m-d').'.pdf';
+
+        return $pdf->download($filename);
     }
 
     public function terminateContract(\App\Models\EmployeeContract $contract)

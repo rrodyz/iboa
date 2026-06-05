@@ -39,18 +39,6 @@
         @endif
     </div>
 
-    {{-- Errors --}}
-    @if($errors->any())
-        <div class="bg-red-50 border border-red-200 rounded-xl p-4">
-            <p class="text-sm font-semibold text-red-700 mb-2">Veuillez corriger les erreurs suivantes :</p>
-            <ul class="list-disc list-inside text-sm text-red-700 space-y-1">
-                @foreach($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
-            </ul>
-        </div>
-    @endif
-
     {{-- Production warning --}}
     <div x-show="mode === 'production'" x-transition
          class="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
@@ -241,7 +229,8 @@
                 </a>
                 @if($integration->exists)
                 <form method="POST" action="{{ route('integrations.destroy', $integration) }}"
-                    onsubmit="return confirm('Supprimer définitivement cette intégration ?')">
+                    data-confirm="Supprimer définitivement cette intégration ? Les clés API et l'historique seront perdus."
+                    data-confirm-title="Supprimer l'intégration">
                     @csrf @method('DELETE')
                     <button type="submit" class="text-sm text-red-600 hover:text-red-800 font-medium">Supprimer</button>
                 </form>

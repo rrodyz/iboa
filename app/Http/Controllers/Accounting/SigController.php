@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FiscalYear;
 use App\Services\SigService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
 class SigController extends Controller
@@ -23,6 +24,10 @@ class SigController extends Controller
             ?: optional($fiscalYears->first())->id;
 
         $fiscalYear = $fyId ? FiscalYear::find($fyId) : null;
+        $companyId  = Auth::user()->company_id;
+        if ($fiscalYear && $fiscalYear->company_id !== null && $fiscalYear->company_id !== $companyId) {
+            $fiscalYear = null;
+        }
         $sig = $fiscalYear ? $this->sigService->compute($fiscalYear) : null;
 
         return view('comptabilite.rapports.sig', compact('fiscalYears', 'fiscalYear', 'sig'));

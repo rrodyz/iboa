@@ -50,12 +50,10 @@ class PayrollRunController extends Controller
             ->when($filters['status'] ?? null, fn($q) => $q->where('status', $filters['status']));
 
         $summary = [
-            'total_brut'          => (int) $summaryQuery->sum('total_brut'),
+            'total_brut'          => (int) (clone $summaryQuery)->sum('total_brut'),
             'total_net'           => (int) (clone $summaryQuery)->sum('total_net'),
             'total_cnss_employee' => (int) (clone $summaryQuery)->sum('total_cnss_employee'),
             'total_iuts'          => (int) (clone $summaryQuery)->sum('total_iuts'),
-            'count_valide'        => (int) (clone $summaryQuery)->where('status', 'valide')->count(),
-            'count_paye'          => (int) (clone $summaryQuery)->where('status', 'paye')->count(),
         ];
 
         return view('rh.paie.index', compact('runs', 'filters', 'years', 'summary'));

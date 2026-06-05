@@ -22,6 +22,11 @@ class RhDashboardController extends Controller
         $totalSuspendu = Employee::where('company_id', $company->id)->where('status', 'suspendu')->count();
         $totalSorties  = Employee::where('company_id', $company->id)->whereIn('status', ['licencie','demissionne'])->count();
 
+        // ─── Bulletins générés cette année ─────────────────────────────────────
+        $bulletinsAnnee = PayrollRun::where('company_id', $company->id)
+            ->whereYear('created_at', now()->year)
+            ->count();
+
         // ─── Masse salariale (dernier bulletin validé ou payé) ─────────────────
         $lastRun = PayrollRun::where('company_id', $company->id)
             ->whereIn('status', ['valide', 'paye', 'calcule'])
@@ -76,7 +81,7 @@ class RhDashboardController extends Controller
             ->pluck('nb', 'category');
 
         return view('rh.dashboard', compact(
-            'totalActif', 'totalSuspendu', 'totalSorties',
+            'totalActif', 'totalSuspendu', 'totalSorties', 'bulletinsAnnee',
             'lastRun', 'evolution', 'byDept',
             'pendingLeaves', 'pendingAdvances', 'byCategory'
         ));

@@ -22,11 +22,14 @@ Route::get('/', function () {
  * ── Vérification publique de facture (URL signée, aucune auth requise) ──────
  * Accessible via le QR code imprimé sur la facture PDF.
  */
-Route::get('/verifier/facture/{number}', \App\Http\Controllers\Sales\InvoiceVerifyController::class)
-    ->name('invoice.verify');
+// Rate limited: 30 req/min par IP — prévient l'énumération des numéros de documents
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/verifier/facture/{number}', \App\Http\Controllers\Sales\InvoiceVerifyController::class)
+        ->name('invoice.verify');
 
-Route::get('/verifier/bon-livraison/{number}', \App\Http\Controllers\Sales\DeliveryNoteVerifyController::class)
-    ->name('delivery-note.verify');
+    Route::get('/verifier/bon-livraison/{number}', \App\Http\Controllers\Sales\DeliveryNoteVerifyController::class)
+        ->name('delivery-note.verify');
+});
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -35,6 +38,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Endpoint JSON polling — actualisation automatique KPIs (60s cache)
+    Route::get('/dashboard/kpis', [DashboardController::class, 'kpisJson'])->name('dashboard.kpis');
 
     // ── Users (users.manage) ────────────────────────────────────────────────────
     Route::middleware('permission:users.manage')->group(function () {
@@ -125,7 +130,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('quick/units',    [\App\Http\Controllers\UnitController::class, 'quickStore'])->name('quick.units.store');
 
         // ── Rapports & BI ────────────────────────────────────────────────────────
-        Route::prefix('reports')->name('reports.')->group(function () {
+        // [SECU] Données financières (CA, marges, perf) → réservées à reports.view
+        // (le groupe parent products.view ne suffit pas : un magasinier ne doit pas
+        //  voir les revenus/marges).
+        Route::middleware('permission:reports.view')->prefix('reports')->name('reports.')->group(function () {
             Route::get('/',                      [\App\Http\Controllers\ReportController::class, 'index'])->name('index');
             Route::get('/ca',                    [\App\Http\Controllers\ReportController::class, 'ca'])->name('ca');
             Route::get('/ca/pdf',                [\App\Http\Controllers\ReportController::class, 'caPdf'])->name('ca-pdf');
@@ -919,6 +927,12 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
             Route::put('/{rubric}',    [\App\Http\Controllers\HR\PayRubricController::class, 'update'])->name('update');
             Route::delete('/{rubric}', [\App\Http\Controllers\HR\PayRubricController::class, 'destroy'])->name('destroy');
         });
+        Route::prefix('types-primes')->name('types-primes.')->group(function () {
+            Route::get('/',       [\App\Http\Controllers\HR\AllowanceTypeController::class, 'index'])->name('index');
+            Route::post('/',      [\App\Http\Controllers\HR\AllowanceTypeController::class, 'store'])->name('store');
+            Route::put('/{type}', [\App\Http\Controllers\HR\AllowanceTypeController::class, 'update'])->name('update');
+            Route::delete('/{type}', [\App\Http\Controllers\HR\AllowanceTypeController::class, 'destroy'])->name('destroy');
+        });
         Route::prefix('plans')->name('plans.')->group(function () {
             Route::get('/',                  [\App\Http\Controllers\HR\PayrollPlanController::class, 'index'])->name('index');
             Route::get('/creer',             [\App\Http\Controllers\HR\PayrollPlanController::class, 'create'])->name('create');
@@ -1008,6 +1022,7 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::get('/contrats',                    [\App\Http\Controllers\HR\EmployeeController::class, 'contracts'])->name('contrats.index');
         Route::get('/contrats/export',             [\App\Http\Controllers\HR\EmployeeController::class, 'exportContracts'])->name('contrats.export');
         Route::post('/contrats/store',             [\App\Http\Controllers\HR\EmployeeController::class, 'storeContractDirect'])->name('contrats.store');
+        Route::get('/contrats/{contract}/pdf',     [\App\Http\Controllers\HR\EmployeeController::class, 'contractPdf'])->name('contrats.pdf');
         Route::patch('/contrats/{contract}/terminate', [\App\Http\Controllers\HR\EmployeeController::class, 'terminateContract'])->name('contrats.terminate');
         Route::patch('/contrats/{contract}/resilier',  [\App\Http\Controllers\HR\EmployeeController::class, 'resilierContract'])->name('contrats.resilier');
         Route::delete('/contrats/{contract}',          [\App\Http\Controllers\HR\EmployeeController::class, 'destroyContract'])->name('contrats.destroy');
@@ -1050,45 +1065,48 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
 
 // ── [MODULE INTÉGRATIONS EXTERNES] ───────────────────────────────────────────
 // Webhooks publics (pas d'auth — reçoivent les callbacks des providers)
-Route::prefix('integrations/webhooks')->name('integrations.webhooks.')->group(function () {
+// Rate limited: 120 req/min par IP (DOS protection)
+Route::middleware(['throttle:webhooks'])->prefix('integrations/webhooks')->name('integrations.webhooks.')->group(function () {
     Route::post('/orange-money', [\App\Http\Controllers\Integrations\WebhookController::class, 'orangeMoney'])->name('orange-money');
     Route::post('/moov-money',   [\App\Http\Controllers\Integrations\WebhookController::class, 'moovMoney'])->name('moov-money');
 });
 
 Route::middleware(['auth', 'verified'])->prefix('integrations')->name('integrations.')->group(function () {
-    $ctrl = \App\Http\Controllers\Integrations\IntegrationController::class;
-
-    // ── Listings
-    Route::get('/',              [$ctrl, 'index'])->name('index');
-    Route::get('/dashboard',     [$ctrl, 'dashboard'])->name('dashboard');
-    Route::get('/transactions',  [$ctrl, 'transactions'])->name('transactions');
-    Route::get('/logs',          [$ctrl, 'allLogs'])->name('logs');
-
-    // ── CRUD
-    Route::get('/create',        [$ctrl, 'create'])->name('create');
-    Route::post('/',             [$ctrl, 'store'])->name('store');
-    Route::get('/{integration}',      [$ctrl, 'show'])->name('show');
-    Route::get('/{integration}/edit', [$ctrl, 'edit'])->name('edit');
-    Route::put('/{integration}',      [$ctrl, 'update'])->name('update');
-    Route::delete('/{integration}',   [$ctrl, 'destroy'])->name('destroy');
-
-    // ── Actions
-    Route::post('/{integration}/toggle',       [$ctrl, 'toggle'])->name('toggle');
-    Route::post('/{integration}/test',         [$ctrl, 'test'])->name('test');
-    Route::post('/{integration}/ping',         [$ctrl, 'ping'])->name('ping');       // AJAX → JSON
-    Route::get('/{integration}/simulate',      [$ctrl, 'simulate'])->name('simulate');
-    Route::post('/{integration}/simulate',     [$ctrl, 'simulateSend'])->name('simulate.send');
-
-    // ── Transaction actions
-    Route::post('/transactions/{transaction}/retry', [$ctrl, 'retryTransaction'])->name('transactions.retry');
-
-    // ── Export fiscal DGI Burkina Faso
+    $ctrl  = \App\Http\Controllers\Integrations\IntegrationController::class;
     $fctrl = \App\Http\Controllers\Integrations\FiscalExportController::class;
-    Route::get( '/{integration}/fiscal',                [$fctrl, 'index'])->name('fiscal.index');
-    Route::post('/{integration}/fiscal/tva',            [$fctrl, 'exportTva'])->name('fiscal.tva');
-    Route::post('/{integration}/fiscal/factures',       [$fctrl, 'exportInvoices'])->name('fiscal.factures');
-    Route::post('/{integration}/fiscal/journal',        [$fctrl, 'exportJournal'])->name('fiscal.journal');
-    Route::post('/{integration}/fiscal/declarer',       [$fctrl, 'declareTva'])->name('fiscal.declarer');
+
+    // ── Lecture (intégrations, transactions, logs, export fiscal) ──────────────
+    Route::middleware('permission:integrations.view')->group(function () use ($ctrl, $fctrl) {
+        Route::get('/',              [$ctrl, 'index'])->name('index');
+        Route::get('/dashboard',     [$ctrl, 'dashboard'])->name('dashboard');
+        Route::get('/transactions',  [$ctrl, 'transactions'])->name('transactions');
+        Route::get('/logs',          [$ctrl, 'allLogs'])->name('logs');
+        Route::get('/create',        [$ctrl, 'create'])->name('create');
+        Route::get('/{integration}',          [$ctrl, 'show'])->name('show');
+        Route::get('/{integration}/edit',     [$ctrl, 'edit'])->name('edit');
+        Route::get('/{integration}/simulate', [$ctrl, 'simulate'])->name('simulate');
+        Route::get('/{integration}/fiscal',   [$fctrl, 'index'])->name('fiscal.index');
+    });
+
+    // ── Gestion (clés API, CRUD, actions techniques) ──────────────────────────
+    Route::middleware('permission:integrations.manage')->group(function () use ($ctrl) {
+        Route::post('/',                  [$ctrl, 'store'])->name('store');
+        Route::put('/{integration}',      [$ctrl, 'update'])->name('update');
+        Route::delete('/{integration}',   [$ctrl, 'destroy'])->name('destroy');
+        Route::post('/{integration}/toggle',   [$ctrl, 'toggle'])->name('toggle');
+        Route::post('/{integration}/test',     [$ctrl, 'test'])->name('test');
+        Route::post('/{integration}/ping',     [$ctrl, 'ping'])->name('ping');       // AJAX → JSON
+        Route::post('/{integration}/simulate', [$ctrl, 'simulateSend'])->name('simulate.send');
+        Route::post('/transactions/{transaction}/retry', [$ctrl, 'retryTransaction'])->name('transactions.retry');
+    });
+
+    // ── Déclarations fiscales DGI Burkina Faso (envoi à l'administration) ──────
+    Route::middleware('permission:integrations.declare')->group(function () use ($fctrl) {
+        Route::post('/{integration}/fiscal/tva',      [$fctrl, 'exportTva'])->name('fiscal.tva');
+        Route::post('/{integration}/fiscal/factures', [$fctrl, 'exportInvoices'])->name('fiscal.factures');
+        Route::post('/{integration}/fiscal/journal',  [$fctrl, 'exportJournal'])->name('fiscal.journal');
+        Route::post('/{integration}/fiscal/declarer', [$fctrl, 'declareTva'])->name('fiscal.declarer');
+    });
 });
 
 // ── [CONCURRENCE-MULTI-USER] Edit Locks ──────────────────────────────────────
@@ -1138,7 +1156,7 @@ Route::middleware(['auth', 'verified'])->prefix('exports')->name('exports.')->gr
 Route::middleware(['auth', 'verified'])->get('/search', [\App\Http\Controllers\SearchController::class, 'search'])->name('search');
 
 // ── CRM ───────────────────────────────────────────────────────────────────────
-Route::middleware(['auth', 'verified'])->prefix('crm')->name('crm.')->group(function () {
+Route::middleware(['auth', 'verified', 'permission:clients.view|sales.view_all|quotes.view'])->prefix('crm')->name('crm.')->group(function () {
 
     // Dashboard
     Route::get('/', [\App\Http\Controllers\Crm\DashboardController::class, 'index'])->name('dashboard');

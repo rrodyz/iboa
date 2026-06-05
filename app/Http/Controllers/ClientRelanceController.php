@@ -132,12 +132,29 @@ class ClientRelanceController extends Controller
             'mise_en_demeure'  => 'Mise en demeure',
         ];
 
-        if (!$client->email) {
-            return back()->with('error', 'Ce client n\'a pas d\'adresse email renseignée.');
+        // Collecter tous les destinataires : email principal + contacts recevant les factures
+        $additionalContacts = $client->contacts
+            ->where('receives_invoices', true)
+            ->whereNotNull('email')
+            ->filter(fn ($c) => $c->email !== $client->email); // éviter doublon si même adresse
+
+        $hasRecipient = $client->email || $additionalContacts->isNotEmpty();
+
+        if (! $hasRecipient) {
+            return back()->with('error',
+                'Ce client n\'a pas d\'adresse email renseignée et aucun contact ne reçoit les factures.'
+            );
         }
 
         $invoiceNumbers = $invoices->pluck('number')->join(', ');
         $totalDu        = (float) $invoices->sum('remaining_amount');
+
+        // Construire la liste des destinataires pour le log
+        $recipientList = collect();
+        if ($client->email) {
+            $recipientList->push($client->email);
+        }
+        $additionalContacts->each(fn ($c) => $recipientList->push("{$c->fullName()} <{$c->email}>"));
 
         // [PERF-C1] Dispatch asynchronously — the job handles all recipients + logging.
         SendRelanceEmailJob::dispatch(
@@ -155,7 +172,7 @@ class ClientRelanceController extends Controller
             'type'        => 'relance',
             'occurred_at' => now(),
             'subject'     => $typeLabels[$request->type].' — '.$invoiceNumbers,
-            'notes'       => 'Email planifié vers : '.$client->email
+            'notes'       => 'Email planifié vers : '.$recipientList->join(', ')
                              .($request->message ? "\n\nMessage : ".$request->message : '')
                              ."\n\nFactures : ".$invoiceNumbers,
             'outcome'     => 'neutre',
@@ -166,6 +183,8 @@ class ClientRelanceController extends Controller
             }),
         ]);
 
-        return back()->with('success', "Relance programmée pour {$client->displayName()} — {$invoiceNumbers}.");
+        $recipientCount = $recipientList->count();
+        $suffix = $recipientCount > 1 ? " ({$recipientCount} destinataires)" : '';
+        return back()->with('success', "Relance programmée pour {$client->displayName()} — {$invoiceNumbers}{$suffix}.");
     }
 }

@@ -76,10 +76,13 @@
                    class="text-violet-600 hover:text-violet-800 font-medium text-xs underline ml-2">Voir</a>
                 @can('accounting.validate')
                 @if($entry->isBalanced())
-                <form method="POST" action="{{ route('comptabilite.journaux.validate', $entry) }}" class="inline">
+                <form method="POST" action="{{ route('comptabilite.journaux.validate', $entry) }}" class="inline"
+                      data-confirm="Valider l'écriture {{ $entry->number }} ? Cette action est irréversible."
+                      data-confirm-title="Valider l'écriture"
+                      data-confirm-label="Valider"
+                      data-confirm-danger="false">
                     @csrf
                     <button type="submit"
-                            onclick="return confirm('Valider cette écriture ?')"
                             class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1 rounded-lg transition-colors">
                         Valider
                     </button>

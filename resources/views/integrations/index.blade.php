@@ -21,11 +21,13 @@
                class="border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium px-3 py-2 rounded-lg">
                 Tableau de bord
             </a>
+            @can('integrations.manage')
             <a href="{{ route('integrations.create') }}"
                class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg flex items-center gap-1.5">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 Nouvelle intégration
             </a>
+            @endcan
         </div>
     </div>
 
@@ -45,16 +47,6 @@
         @endforeach
     </div>
 
-    {{-- Flash --}}
-    @if(session('success'))
-        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
-            <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-            {{ session('success') }}
-        </div>
-    @endif
-    @if(session('error'))
-        <div class="bg-red-50 border border-red-200 text-red-800 rounded-lg px-4 py-3 text-sm">{{ session('error') }}</div>
-    @endif
 
     {{-- Grid grouped by type --}}
     @if($integrations->isEmpty())
@@ -66,10 +58,12 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-900">Aucune intégration configurée</h3>
         <p class="text-sm text-gray-500 mt-1">Connectez votre ERP aux services de paiement, SMS et plus.</p>
+        @can('integrations.manage')
         <a href="{{ route('integrations.create') }}" class="inline-flex items-center gap-2 mt-4 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             Créer la première intégration
         </a>
+        @endcan
     </div>
     @else
 
@@ -139,6 +133,7 @@
                 <div class="bg-gray-50 border-t border-gray-100 px-4 py-2.5 flex items-center gap-2">
                     <a href="{{ route('integrations.show', $intg) }}"
                        class="text-xs text-gray-600 hover:text-gray-900 font-medium">Détails</a>
+                    @can('integrations.manage')
                     <span class="text-gray-200">|</span>
                     <a href="{{ route('integrations.edit', $intg) }}"
                        class="text-xs text-gray-600 hover:text-gray-900 font-medium">Modifier</a>
@@ -161,6 +156,7 @@
                             </button>
                         </form>
                     </div>
+                    @endcan
                 </div>
             </div>
             @endforeach

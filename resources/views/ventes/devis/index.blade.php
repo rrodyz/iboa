@@ -101,23 +101,23 @@
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Numéro</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Client</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Validité</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Montant TTC</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left">Numéro</th>
+                        <th class="text-left">Client</th>
+                        <th class="text-left hidden md:table-cell">Date</th>
+                        <th class="text-left hidden lg:table-cell">Validité</th>
+                        <th class="text-right">Montant TTC</th>
+                        <th class="text-center">Statut</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($quotes as $quote)
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3">
+                    <tr>
+                        <td>
                             <a href="{{ route('ventes.devis.show', $quote) }}"
                                class="font-mono font-semibold text-blue-600 hover:text-blue-800">
                                 {{ $quote->number }}
@@ -126,16 +126,16 @@
                             <p class="text-xs text-gray-400">{{ $quote->reference }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             <span class="font-medium text-gray-900">{{ $quote->client?->name ?? '—' }}</span>
                             @if($quote->client?->trade_name)
                             <p class="text-xs text-gray-400">{{ $quote->client->trade_name }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-gray-600 hidden md:table-cell">
+                        <td class="text-gray-600 hidden md:table-cell">
                             {{ $quote->issued_at?->format('d/m/Y') ?? '—' }}
                         </td>
-                        <td class="px-4 py-3 hidden lg:table-cell">
+                        <td class="hidden lg:table-cell">
                             @if($quote->expires_at)
                                 <span class="{{ $quote->expires_at->isPast() && !in_array($quote->status, ['accepte','annule']) ? 'text-red-600 font-medium' : 'text-gray-600' }}">
                                     {{ $quote->expires_at->format('d/m/Y') }}
@@ -144,13 +144,13 @@
                                 <span class="text-gray-400">—</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
+                        <td class="text-right font-semibold tabular-nums text-gray-900">
                             {{ number_format($quote->total_ttc, 0, ',', ' ') }} FCFA
                         </td>
-                        <td class="px-4 py-3 text-center">
+                        <td class="text-center">
                             <x-workflow.status-badge :status="$quote->status" :label="$quote->status_label" size="sm" />
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             <div class="flex items-center justify-end gap-1">
                                 {{-- Voir --}}
                                 <a href="{{ route('ventes.devis.show', $quote) }}"
@@ -172,7 +172,10 @@
                                 {{-- Convertir en commande (accepted ou sent) --}}
                                 @if(in_array($quote->status, ['envoye', 'brouillon']) && !$quote->converted_to_order_id)
                                 <form action="{{ route('ventes.devis.convert', $quote) }}" method="POST"
-                                      onsubmit="return confirm('Convertir ce devis en commande ?')">
+                                      data-confirm="Convertir ce devis en commande ?"
+                                      data-confirm-title="Convertir en commande"
+                                      data-confirm-label="Convertir"
+                                      data-confirm-danger="false">
                                     @csrf
                                     <button type="submit"
                                             class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Convertir en commande">
@@ -185,7 +188,8 @@
                                 {{-- Supprimer (draft seulement) --}}
                                 @if($quote->status === 'brouillon')
                                 <form action="{{ route('ventes.devis.destroy', $quote) }}" method="POST"
-                                      onsubmit="return confirm('Supprimer le devis {{ addslashes($quote->number) }} ?')">
+                                      data-confirm="Supprimer le devis {{ $quote->number }} ?"
+                                      data-confirm-title="Supprimer le devis">
                                     @csrf @method('DELETE')
                                     <button type="submit"
                                             class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Supprimer">

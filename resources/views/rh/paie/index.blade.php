@@ -136,47 +136,49 @@
 </form>
 
 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200 text-sm">
-        <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+    <div class="tbl-scroll">
+        <table class="tbl tbl-sticky">
+            <thead>
+                <tr>
+                    <th class="text-left">Période</th>
+                    <th class="text-center">Effectif</th>
+                    <th class="text-right">Total brut</th>
+                    <th class="text-right">CNSS (emp.)</th>
+                    <th class="text-right">CNSS (pat.)</th>
+                    <th class="text-right">IUTS</th>
+                    <th class="text-right">Total net</th>
+                    <th class="text-center">Statut</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @forelse($runs as $run)
             <tr>
-                <th class="px-4 py-3 text-left">Période</th>
-                <th class="px-4 py-3 text-center">Effectif</th>
-                <th class="px-4 py-3 text-right">Total brut</th>
-                <th class="px-4 py-3 text-right">CNSS (emp.)</th>
-                <th class="px-4 py-3 text-right">CNSS (pat.)</th>
-                <th class="px-4 py-3 text-right">IUTS</th>
-                <th class="px-4 py-3 text-right">Total net</th>
-                <th class="px-4 py-3 text-center">Statut</th>
-                <th class="px-4 py-3"></th>
+                <td class="font-medium">{{ $run->period_label }}</td>
+                <td class="text-center text-gray-600">{{ $run->employee_count ?: '—' }}</td>
+                <td class="text-right font-mono">{{ $run->total_brut ? number_format($run->total_brut, 0, ',', ' ') : '—' }}</td>
+                <td class="text-right font-mono text-red-600">{{ $run->total_cnss_employee ? number_format($run->total_cnss_employee, 0, ',', ' ') : '—' }}</td>
+                <td class="text-right font-mono text-orange-600">{{ $run->total_cnss_employer ? number_format($run->total_cnss_employer, 0, ',', ' ') : '—' }}</td>
+                <td class="text-right font-mono text-red-600">{{ $run->total_iuts ? number_format($run->total_iuts, 0, ',', ' ') : '—' }}</td>
+                <td class="text-right font-mono font-semibold text-emerald-700">{{ $run->total_net ? number_format($run->total_net, 0, ',', ' ') : '—' }}</td>
+                <td class="text-center">
+                    @php $c = $run->status_color @endphp
+                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-{{ $c }}-100 text-{{ $c }}-700">
+                        {{ $run->status_label }}
+                    </span>
+                </td>
+                <td class="text-right">
+                    <a href="{{ route('rh.paie.show', $run) }}" class="text-blue-600 hover:underline text-xs">Voir</a>
+                </td>
             </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-        @forelse($runs as $run)
-        <tr class="hover:bg-gray-50">
-            <td class="px-4 py-3 font-medium">{{ $run->period_label }}</td>
-            <td class="px-4 py-3 text-center text-gray-600">{{ $run->employee_count ?: '—' }}</td>
-            <td class="px-4 py-3 text-right font-mono">{{ $run->total_brut ? number_format($run->total_brut, 0, ',', ' ') : '—' }}</td>
-            <td class="px-4 py-3 text-right font-mono text-red-600">{{ $run->total_cnss_employee ? number_format($run->total_cnss_employee, 0, ',', ' ') : '—' }}</td>
-            <td class="px-4 py-3 text-right font-mono text-orange-600">{{ $run->total_cnss_employer ? number_format($run->total_cnss_employer, 0, ',', ' ') : '—' }}</td>
-            <td class="px-4 py-3 text-right font-mono text-red-600">{{ $run->total_iuts ? number_format($run->total_iuts, 0, ',', ' ') : '—' }}</td>
-            <td class="px-4 py-3 text-right font-mono font-semibold text-emerald-700">{{ $run->total_net ? number_format($run->total_net, 0, ',', ' ') : '—' }}</td>
-            <td class="px-4 py-3 text-center">
-                @php $c = $run->status_color @endphp
-                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-{{ $c }}-100 text-{{ $c }}-700">
-                    {{ $run->status_label }}
-                </span>
-            </td>
-            <td class="px-4 py-3 text-right">
-                <a href="{{ route('rh.paie.show', $run) }}" class="text-blue-600 hover:underline text-xs">Voir</a>
-            </td>
-        </tr>
-        @empty
-        <tr><td colspan="9" class="px-4 py-12 text-center text-gray-400">Aucun bulletin de paie. Créez-en un pour commencer.</td></tr>
-        @endforelse
-        </tbody>
-    </table>
+            @empty
+            <tr><td colspan="9" class="px-4 py-12 text-center text-gray-400">Aucun bulletin de paie. Créez-en un pour commencer.</td></tr>
+            @endforelse
+            </tbody>
+        </table>
+    </div>
     @if($runs->hasPages())
-    <div class="px-4 py-3 border-t">{{ $runs->links() }}</div>
+    <div class="px-4 py-3 border-t border-gray-100">{{ $runs->links() }}</div>
     @endif
 </div>
 @endsection

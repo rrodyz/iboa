@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\HR;
 
 use App\Http\Controllers\Controller;
-use App\Models\Company;
 use App\Models\PayrollSetting;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -54,6 +53,7 @@ class PayrollSimulatorController extends Controller
             'prime_imposable'     => ['nullable', 'integer', 'min:0'],
             'prime_non_imposable' => ['nullable', 'integer', 'min:0'],
             'avances'             => ['nullable', 'integer', 'min:0'],
+            'anciennete_pct'      => ['nullable', 'numeric', 'min:0', 'max:25'],
         ]);
 
         [$payroll, $result] = $this->runSimulation($data);
@@ -73,6 +73,7 @@ class PayrollSimulatorController extends Controller
             'prime_imposable'     => ['nullable', 'integer', 'min:0'],
             'prime_non_imposable' => ['nullable', 'integer', 'min:0'],
             'avances'             => ['nullable', 'integer', 'min:0'],
+            'anciennete_pct'      => ['nullable', 'numeric', 'min:0', 'max:25'],
             'categorie_label'     => ['nullable', 'string', 'max:100'],
         ]);
 
@@ -123,6 +124,7 @@ class PayrollSimulatorController extends Controller
         $primeImposable    = (int) ($data['prime_imposable']     ?? 0);
         $primeNonImposable = (int) ($data['prime_non_imposable'] ?? 0);
         $avances           = (int) ($data['avances']             ?? 0);
+        $anciennetePct     = (float) ($data['anciennete_pct']    ?? 0);
         $familyStatus      = $data['family_status'];
         $nbChildren        = (int) $data['nb_children'];
 
@@ -134,9 +136,11 @@ class PayrollSimulatorController extends Controller
 
         // Cas special : la prime non imposable couvre deja le net cible
         // (ex: PNI = 800k pour un net cible de 720k → brut = 0, pas de salaire taxable)
-        if ($primeNonImposable - $avances >= $netSouhaite) {
+        // Effort de paix s'applique aussi sur la PNI seule (base = PNI quand brut=0).
+        $epOnlyPni = $this->effortPaix(0, $primeNonImposable, 0, 0, $payroll);
+        if ($primeNonImposable - $epOnlyPni - $avances >= $netSouhaite) {
             $brut    = 0;
-            $calcNet = $primeNonImposable - $avances;
+            $calcNet = $primeNonImposable - $epOnlyPni - $avances;
         } else {
             // Recherche binaire sur brut_total (= base + prime_imposable)
             // lo = borne inferieure certaine (brut minimum pour atteindre le net)
@@ -149,7 +153,8 @@ class PayrollSimulatorController extends Controller
                 if ($lo > $hi) break;                             // convergence impossibe : sortie propre
                 $mid = max(1, (int) round(($lo + $hi) / 2));     // jamais negatif ni zero
                 $c      = $this->compute($mid, $nbParts, $cnssEmpRate, $cnssPatRate, $cnssPlafond, $abattRate, $payroll);
-                $netMid = $c['net'] + $primeNonImposable - $avances;
+                $ep     = $this->effortPaix($mid, $primeNonImposable, $c['cnss_emp'], $c['iuts'], $payroll);
+                $netMid = $c['net'] + $primeNonImposable - $ep - $avances;
                 $diff   = $netMid - $netSouhaite;
 
                 if (abs($diff) <= 5) { $brut = $mid; $calcNet = $netMid; break; }
@@ -160,11 +165,21 @@ class PayrollSimulatorController extends Controller
         }
 
         $detail  = $this->compute($brut, $nbParts, $cnssEmpRate, $cnssPatRate, $cnssPlafond, $abattRate, $payroll);
-        $salaireBase = max(0, $brut - $primeImposable);
+        $effortPaix  = $this->effortPaix($brut, $primeNonImposable, $detail['cnss_emp'], $detail['iuts'], $payroll);
+
+        // Décomposition base / prime d'ancienneté (modèle Sage Paie RH).
+        // brut = base + ancienneté + prime imposable, avec ancienneté = base × pct%.
+        $taxableHorsPrime = max(0, $brut - $primeImposable);          // = base + ancienneté
+        $salaireBase = $anciennetePct > 0
+            ? (int) round($taxableHorsPrime / (1 + $anciennetePct / 100))
+            : $taxableHorsPrime;
+        $anciennete  = max(0, $taxableHorsPrime - $salaireBase);      // = base × pct%
         $ecart   = abs($calcNet - $netSouhaite);
 
         $result = [
             'salaire_base'          => $salaireBase,
+            'anciennete'            => $anciennete,
+            'anciennete_pct'        => $anciennetePct,
             'prime_imposable'       => $primeImposable,
             'salaire_brut'          => $brut,
             'cnss_employee'         => $detail['cnss_emp'],
@@ -173,6 +188,8 @@ class PayrollSimulatorController extends Controller
             'base_iuts'             => $detail['base_iuts'],
             'iuts'                  => $detail['iuts'],
             'prime_non_imposable'   => $primeNonImposable,
+            'effort_paix'           => $effortPaix,
+            'effort_paix_rate'      => $payroll->effort_paix_enabled ? (float) $payroll->effort_paix_rate : 0,
             'avances'               => $avances,
             'net_calcule'           => $calcNet,
             'net_souhaite'          => $netSouhaite,
@@ -186,6 +203,8 @@ class PayrollSimulatorController extends Controller
             'detail' => [
                 // ── Composantes du brut ──────────────────────────────────
                 ['label'=>'Salaire de base estime',         'montant'=>$salaireBase,                'signe'=>'+','color'=>'gray'],
+                ['label'=>'Prime d\'anciennete ('.rtrim(rtrim(number_format($anciennetePct,2,'.',''),'0'),'.').'%)',
+                          'montant'=>$anciennete,                'signe'=>'+','color'=>'teal'],
                 ['label'=>'Prime(s) imposable(s)',          'montant'=>$primeImposable,             'signe'=>'+','color'=>'indigo'],
                 ['label'=>'Salaire brut',                   'montant'=>$brut,                       'signe'=>'=','color'=>'blue','bold'=>true],
                 // ── Deductions salariales ────────────────────────────────
@@ -197,6 +216,8 @@ class PayrollSimulatorController extends Controller
                 ['label'=>'IUTS ('.$nbParts.' part(s))',    'montant'=>$detail['iuts'],             'signe'=>'-','color'=>'purple'],
                 // ── Elements hors brut ───────────────────────────────────
                 ['label'=>'Prime(s) non imposable(s)',      'montant'=>$primeNonImposable,          'signe'=>'+','color'=>'emerald'],
+                ['label'=>'Effort de paix ('.($payroll->effort_paix_enabled ? $payroll->effort_paix_rate : 0).'%)',
+                          'montant'=>$effortPaix,                'signe'=>'-','color'=>'rose'],
                 ['label'=>'Avances / Retenues',             'montant'=>$avances,                    'signe'=>'-','color'=>'orange'],
                 ['label'=>'Net a payer',                    'montant'=>$calcNet,                    'signe'=>'=','color'=>'green','bold'=>true],
                 // ── Charge patronale ─────────────────────────────────────
@@ -206,6 +227,19 @@ class PayrollSimulatorController extends Controller
         ];
 
         return [$payroll, $result];
+    }
+
+    /**
+     * Retenue effort de paix (code 9000) — alignée sur PayrollService.
+     * Base légale BF : brut + non-imposables − CNSS salarié − IUTS.
+     */
+    private function effortPaix(int $brut, int $primeNonImposable, int $cnssEmp, int $iuts, PayrollSetting $payroll): int
+    {
+        if (!$payroll->effort_paix_enabled) {
+            return 0;
+        }
+        $base = max(0, $brut + $primeNonImposable - $cnssEmp - $iuts);
+        return (int) round($base * (float) $payroll->effort_paix_rate / 100);
     }
 
     private function compute(int $brut, float $nbParts, float $cnssEmpRate, float $cnssPatRate, int $cnssPlafond, float $abattRate, PayrollSetting $payroll): array

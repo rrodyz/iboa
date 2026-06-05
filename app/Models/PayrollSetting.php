@@ -40,6 +40,7 @@ class PayrollSetting extends Model
         'iuts_abattement_rate',
         'effort_paix_enabled', 'effort_paix_rate',
         'bulletin_prefix', 'currency_code', 'country_code',
+        'cnss_affiliation', 'phone', 'address_bulletin',
         'notes', 'updated_by',
     ];
 

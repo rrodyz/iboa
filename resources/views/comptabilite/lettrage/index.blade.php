@@ -516,7 +516,12 @@ function lettrageApp() {
         },
 
         async removeLettrage(ref) {
-            if (!confirm(`Supprimer le lettrage ${ref} ?\n\nLes lignes repasseront en « non lettrées ».`)) return;
+            const ok = await window.erpConfirm({
+                message: `Supprimer le lettrage ${ref} ? Les lignes repasseront en « non lettrées ».`,
+                confirmLabel: 'Supprimer',
+                isDanger: true,
+            });
+            if (!ok) return;
             try {
                 const resp = await fetch('{{ route('comptabilite.lettrage.remove') }}', {
                     method: 'POST',
@@ -541,7 +546,13 @@ function lettrageApp() {
         async autoLettrage() {
             const accountId = {{ $selectedAccount?->id ?? 0 }};
             if (!accountId) { this.showToast('Sélectionnez d\'abord un compte.', true); return; }
-            if (!confirm('Lancer le lettrage automatique ?\n\nL\'algorithme apparie les couples et groupes débit/crédit ayant le même montant total.\nLes résultats pourront être supprimés individuellement.')) return;
+            const ok = await window.erpConfirm({
+                message: 'Lancer le lettrage automatique ? L\'algorithme apparie les couples et groupes débit/crédit ayant le même montant total.',
+                title: 'Lettrage automatique',
+                confirmLabel: 'Lancer',
+                isDanger: false,
+            });
+            if (!ok) return;
 
             const btn = this.$el.querySelector('[\\@click="autoLettrage()"]');
             this.showToast('⏳ Analyse en cours…');

@@ -20,11 +20,11 @@ class LettrageController extends Controller
     {
         $companyId = auth()->user()->company_id;
 
-        // All class 4 detail tiers accounts with movements
+        // All class 4 detail tiers accounts — pas de filtre is_active : un tiers
+        // désactivé peut conserver des lignes non lettrées à rapprocher.
         $accounts = Account::where('company_id', $companyId)
             ->where('code', 'like', '4%')
             ->where('is_detail', true)
-            ->where('is_active', true)
             ->orderBy('code')
             ->get(['id', 'code', 'name']);
 

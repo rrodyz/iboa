@@ -238,7 +238,12 @@ function attachmentManager() {
         },
 
         async deleteAttachment(id, index) {
-            if (!confirm('Êtes-vous sûr de vouloir supprimer cette pièce jointe ?')) return;
+            const ok = await window.erpConfirm({
+                message: 'Supprimer cette pièce jointe ?',
+                confirmLabel: 'Supprimer',
+                isDanger: true,
+            });
+            if (!ok) return;
 
             try {
                 const response = await fetch(this.urlDelTpl.replace('__ID__', id), {
@@ -250,8 +255,9 @@ function attachmentManager() {
 
                 if (!response.ok) throw new Error('Erreur lors de la suppression');
                 this.attachments.splice(index, 1);
+                window.toast('Pièce jointe supprimée.', 'success');
             } catch (err) {
-                this.error = 'Impossible de supprimer la pièce jointe';
+                window.toast('Impossible de supprimer la pièce jointe.', 'error');
                 console.error('Erreur suppression:', err);
             }
         }

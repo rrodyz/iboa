@@ -52,6 +52,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.view', 'reports.export',
             // Comptabilité SYSCOHADA
             'accounting.view', 'accounting.write', 'accounting.validate', 'accounting.manage',
+            // Intégrations API & déclarations fiscales DGI
+            'integrations.view', 'integrations.manage', 'integrations.declare',
             // Admin
             'users.manage', 'roles.manage', 'settings.manage', 'audit.view',
         ];
@@ -68,18 +70,19 @@ class RolesAndPermissionsSeeder extends Seeder
         $directeur = Role::firstOrCreate(['name' => 'directeur', 'guard_name' => 'web']);
         $directeur->syncPermissions(Permission::whereNotIn('name', ['users.manage', 'roles.manage'])->get());
 
-        // Commercial — ventes + clients + workflow (create + submit + transform)
+        // Commercial — ventes + clients + workflow (create + submit + transform + validate orders)
         $commercial = Role::firstOrCreate(['name' => 'commercial', 'guard_name' => 'web']);
         $commercial->syncPermissions([
             'products.view', 'clients.view', 'clients.create', 'clients.edit',
             'quotes.view', 'quotes.create', 'quotes.edit',
-            'orders.view', 'orders.create', 'orders.edit',
+            'orders.view', 'orders.create', 'orders.edit', 'orders.validate',
             'invoices.view', 'invoices.create', 'invoices.send',
             'deliveries.view', 'deliveries.create',
             'credit_notes.view', 'credit_notes.create',
             'payments.view', 'reports.view',
-            // Workflow : un commercial crée, soumet et transforme mais ne valide pas
-            'sales.create', 'sales.submit', 'sales.transform',
+            'stocks.view',    // lecture stock pour info dispo sur devis/commandes
+            // Workflow : un commercial crée, soumet, transforme et valide les commandes
+            'sales.create', 'sales.submit', 'sales.transform', 'sales.validate',
         ]);
 
         // Comptable — factures + trésorerie + rapports + workflow validation factures/avoirs
@@ -95,11 +98,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'treasury.write', 'treasury.validate',
             'reports.view', 'reports.export',
             'accounting.view', 'accounting.write', 'accounting.validate', 'accounting.manage',
+            // Intégrations : consulter + déclarer la TVA à la DGI (gestion des clés réservée au directeur)
+            'integrations.view', 'integrations.declare',
             // Workflow : le comptable valide les factures et avoirs, peut annuler
             'sales.validate', 'sales.reject', 'sales.cancel', 'sales.view_all',
         ]);
 
-        // Magasinier — stocks + réceptions
+        // Magasinier — stocks + réceptions + lecture commandes/factures pour préparer livraisons
         $magasinier = Role::firstOrCreate(['name' => 'magasinier', 'guard_name' => 'web']);
         $magasinier->syncPermissions([
             'products.view', 'stocks.view', 'stocks.adjust', 'stocks.transfer',
@@ -107,6 +112,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'receptions.view', 'receptions.create', 'receptions.validate',
             'supplier_returns.view', 'supplier_returns.create', 'supplier_returns.validate',
             'purchase_orders.view', 'deliveries.view',
+            'orders.view',    // voir les commandes à préparer
+            'invoices.view',  // vérifier si facturé avant expédition
         ]);
 
         $this->command->info('Roles & Permissions créés avec succès.');

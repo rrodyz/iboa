@@ -17,7 +17,8 @@
                     <svg class="w-4.5 h-4.5 text-white" style="width:18px;height:18px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                 </div>
             </div>
-            <p class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
+            <p id="kpi-rev-jour" data-raw="{{ $revenueJour }}"
+               class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
             <div class="mt-2 flex items-center justify-between gap-2">
                 <p class="text-xs font-medium text-gray-400">FCFA</p>
                 @if($trendJour['value'] !== null)
@@ -50,7 +51,8 @@
                     <svg style="width:18px;height:18px" class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                 </div>
             </div>
-            <p class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
+            <p id="kpi-rev-mois" data-raw="{{ $revenueMois }}"
+               class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
             <div class="mt-2 flex items-center justify-between gap-2">
                 <p class="text-xs font-medium text-gray-400">FCFA · {{ $nbFacturesMois }} facture(s)</p>
                 @if($trendRevenue['value'] !== null)
@@ -83,7 +85,8 @@
                     <svg style="width:18px;height:18px" class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                 </div>
             </div>
-            <p class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
+            <p id="kpi-enc-mois" data-raw="{{ $encaissementsMois }}"
+               class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
             <div class="mt-2 flex items-center justify-between gap-2">
                 <p class="text-xs font-medium text-gray-400">FCFA ce mois</p>
                 @if($trendEncaissements['value'] !== null)
@@ -116,7 +119,8 @@
                     <svg style="width:18px;height:18px" class="text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
                 </div>
             </div>
-            <p class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
+            <p id="kpi-solde-tresorerie" data-raw="{{ $soldeTresorerie }}"
+               class="text-2xl 2xl:text-3xl font-black text-gray-900 tabular-nums leading-none tracking-tight whitespace-nowrap" x-text="formatted()">0</p>
             <p class="mt-2 text-xs font-medium text-gray-400">FCFA solde total</p>
 
             @if($cashAccounts->isNotEmpty())
@@ -155,10 +159,16 @@
             </div>
             <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold {{ $facturesEnRetard > 0 ? 'text-rose-700' : 'text-gray-400' }} truncate">
-                    {{ $facturesEnRetard > 0 ? $facturesEnRetard . ' fact. en retard' : 'Aucun retard' }}
+                    @if($facturesEnRetard > 0)
+                        <span id="kpi-factures-retard" data-raw="{{ $facturesEnRetard }}">{{ $facturesEnRetard }}</span> fact. en retard
+                    @else
+                        Aucun retard
+                    @endif
                 </p>
                 @if($facturesEnRetard > 0)
-                <p class="text-xs text-rose-400 tabular-nums">{{ number_format($montantEnRetard, 0, ',', ' ') }} FCFA</p>
+                <p class="text-xs text-rose-400 tabular-nums">
+                    <span id="kpi-montant-retard" data-raw="{{ $montantEnRetard }}">{{ number_format($montantEnRetard, 0, ',', ' ') }}</span> FCFA
+                </p>
                 @endif
             </div>
         </a>
@@ -177,7 +187,11 @@
             </div>
             <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold {{ $ruptureStock > 0 ? 'text-amber-700' : 'text-gray-400' }} truncate">
-                    {{ $ruptureStock > 0 ? $ruptureStock . ' rupture(s)' : 'Stock OK' }}
+                    @if($ruptureStock > 0)
+                        <span id="kpi-rupture-stock" data-raw="{{ $ruptureStock }}">{{ $ruptureStock }}</span> rupture(s)
+                    @else
+                        Stock OK
+                    @endif
                 </p>
                 <p class="text-xs {{ $ruptureStock > 0 ? 'text-amber-400' : 'text-gray-300' }}">
                     {{ $ruptureStock > 0 ? 'Réapprovisionnement requis' : 'Aucune rupture' }}

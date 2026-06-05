@@ -14,10 +14,10 @@
     ];
 @endphp
 
-<div class="max-w-xl mx-auto"
+<div class="w-full"
      x-data="{
-         month: {{ $suggestMonth }},
-         year:  {{ $suggestYear }},
+         month: {{ old('period_month', $suggestMonth) }},
+         year:  {{ old('period_year', $suggestYear) }},
          months: {
              1:'Janvier', 2:'Février',  3:'Mars',     4:'Avril',
              5:'Mai',     6:'Juin',     7:'Juillet',  8:'Août',
@@ -42,21 +42,14 @@
         </div>
     </div>
 
-    {{-- Erreurs --}}
-    @if($errors->any())
-    <div class="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-        <ul class="list-disc list-inside space-y-0.5">
-            @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
-        </ul>
-    </div>
-    @endif
-
     <form method="POST" action="{{ route('rh.paie.store') }}">
     @csrf
     <x-form-guard />
 
-    {{-- Carte principale --}}
-    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+
+    {{-- Colonne gauche : période + notes --}}
+    <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
         {{-- Section période --}}
         <div class="px-6 pt-6 pb-4">
@@ -69,7 +62,7 @@
                     <select name="period_month" x-model.number="month"
                             class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors">
                         @foreach($months as $m => $l)
-                            <option value="{{ $m }}" @selected($m == $suggestMonth)>{{ $l }}</option>
+                            <option value="{{ $m }}" @selected($m == old('period_month', $suggestMonth))>{{ $l }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -78,7 +71,7 @@
                         Année <span class="text-red-500">*</span>
                     </label>
                     <input type="number" name="period_year" x-model.number="year"
-                           value="{{ $suggestYear }}" min="2020" max="2100" required
+                           value="{{ old('period_year', $suggestYear) }}" min="2020" max="2100" required
                            class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors">
                 </div>
             </div>
@@ -112,15 +105,16 @@
             <label class="block text-sm font-medium text-gray-700 mb-1.5">
                 Notes internes <span class="text-gray-400 font-normal">(optionnel)</span>
             </label>
-            <textarea name="notes" rows="2"
+            <textarea name="notes" rows="3"
                       placeholder="Ex : Intégration des primes de fin d'année…"
                       class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm resize-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-colors placeholder-gray-400">{{ old('notes') }}</textarea>
         </div>
+    </div>{{-- /colonne gauche --}}
 
-        {{-- Séparateur + étapes --}}
-        <div class="border-t border-gray-100 bg-gray-50 px-6 py-4">
-            <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Ce qui va se passer</p>
-            <ol class="space-y-2">
+    {{-- Colonne droite : étapes --}}
+    <div class="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-5">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Ce qui va se passer</p>
+        <ol class="space-y-2">
                 <li class="flex items-start gap-2.5">
                     <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-[10px] font-bold flex items-center justify-center mt-0.5">1</span>
                     <div>

@@ -32,7 +32,7 @@ $sizeClass = match($size) {
 };
 @endphp
 
-<form method="POST" action="{{ $action }}" onsubmit="return confirm('{{ addslashes($confirm) }}')">
+<form method="POST" action="{{ $action }}" data-confirm="{{ $confirm }}">
     @csrf
     @if(!in_array(strtoupper($method), ['GET','POST']))
         @method($method)

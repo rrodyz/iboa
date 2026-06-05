@@ -322,7 +322,7 @@ function matchingPanel() {
 
         async matchLine(journalLineId) {
             if (!this.selectedBankLine) {
-                alert('Sélectionnez d\'abord une ligne du relevé bancaire (colonne gauche).');
+                window.toast('Sélectionnez d\'abord une ligne du relevé bancaire (colonne gauche).', 'warning');
                 return;
             }
             try {
@@ -336,17 +336,23 @@ function matchingPanel() {
                 });
                 const data = await resp.json();
                 if (data.ok) {
+                    window.toast('Association enregistrée.', 'success');
                     window.location.reload();
                 } else {
-                    alert(data.message || 'Erreur lors de l\'association.');
+                    window.toast(data.message || 'Erreur lors de l\'association.', 'error');
                 }
             } catch (e) {
-                alert('Erreur réseau. Réessayez.');
+                window.toast('Erreur réseau. Réessayez.', 'error');
             }
         },
 
         async unmatch(bankLineId) {
-            if (!confirm('Supprimer cette association ?')) return;
+            const ok = await window.erpConfirm({
+                message: 'Supprimer cette association ?',
+                confirmLabel: 'Supprimer',
+                isDanger: true,
+            });
+            if (!ok) return;
             try {
                 const resp = await fetch(`${matchUrlBase}/${bankLineId}/unmatch`, {
                     method: 'POST',
@@ -357,12 +363,13 @@ function matchingPanel() {
                 });
                 const data = await resp.json();
                 if (data.ok) {
+                    window.toast('Association supprimée.', 'success');
                     window.location.reload();
                 } else {
-                    alert(data.message || 'Erreur lors de la dissociation.');
+                    window.toast(data.message || 'Erreur lors de la dissociation.', 'error');
                 }
             } catch (e) {
-                alert('Erreur réseau. Réessayez.');
+                window.toast('Erreur réseau. Réessayez.', 'error');
             }
         },
     };

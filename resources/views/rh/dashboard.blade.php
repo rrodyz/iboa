@@ -13,7 +13,7 @@
         ['Effectif actif',    $totalActif,    'bg-blue-600',    'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z'],
         ['Suspendus',         $totalSuspendu, 'bg-yellow-500',  'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'],
         ['Sorties (cumul)',   $totalSorties,  'bg-red-500',     'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1'],
-        ['Bulletins/an',      \App\Models\PayrollRun::where('company_id', \App\Models\Company::first()?->id)->whereYear('created_at', now()->year)->count(), 'bg-indigo-600', 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'],
+        ['Bulletins/an',      $bulletinsAnnee, 'bg-indigo-600', 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'],
     ] as [$label, $val, $color, $icon])
     <div class="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4">
         <div class="w-12 h-12 {{ $color }} rounded-xl flex items-center justify-center flex-shrink-0">

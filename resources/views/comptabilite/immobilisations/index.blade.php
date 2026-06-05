@@ -34,13 +34,6 @@
         @endcan
     </div>
 
-    {{-- Flash messages --}}
-    @if(session('success'))
-        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-        <div class="bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">{{ session('error') }}</div>
-    @endif
 
     {{-- KPIs --}}
     <div class="grid grid-cols-3 gap-4">
@@ -93,21 +86,22 @@
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-100 text-sm">
-            <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+        <table class="tbl tbl-sticky">
+            <thead>
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Code / Désignation</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Catégorie</th>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Mise en service</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Valeur brute</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Amort. cumulé</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">VNC</th>
-                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Durée</th>
-                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Statut</th>
-                    <th class="px-4 py-3"></th>
+                    <th class="text-left">Code / Désignation</th>
+                    <th class="text-left">Catégorie</th>
+                    <th class="text-left">Mise en service</th>
+                    <th class="text-right">Valeur brute</th>
+                    <th class="text-right">Amort. cumulé</th>
+                    <th class="text-right">VNC</th>
+                    <th class="text-center">Durée</th>
+                    <th class="text-center">Statut</th>
+                    <th></th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100">
+            <tbody>
                 @forelse($assets as $asset)
                 @php
                     $cumul = $asset->depreciations->where('is_posted', true)->sum('depreciation_amount');
@@ -120,14 +114,14 @@
                     ];
                 @endphp
                 <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-4 py-3">
+                    <td class="">
                         <p class="font-semibold text-gray-900">{{ $asset->name }}</p>
                         <p class="text-xs text-gray-500">{{ $asset->code }}</p>
                     </td>
-                    <td class="px-4 py-3 text-gray-600">{{ $categoryLabels[$asset->category] ?? $asset->category }}</td>
-                    <td class="px-4 py-3 text-gray-600">{{ $asset->commissioning_date->format('d/m/Y') }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums font-medium text-gray-900">{{ $fmt($asset->acquisition_cost) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums text-orange-600">
+                    <td class=" text-gray-600">{{ $categoryLabels[$asset->category] ?? $asset->category }}</td>
+                    <td class=" text-gray-600">{{ $asset->commissioning_date?->format('d/m/Y') ?? '—' }}</td>
+                    <td class=" text-right tabular-nums font-medium text-gray-900">{{ $fmt($asset->acquisition_cost) }}</td>
+                    <td class=" text-right tabular-nums text-orange-600">
                         {{ $fmt($cumul) }}
                         @if($pct > 0)
                             <div class="mt-1 h-1 bg-gray-100 rounded-full overflow-hidden w-20 ml-auto">
@@ -135,20 +129,20 @@
                             </div>
                         @endif
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums font-semibold text-blue-600">{{ $fmt($vnc) }}</td>
-                    <td class="px-4 py-3 text-center text-gray-600">
+                    <td class=" text-right tabular-nums font-semibold text-blue-600">{{ $fmt($vnc) }}</td>
+                    <td class=" text-center text-gray-600">
                         @if($asset->useful_life_years > 0)
                             {{ $asset->useful_life_years }} ans
                         @else
                             <span class="text-gray-400 text-xs">Non amort.</span>
                         @endif
                     </td>
-                    <td class="px-4 py-3 text-center">
+                    <td class=" text-center">
                         <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ $statusColors[$asset->status] ?? 'bg-gray-100 text-gray-500' }}">
                             {{ $statusLabels[$asset->status] ?? $asset->status }}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class=" text-right">
                         <a href="{{ route('comptabilite.immobilisations.show', $asset) }}"
                            class="text-xs text-blue-600 hover:underline font-medium">Voir →</a>
                     </td>
@@ -165,6 +159,7 @@
                 @endforelse
             </tbody>
         </table>
+        </div>
 
         @if($assets->hasPages())
             <div class="px-4 py-3 border-t border-gray-100">{{ $assets->links() }}</div>

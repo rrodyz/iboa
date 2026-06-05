@@ -93,6 +93,19 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip());
         });
 
+        // Rate limiter webhooks paiement mobile (Orange Money / Moov Money)
+        // Les providers légitimes envoient rarement > 60 callbacks/min par IP.
+        // Limite 120/min pour absorber les rafales, 429 sinon (toujours JSON).
+        RateLimiter::for('webhooks', function (\Illuminate\Http\Request $request) {
+            return Limit::perMinute(120)->by($request->ip())
+                ->response(function () {
+                    return response()->json(
+                        ['status' => 'rate_limited', 'retry_after' => 60],
+                        429
+                    );
+                });
+        });
+
         // ── Event → Listener bindings ──────────────────────────────────────────
         // Commandes
         Event::listen(OrderConfirmed::class,            ReserveStockOnOrderConfirmed::class);

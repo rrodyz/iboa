@@ -82,7 +82,7 @@
         </a>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {{-- Top valorisation --}}
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -180,7 +180,14 @@
                 <div class="px-4 py-3">
                     <p class="font-mono text-xs text-blue-700">{{ $r->reference }}</p>
                     <p class="text-sm text-gray-900 truncate">{{ $r->name }}</p>
-                    <p class="text-xs text-gray-500 mt-0.5">{{ (int) $r->days_idle }} j inactif · {{ $fmt($r->immobilized_value) }} FCFA</p>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        @if($r->days_idle === null)
+                            <span class="italic">jamais mouvementé</span>
+                        @else
+                            {{ (int) $r->days_idle }} j inactif
+                        @endif
+                        · {{ $fmt($r->immobilized_value) }} FCFA
+                    </p>
                 </div>
                 @empty
                 <div class="px-4 py-8 text-center text-gray-400 text-sm">Aucun.</div>

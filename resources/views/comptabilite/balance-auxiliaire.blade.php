@@ -51,57 +51,59 @@
     </div>
     @else
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
+        <div class="tbl-scroll">
+        <table class="tbl tbl-sticky">
+            <thead>
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-full">Compte</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Débit</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">Crédit</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-blue-600 uppercase whitespace-nowrap">Solde D</th>
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-red-600 uppercase whitespace-nowrap">Solde C</th>
+                    <th class="text-left w-full">Compte</th>
+                    <th class="text-right whitespace-nowrap">Débit</th>
+                    <th class="text-right whitespace-nowrap">Crédit</th>
+                    <th class="text-right whitespace-nowrap text-blue-600">Solde D</th>
+                    <th class="text-right whitespace-nowrap text-red-600">Solde C</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100">
+            <tbody>
                 @foreach($accounts as $account)
-                <tr class="hover:bg-gray-50 cursor-pointer"
+                <tr class="cursor-pointer"
                     onclick="window.location='{{ route('comptabilite.grand-livre', ['account_id' => $account->id, 'date_from' => $dateFrom, 'date_to' => $dateTo]) }}'">
-                    <td class="px-4 py-2.5 w-full">
+                    <td class="w-full">
                         <span class="font-mono font-semibold text-violet-700 text-xs">{{ $account->code }}</span>
                         <span class="text-gray-700 ml-2">{{ $account->name }}</span>
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700 font-medium whitespace-nowrap">
+                    <td class="text-right tabular-nums text-gray-700 font-medium whitespace-nowrap">
                         {{ number_format($account->total_debit, 0, ',', ' ') }}
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700 font-medium whitespace-nowrap">
+                    <td class="text-right tabular-nums text-gray-700 font-medium whitespace-nowrap">
                         {{ number_format($account->total_credit, 0, ',', ' ') }}
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums font-semibold text-blue-700 whitespace-nowrap">
+                    <td class="text-right tabular-nums font-semibold text-blue-700 whitespace-nowrap">
                         {{ $account->solde_debiteur > 0 ? number_format($account->solde_debiteur, 0, ',', ' ') : '—' }}
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums font-semibold text-red-700 whitespace-nowrap">
+                    <td class="text-right tabular-nums font-semibold text-red-700 whitespace-nowrap">
                         {{ $account->solde_crediteur > 0 ? number_format($account->solde_crediteur, 0, ',', ' ') : '—' }}
                     </td>
                 </tr>
                 @endforeach
             </tbody>
-            <tfoot class="border-t-2 border-gray-300 bg-gray-100">
+            <tfoot class="border-t-2 border-gray-300 bg-gray-100 font-bold">
                 <tr>
-                    <td class="px-4 py-3 text-xs font-bold text-gray-600 uppercase w-full">TOTAUX</td>
-                    <td class="px-4 py-3 text-right tabular-nums font-bold text-gray-900 whitespace-nowrap">
+                    <td class="text-xs text-gray-600 uppercase w-full">TOTAUX</td>
+                    <td class="text-right tabular-nums text-gray-900 whitespace-nowrap">
                         {{ number_format($totals['total_debit'], 0, ',', ' ') }}
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums font-bold text-gray-900 whitespace-nowrap">
+                    <td class="text-right tabular-nums text-gray-900 whitespace-nowrap">
                         {{ number_format($totals['total_credit'], 0, ',', ' ') }}
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums font-bold text-blue-700 whitespace-nowrap">
+                    <td class="text-right tabular-nums text-blue-700 whitespace-nowrap">
                         {{ number_format($totals['solde_debiteur'], 0, ',', ' ') }}
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums font-bold text-red-700 whitespace-nowrap">
+                    <td class="text-right tabular-nums text-red-700 whitespace-nowrap">
                         {{ number_format($totals['solde_crediteur'], 0, ',', ' ') }}
                     </td>
                 </tr>
             </tfoot>
         </table>
+        </div>
     </div>
     @endif
 

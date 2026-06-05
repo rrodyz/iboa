@@ -42,20 +42,6 @@ window.__parametrageCfg = @json($cfg);
     </div>
 </div>
 
-@if(session('success'))
-<div class="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm flex items-center gap-2">
-    <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-    {{ session('success') }}
-</div>
-@endif
-@if($errors->any())
-<div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
-    <ul class="text-sm text-red-700 space-y-0.5 list-disc list-inside">
-        @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
-    </ul>
-</div>
-@endif
-
 <form method="POST" action="{{ route('rh.parametrage.update') }}">
 @csrf @method('PUT')
 
@@ -604,6 +590,30 @@ window.__parametrageCfg = @json($cfg);
                 </div>
             </div>
             <div class="p-5 grid grid-cols-2 sm:grid-cols-4 gap-5">
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1.5">N° affiliation CNSS</label>
+                    <input type="text" name="cnss_affiliation" maxlength="30"
+                           value="{{ old('cnss_affiliation', $setting->cnss_affiliation) }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-400"
+                           placeholder="Ex : 213762A">
+                    <p class="text-[10px] text-gray-400 mt-1">Affiché sur le bulletin</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1.5">Téléphone (bulletin)</label>
+                    <input type="text" name="phone" maxlength="30"
+                           value="{{ old('phone', $setting->phone) }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400"
+                           placeholder="Ex : 50 31 02 91">
+                    <p class="text-[10px] text-gray-400 mt-1">Affiché sur le bulletin</p>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-medium text-gray-700 mb-1.5">Adresse (bulletin)</label>
+                    <input type="text" name="address_bulletin" maxlength="200"
+                           value="{{ old('address_bulletin', $setting->address_bulletin) }}"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400"
+                           placeholder="Ex : 01 BP 1234 Ouagadougou">
+                    <p class="text-[10px] text-gray-400 mt-1">Adresse affichée sur le bulletin (peut différer de l'adresse légale)</p>
+                </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-700 mb-1.5">Préfixe bulletin</label>
                     <input type="text" name="bulletin_prefix" maxlength="10"

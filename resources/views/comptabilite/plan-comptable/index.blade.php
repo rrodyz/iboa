@@ -83,40 +83,29 @@
         </div>
     </form>
 
-    @if($errors->any())
-    <div class="bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">
-        <p class="font-medium mb-1">Erreur d'importation</p>
-        <ul class="list-disc list-inside space-y-0.5 text-xs">
-            @foreach($errors->all() as $error)
-            <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    </div>
-    @endif
-
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-24">Code</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Classe</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Type</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Solde débiteur</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Solde créditeur</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Saisissable</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left w-24">Code</th>
+                        <th class="text-left">Libellé</th>
+                        <th class="text-left hidden md:table-cell">Classe</th>
+                        <th class="text-left hidden lg:table-cell">Type</th>
+                        <th class="text-right hidden lg:table-cell">Solde débiteur</th>
+                        <th class="text-right hidden lg:table-cell">Solde créditeur</th>
+                        <th class="text-center hidden md:table-cell">Saisissable</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($accounts as $account)
-                    <tr class="hover:bg-gray-50 transition-colors {{ !$account->is_active ? 'opacity-50' : '' }}">
-                        <td class="px-4 py-3">
+                    <tr class="{{ !$account->is_active ? 'opacity-50' : '' }}">
+                        <td>
                             <span class="font-mono font-semibold text-violet-700">{{ $account->code }}</span>
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             <span class="{{ $account->is_detail ? 'text-gray-900' : 'text-gray-500 font-medium' }}">
                                 {{ $account->name }}
                             </span>
@@ -124,10 +113,10 @@
                             <p class="text-xs text-gray-400">↳ {{ $account->parent->code }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-gray-500 hidden md:table-cell text-xs">
+                        <td class="text-gray-500 hidden md:table-cell text-xs">
                             Classe {{ $account->accountClass?->number }}
                         </td>
-                        <td class="px-4 py-3 hidden lg:table-cell">
+                        <td class="hidden lg:table-cell">
                             @php
                             $typeColors = ['actif'=>'blue','passif'=>'indigo','charge'=>'red','produit'=>'green','bilan'=>'gray','resultat'=>'amber'];
                             $tc = $typeColors[$account->type] ?? 'gray';
@@ -136,20 +125,20 @@
                                 {{ ucfirst($account->type) }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700 hidden lg:table-cell">
+                        <td class="text-right tabular-nums text-gray-700 hidden lg:table-cell">
                             {{ $account->debit_balance > 0 ? number_format($account->debit_balance, 0, ',', ' ') : '—' }}
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700 hidden lg:table-cell">
+                        <td class="text-right tabular-nums text-gray-700 hidden lg:table-cell">
                             {{ $account->credit_balance > 0 ? number_format($account->credit_balance, 0, ',', ' ') : '—' }}
                         </td>
-                        <td class="px-4 py-3 text-center hidden md:table-cell">
+                        <td class="text-center hidden md:table-cell">
                             @if($account->is_detail)
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Oui</span>
                             @else
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Regroupement</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="text-right">
                             @can('accounting.manage')
                             <a href="{{ route('comptabilite.plan-comptable.edit', $account) }}"
                                class="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors inline-flex" title="Modifier">

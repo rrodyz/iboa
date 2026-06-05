@@ -171,7 +171,18 @@ document.addEventListener('DOMContentLoaded', function () {
         const dataConfirm  = form.dataset.confirm;
         const onsubmitAttr = form.getAttribute('onsubmit') || '';
         const inlineMsg    = _erpExtractConfirmMsg(onsubmitAttr);
-        const confirmMsg   = dataConfirm || inlineMsg;
+
+        /* ── Auto-confirmation globale pour TOUS les formulaires DELETE ──
+           Tout form avec _method=DELETE sans data-confirm explicite
+           reçoit une confirmation par défaut (data-skip-confirm pour opt-out). */
+        let confirmMsg = dataConfirm || inlineMsg;
+        if (!confirmMsg && form.dataset.skipConfirm === undefined) {
+            const methodInput = form.querySelector('input[name="_method"]');
+            const hiddenMethod = methodInput ? methodInput.value.toUpperCase() : '';
+            if (hiddenMethod === 'DELETE') {
+                confirmMsg = form.dataset.confirmMsg || 'Supprimer cet élément ? Cette action est irréversible.';
+            }
+        }
 
         if (!confirmMsg) return; /* Pas de confirmation requise */
 
@@ -214,6 +225,19 @@ document.addEventListener('DOMContentLoaded', function () {
             form.submit();
         }
     }, true /* capture phase */);
+
+    /* ── 1b. Helper global async — utilisable depuis n'importe quel JS ── */
+    window.erpConfirm = async function (optsOrMessage) {
+        const modalEl = document.getElementById('erp-confirm-modal');
+        const alpine  = modalEl?._x_dataStack?.[0];
+        const opts    = typeof optsOrMessage === 'string'
+            ? { message: optsOrMessage }
+            : (optsOrMessage ?? {});
+        if (!alpine || typeof alpine.show !== 'function') {
+            return window.confirm(opts.message ?? 'Confirmer ?');
+        }
+        return alpine.show(opts);
+    };
 
     /* ── 2. État de chargement pour liens PDF / export ───────────────── */
     const overlay  = document.getElementById('erp-loading-overlay');

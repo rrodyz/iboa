@@ -16,7 +16,6 @@
 </div>
 
 <x-validation-errors />
-@endif
 
 <form method="POST" action="{{ route('ventes.factures.store') }}">
     @csrf

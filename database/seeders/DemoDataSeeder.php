@@ -38,10 +38,34 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ *  SEEDER DE DÉMONSTRATION — données fictives à NE PAS charger en production.
+ *
+ *  Crée : sociétés de démo, exercices, clients/fournisseurs/produits fictifs,
+ *  devis/commandes/factures/réceptions de test, paiements et mouvements de
+ *  trésorerie, utilisateurs de démo (admin@iboa.bf…).
+ *
+ *  Garde-fou intégré : refuse de s'exécuter si APP_ENV=production, même appelé
+ *  directement via `--class=DemoDataSeeder`. Définir SEED_DEMO_FORCE=true pour
+ *  outrepasser (à n'utiliser que sciemment sur une base jetable).
+ * ════════════════════════════════════════════════════════════════════════════
+ */
 class DemoDataSeeder extends Seeder
 {
     public function run(): void
     {
+        // ── Garde-fou production ───────────────────────────────────────────────
+        if (app()->environment('production') && ! env('SEED_DEMO_FORCE', false)) {
+            $this->command->error(
+                '⛔ DemoDataSeeder bloqué : APP_ENV=production. '.
+                'Les données de démonstration ne doivent jamais être chargées en '.
+                'production. (Forcer avec SEED_DEMO_FORCE=true sur une base jetable.)'
+            );
+
+            return;
+        }
+
         // ── Devise ────────────────────────────────────────────────────────────
         $xof = Currency::firstOrCreate(['code' => 'XOF'], [
             'name'               => 'Franc CFA BCEAO',

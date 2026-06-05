@@ -83,9 +83,12 @@ class PayrollSettingController extends Controller
             'parts_base_married'  => ['required', 'numeric', 'min:0.5', 'max:5'],
             'parts_base_widowed'  => ['required', 'numeric', 'min:0.5', 'max:5'],
             'bulletin_prefix'     => ['required', 'string', 'max:10'],
-            'currency_code'      => ['required', 'string', 'max:10'],
-            'country_code'       => ['required', 'string', 'max:5'],
-            'notes'              => ['nullable', 'string', 'max:2000'],
+            'currency_code'       => ['required', 'string', 'max:10'],
+            'country_code'        => ['required', 'string', 'max:5'],
+            'cnss_affiliation'    => ['nullable', 'string', 'max:30'],
+            'phone'               => ['nullable', 'string', 'max:30'],
+            'address_bulletin'    => ['nullable', 'string', 'max:200'],
+            'notes'               => ['nullable', 'string', 'max:2000'],
 
             // [P3.B] Effort de paix
             'effort_paix_enabled' => ['nullable', 'boolean'],

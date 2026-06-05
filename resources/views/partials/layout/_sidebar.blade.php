@@ -105,6 +105,7 @@ request()->routeIs('achats.*')                                                  
             ══════════════════════════════════════ --}}
 
             {{-- ── VENTES ───────────────────────────────── --}}
+            @canany(['quotes.view','orders.view','invoices.view','deliveries.view','credit_notes.view','sales.view_all'])
             @php $gId = 'ventes'; $gActive = request()->routeIs('ventes.*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -149,6 +150,8 @@ request()->routeIs('achats.*')                                                  
                     </div>
                 </div>
             </div>
+
+            @endcanany
 
             {{-- ── ACHATS ───────────────────────────────── --}}
             @canany(['purchase_requests.view', 'purchase_orders.view', 'receptions.view', 'supplier_invoices.view', 'supplier_returns.view'])
@@ -196,6 +199,7 @@ request()->routeIs('achats.*')                                                  
             @endcanany
 
             {{-- ── GESTION ──────────────────────────────── --}}
+            @canany(['clients.view','suppliers.view','products.view'])
             @php $gId = 'gestion'; $gActive = request()->routeIs('clients*','suppliers*','products*','brands*','product-families*','promotions*','product-price-tiers*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -239,6 +243,8 @@ request()->routeIs('achats.*')                                                  
                     </div>
                 </div>
             </div>
+
+            @endcanany
 
             {{-- ── STOCKS ───────────────────────────────── --}}
             @canany(['stocks.view', 'stocks.adjust', 'inventory.view'])
@@ -448,6 +454,7 @@ request()->routeIs('achats.*')                                                  
             @endcanany
 
             {{-- ── RH / PAIE ────────────────────────────── --}}
+            @canany(['rh.view','rh.employees.view','rh.payroll.view','rh.payroll.manage','rh.settings','rh.portail'])
             @php $gId = 'rh'; $gActive = request()->routeIs('rh.*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -519,6 +526,7 @@ request()->routeIs('achats.*')                                                  
                             <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Configuration</span>
                         </div>
                         @foreach([
+                            [route('rh.types-primes.index'),       'Types de primes',         'rh.types-primes*'],
                             [route('rh.rubriques.index'),          'Rubriques de paie',      'rh.rubriques*'],
                             [route('rh.plans.index'),              'Plans de paie',           'rh.plans*'],
                             [route('rh.profils.index'),            'Profils de paie',         'rh.profils*'],
@@ -559,7 +567,10 @@ request()->routeIs('achats.*')                                                  
                 </div>
             </div>
 
+            @endcanany
+
             {{-- ── CRM ──────────────────────────────────── --}}
+            @canany(['clients.view','sales.view_all','quotes.view'])
             @php $gId = 'crm'; $gActive = request()->routeIs('crm.*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -601,7 +612,10 @@ request()->routeIs('achats.*')                                                  
                 </div>
             </div>
 
+            @endcanany
+
             {{-- ── INTÉGRATIONS ─────────────────────────── --}}
+            @can('integrations.view')
             @php $gId = 'integrations'; $gActive = request()->routeIs('integrations.*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -625,11 +639,16 @@ request()->routeIs('achats.*')                                                  
                      x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
-                        @foreach([
-                            [route('integrations.dashboard'), 'Tableau de bord',    'integrations.dashboard'],
-                            [route('integrations.index'),     'Toutes les intégrations', 'integrations.index'],
-                            [route('integrations.create'),    'Nouvelle intégration', 'integrations.create'],
-                        ] as [$href, $label, $match])
+                        @php
+                            $intLinks = [
+                                [route('integrations.dashboard'), 'Tableau de bord',    'integrations.dashboard'],
+                                [route('integrations.index'),     'Toutes les intégrations', 'integrations.index'],
+                            ];
+                            if (auth()->user()->can('integrations.manage')) {
+                                $intLinks[] = [route('integrations.create'), 'Nouvelle intégration', 'integrations.create'];
+                            }
+                        @endphp
+                        @foreach($intLinks as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
@@ -642,7 +661,10 @@ request()->routeIs('achats.*')                                                  
                 </div>
             </div>
 
+            @endcan
+
             {{-- ── PARAMÈTRES ───────────────────────────── --}}
+            @canany(['settings.manage','users.manage','roles.manage','company.edit'])
             @php $gId = 'parametres'; $gActive = request()->routeIs('users*','roles*','audit*','company*','units*','settings.*','payment-terms*','sequences*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -749,6 +771,8 @@ request()->routeIs('achats.*')                                                  
                     </div>
                 </div>
             </div>
+
+            @endcanany {{-- fin Paramètres --}}
 
             <div class="h-4"></div>
 

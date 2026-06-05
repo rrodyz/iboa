@@ -22,7 +22,8 @@
              if (p) { this.hasLot = p.lot; this.hasSerial = p.serial; this.hasExpiry = p.expiry; this.isKit = p.kit; }
              else { this.hasLot = false; this.hasSerial = false; this.hasExpiry = false; this.isKit = false; }
          }
-     }">
+     }"
+     x-init="onProductChange($el.querySelector('#product_id')?.value)">
 
     {{-- Header --}}
     <div>
@@ -75,7 +76,7 @@
                 @foreach($products as $product)
                     <option value="{{ $product->id }}"
                             data-price="{{ $product->purchase_price }}"
-                            {{ old('product_id') == $product->id ? 'selected' : '' }}>
+                            {{ old('product_id', request()->query('product_id')) == $product->id ? 'selected' : '' }}>
                         {{ $product->reference ? '[' . $product->reference . '] ' : '' }}{{ $product->name }}
                         @if($product->type === 'compose') (Kit) @endif
                     </option>

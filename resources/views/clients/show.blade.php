@@ -506,11 +506,9 @@
         <x-attachments.manager model="Client" :id="$client->id" />
     </div>
 
-</div>
-
-{{-- ================================================================
-     Interaction Modal (Alpine.js x-show)
-================================================================ --}}
+    {{-- ================================================================
+         Interaction Modal (Alpine.js x-show) — inside x-data wrapper
+    ================================================================ --}}
 <div x-show="showInteractionModal"
      x-cloak
      class="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -619,14 +617,15 @@
         </form>
     </div>
 
-</div>
+</div>{{-- fin du wrapper x-data showInteractionModal --}}
 
 @push('scripts')
 <script>
     // Auto-open interaction modal if there are validation errors for interaction fields
     @if($errors->has('type') || $errors->has('subject') || $errors->has('occurred_at') || $errors->has('notes'))
-    document.addEventListener('alpine:init', () => {
-        document.querySelector('[x-data]').__x.$data.showInteractionModal = true;
+    document.addEventListener('alpine:initialized', () => {
+        const el = document.querySelector('[x-data]');
+        if (el) Alpine.$data(el).showInteractionModal = true;
     });
     @endif
 </script>

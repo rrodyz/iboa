@@ -156,28 +156,28 @@
         @if($serie->isEmpty())
             <div class="py-12 text-center text-gray-400 text-sm">Aucune donnée sur cette période</div>
         @else
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm divide-y divide-gray-100">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Période</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Nb Fact.</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">CA HT</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">CA TTC</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Encaissé</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Taux encais.</th>
+                        <th class="text-left">Période</th>
+                        <th class="text-right">Nb Fact.</th>
+                        <th class="text-right">CA HT</th>
+                        <th class="text-right">CA TTC</th>
+                        <th class="text-right">Encaissé</th>
+                        <th class="text-right">Taux encais.</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-50">
+                <tbody>
                     @foreach($serie as $row)
                     @php $tauxEnc = $row->ttc > 0 ? round(($row->encaisse / $row->ttc) * 100) : 0; @endphp
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-5 py-3 font-semibold text-gray-900">{{ $row->label }}</td>
-                        <td class="px-5 py-3 text-right text-gray-600">{{ $row->nb }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-gray-700">{{ number_format($row->ht, 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono font-bold text-gray-900">{{ number_format($row->ttc, 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-emerald-700">{{ number_format($row->encaisse, 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right">
+                    <tr>
+                        <td class="font-semibold text-gray-900">{{ $row->label }}</td>
+                        <td class="text-right text-gray-600">{{ $row->nb }}</td>
+                        <td class="text-right font-mono text-gray-700">{{ number_format($row->ht, 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono font-bold text-gray-900">{{ number_format($row->ttc, 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono text-emerald-700">{{ number_format($row->encaisse, 0, ',', ' ') }}</td>
+                        <td class="text-right">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
                                 {{ $tauxEnc >= 80 ? 'bg-emerald-100 text-emerald-700' : ($tauxEnc >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700') }}">
                                 {{ $tauxEnc }}%
@@ -188,12 +188,12 @@
                 </tbody>
                 <tfoot class="bg-indigo-50 font-bold">
                     <tr>
-                        <td class="px-5 py-3 text-indigo-800 font-bold">Total</td>
-                        <td class="px-5 py-3 text-right text-indigo-800">{{ $serie->sum('nb') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-indigo-800">{{ number_format($serie->sum('ht'), 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-indigo-900 font-extrabold">{{ number_format($serie->sum('ttc'), 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-emerald-800">{{ number_format($serie->sum('encaisse'), 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right">
+                        <td class="text-indigo-800 font-bold">Total</td>
+                        <td class="text-right text-indigo-800">{{ $serie->sum('nb') }}</td>
+                        <td class="text-right font-mono text-indigo-800">{{ number_format($serie->sum('ht'), 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono text-indigo-900 font-extrabold">{{ number_format($serie->sum('ttc'), 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono text-emerald-800">{{ number_format($serie->sum('encaisse'), 0, ',', ' ') }}</td>
+                        <td class="text-right">
                             @php $ttot = $serie->sum('ttc'); $etot = $serie->sum('encaisse'); @endphp
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
                                 {{ $ttot > 0 ? round(($etot / $ttot) * 100) : 0 }}%

@@ -1,30 +1,30 @@
-<div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200 text-sm">
-        <thead class="bg-gray-50">
+<div class="tbl-scroll">
+    <table class="tbl">
+        <thead>
             <tr>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Journal</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">N° pièce</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Libellé</th>
-                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Débit</th>
-                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Crédit</th>
-                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Solde cumulé</th>
+                <th class="text-left">Date</th>
+                <th class="text-left">Journal</th>
+                <th class="text-left">N° pièce</th>
+                <th class="text-left">Libellé</th>
+                <th class="text-right">Débit</th>
+                <th class="text-right">Crédit</th>
+                <th class="text-right">Solde cumulé</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody>
             @php $running = 0; @endphp
             @forelse($lines as $line)
             @php $running += $line->debit - $line->credit; @endphp
-            <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-2.5 text-gray-600 whitespace-nowrap">
+            <tr>
+                <td class="text-gray-600 whitespace-nowrap">
                     {{ $line->journalEntry?->entry_date?->format('d/m/Y') ?? '—' }}
                 </td>
-                <td class="px-4 py-2.5 whitespace-nowrap">
+                <td class="whitespace-nowrap">
                     <span class="font-mono text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">
                         {{ $line->journalEntry?->journalType?->code ?? '—' }}
                     </span>
                 </td>
-                <td class="px-4 py-2.5 whitespace-nowrap">
+                <td class="whitespace-nowrap">
                     @if($line->journalEntry)
                     <a href="{{ route('comptabilite.journaux.show', $line->journal_entry_id) }}"
                        class="font-mono text-violet-600 hover:text-violet-800 hover:underline text-xs">
@@ -34,16 +34,16 @@
                     <span class="text-gray-400 text-xs">—</span>
                     @endif
                 </td>
-                <td class="px-4 py-2.5 text-gray-700 max-w-xs truncate" title="{{ $line->label ?: $line->journalEntry?->description }}">
+                <td class="text-gray-700 max-w-xs truncate" title="{{ $line->label ?: $line->journalEntry?->description }}">
                     {{ $line->label ?: $line->journalEntry?->description ?: '—' }}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums {{ $line->debit > 0 ? 'font-semibold text-gray-900' : 'text-gray-300' }}">
+                <td class="text-right tabular-nums {{ $line->debit > 0 ? 'font-semibold text-gray-900' : 'text-gray-300' }}">
                     {{ $line->debit > 0 ? number_format($line->debit, 0, ',', ' ') : '—' }}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums {{ $line->credit > 0 ? 'font-semibold text-gray-900' : 'text-gray-300' }}">
+                <td class="text-right tabular-nums {{ $line->credit > 0 ? 'font-semibold text-gray-900' : 'text-gray-300' }}">
                     {{ $line->credit > 0 ? number_format($line->credit, 0, ',', ' ') : '—' }}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums whitespace-nowrap
+                <td class="text-right tabular-nums whitespace-nowrap
                     {{ $running > 0 ? 'text-blue-700' : ($running < 0 ? 'text-red-700' : 'text-gray-400') }}">
                     @if($running == 0)
                         —
@@ -68,17 +68,17 @@
             $footBalance = $footDebit - $footCredit;
         @endphp
         <tfoot>
-            <tr class="border-t-2 border-gray-300 bg-gray-50">
-                <td colspan="4" class="px-4 py-2.5 text-xs font-bold text-gray-600 uppercase tracking-wider">
+            <tr class="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                <td colspan="4" class="text-xs text-gray-600 uppercase tracking-wider">
                     Total — {{ $lines->count() }} ligne(s)
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums font-bold text-blue-700">
+                <td class="text-right tabular-nums text-blue-700">
                     {{ number_format($footDebit, 0, ',', ' ') }}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums font-bold text-red-700">
+                <td class="text-right tabular-nums text-red-700">
                     {{ number_format($footCredit, 0, ',', ' ') }}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums font-bold whitespace-nowrap
+                <td class="text-right tabular-nums whitespace-nowrap
                     {{ $footBalance > 0 ? 'text-blue-700' : ($footBalance < 0 ? 'text-red-700' : 'text-gray-400') }}">
                     @if($footBalance == 0)
                         <span class="text-gray-400 font-normal">Équilibré</span>

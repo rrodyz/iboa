@@ -35,12 +35,6 @@
         </form>
     </div>
 
-    @if(session('success'))
-    <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm">{{ session('success') }}</div>
-    @endif
-    @if(session('error'))
-    <div class="bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">{{ session('error') }}</div>
-    @endif
 
     {{-- Aide --}}
     <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
@@ -60,34 +54,35 @@
         <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700">Mois de l'exercice {{ $fiscalYear->label }}</h2>
         </div>
-        <table class="min-w-full text-sm">
-            <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <div class="tbl-scroll">
+        <table class="tbl tbl-sticky">
+            <thead>
                 <tr>
-                    <th class="px-4 py-2 text-left">Mois</th>
-                    <th class="px-4 py-2 text-right">Écritures</th>
-                    <th class="px-4 py-2 text-right">Volume validé</th>
-                    <th class="px-4 py-2 text-center">État</th>
-                    <th class="px-4 py-2 text-right">Action</th>
+                    <th class="text-left">Mois</th>
+                    <th class="text-right">Écritures</th>
+                    <th class="text-right">Volume validé</th>
+                    <th class="text-center">État</th>
+                    <th class="text-right">Action</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-50">
+            <tbody>
                 @foreach($months as $m)
                     @php $isLocked = $m['lock'] !== null; @endphp
                     <tr class="hover:bg-gray-50 {{ $isLocked ? 'bg-gray-50/60' : '' }}">
-                        <td class="px-4 py-3">
+                        <td class="">
                             <span class="font-medium text-gray-900">{{ ucfirst($m['label']) }}</span>
                             @if($isLocked && $m['lock']->reason)
                                 <p class="text-xs text-gray-500 mt-0.5 italic">« {{ $m['lock']->reason }} »</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">
+                        <td class=" text-right tabular-nums text-gray-700">
                             {{ $m['total_count'] }}
                             @if($m['draft_count'] > 0)
                                 <span class="text-xs text-amber-600 ml-1">({{ $m['draft_count'] }} brouillon{{ $m['draft_count']>1?'s':'' }})</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700">{{ $fmt($m['total_volume']) }} FCFA</td>
-                        <td class="px-4 py-3 text-center">
+                        <td class=" text-right tabular-nums text-gray-700">{{ $fmt($m['total_volume']) }} FCFA</td>
+                        <td class=" text-center">
                             @if($isLocked)
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
                                     <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>
@@ -104,10 +99,13 @@
                                 </span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class=" text-right">
                             @if($isLocked)
                                 <form action="{{ route('comptabilite.periods.unlock', $m['lock']) }}" method="POST" class="inline"
-                                      onsubmit="return confirm('Déverrouiller {{ $m['label'] }} ? Les écritures seront à nouveau modifiables.')">
+                                      data-confirm="Déverrouiller {{ $m['label'] }} ? Les écritures seront à nouveau modifiables."
+                                      data-confirm-title="Déverrouiller la période"
+                                      data-confirm-label="Déverrouiller"
+                                      data-confirm-danger="false">
                                     @csrf @method('DELETE')
                                     <button type="submit" class="text-xs text-violet-600 hover:underline font-medium">Déverrouiller</button>
                                 </form>
@@ -124,7 +122,10 @@
                     @if(!$isLocked)
                     <tr id="lock-form-{{ $m['year'] }}-{{ $m['month'] }}" class="hidden bg-red-50/50">
                         <td colspan="5" class="px-4 py-3">
-                            <form action="{{ route('comptabilite.periods.lock') }}" method="POST" class="flex flex-wrap items-end gap-3">
+                            <form action="{{ route('comptabilite.periods.lock') }}" method="POST" class="flex flex-wrap items-end gap-3"
+                                  data-confirm="Verrouiller {{ $m['label'] }} ? Cette action peut être annulée à tout moment."
+                                  data-confirm-title="Verrouiller la période"
+                                  data-confirm-label="Verrouiller">
                                 @csrf
                                 <input type="hidden" name="year" value="{{ $m['year'] }}">
                                 <input type="hidden" name="month" value="{{ $m['month'] }}">
@@ -135,8 +136,7 @@
                                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                                 </div>
                                 <button type="submit"
-                                        class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
-                                        onclick="return confirm('Verrouiller {{ $m['label'] }} ? Cette action peut être annulée à tout moment.')">
+                                        class="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
                                     Confirmer le verrouillage
                                 </button>
                             </form>
@@ -146,6 +146,7 @@
                 @endforeach
             </tbody>
         </table>
+        </div>
     </div>
     @endif
 

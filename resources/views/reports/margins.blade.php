@@ -112,34 +112,34 @@
         @if($products->isEmpty())
             <div class="py-12 text-center text-gray-400 text-sm">Aucun produit vendu sur cette période</div>
         @else
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm divide-y divide-gray-100">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Qté</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">CA HT</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Coût</th>
-                        <th class="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Marge</th>
-                        <th class="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Taux</th>
+                        <th class="text-left">Produit</th>
+                        <th class="text-right">Qté</th>
+                        <th class="text-right">CA HT</th>
+                        <th class="text-right">Coût</th>
+                        <th class="text-right">Marge</th>
+                        <th class="text-center">Taux</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-50">
+                <tbody>
                     @foreach($products as $p)
-                    <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-5 py-3">
+                    <tr>
+                        <td>
                             <div class="font-medium text-gray-900">{{ $p->name }}</div>
                             @if($p->reference)
                             <div class="text-xs text-gray-400 font-mono">{{ $p->reference }}</div>
                             @endif
                         </td>
-                        <td class="px-5 py-3 text-right text-gray-600 tabular-nums">{{ number_format($p->qty_vendue, 1, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-gray-700 tabular-nums">{{ number_format($p->ca_ht, 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono text-gray-500 tabular-nums">{{ number_format($p->cout_achats, 0, ',', ' ') }}</td>
-                        <td class="px-5 py-3 text-right font-mono font-bold {{ $p->marge_brute >= 0 ? 'text-emerald-700' : 'text-rose-600' }} tabular-nums">
+                        <td class="text-right text-gray-600 tabular-nums">{{ number_format($p->qty_vendue, 1, ',', ' ') }}</td>
+                        <td class="text-right font-mono text-gray-700 tabular-nums">{{ number_format($p->ca_ht, 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono text-gray-500 tabular-nums">{{ number_format($p->cout_achats, 0, ',', ' ') }}</td>
+                        <td class="text-right font-mono font-bold {{ $p->marge_brute >= 0 ? 'text-emerald-700' : 'text-rose-600' }} tabular-nums">
                             {{ number_format($p->marge_brute, 0, ',', ' ') }}
                         </td>
-                        <td class="px-5 py-3 text-center">
+                        <td class="text-center">
                             @php
                                 $t = $p->taux_marge;
                                 $cls = $t >= 30 ? 'bg-emerald-100 text-emerald-700' : ($t >= 15 ? 'bg-amber-100 text-amber-700' : ($t >= 0 ? 'bg-orange-100 text-orange-700' : 'bg-rose-100 text-rose-700'));

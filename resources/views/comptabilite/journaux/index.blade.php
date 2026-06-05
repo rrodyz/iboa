@@ -83,56 +83,56 @@
 
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <thead class="bg-gray-50">
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky">
+                <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Journal</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Débit</th>
-                        <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Crédit</th>
-                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Statut</th>
-                        <th class="px-4 py-3"></th>
+                        <th class="text-left">Numéro</th>
+                        <th class="text-left hidden md:table-cell">Journal</th>
+                        <th class="text-left hidden lg:table-cell">Date</th>
+                        <th class="text-left">Libellé</th>
+                        <th class="text-right hidden lg:table-cell">Débit</th>
+                        <th class="text-right hidden lg:table-cell">Crédit</th>
+                        <th class="text-center">Statut</th>
+                        <th></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100">
+                <tbody>
                     @forelse($entries as $entry)
                     <tr class="hover:bg-gray-50 transition-colors">
-                        <td class="px-4 py-3">
+                        <td>
                             <a href="{{ route('comptabilite.journaux.show', $entry) }}"
                                class="font-mono font-semibold text-violet-600 hover:text-violet-800">
                                 {{ $entry->number }}
                             </a>
                         </td>
-                        <td class="px-4 py-3 hidden md:table-cell">
+                        <td class="hidden md:table-cell">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 font-mono">
                                 {{ $entry->journalType?->code }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-gray-600 hidden lg:table-cell">{{ $entry->entry_date?->format('d/m/Y') }}</td>
-                        <td class="px-4 py-3 text-gray-700">
+                        <td class="text-gray-600 hidden lg:table-cell">{{ $entry->entry_date?->format('d/m/Y') }}</td>
+                        <td class="text-gray-700">
                             {{ \Illuminate\Support\Str::limit($entry->description, 50) }}
                             @if($entry->reference)
                             <span class="text-xs text-gray-400 ml-1">{{ $entry->reference }}</span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums text-gray-700 hidden lg:table-cell">
+                        <td class="text-right tabular-nums text-gray-700 hidden lg:table-cell">
                             {{ number_format($entry->total_debit, 0, ',', ' ') }}
                         </td>
-                        <td class="px-4 py-3 text-right tabular-nums hidden lg:table-cell">
+                        <td class="text-right tabular-nums hidden lg:table-cell">
                             <span class="{{ $entry->total_debit !== $entry->total_credit ? 'text-red-600 font-semibold' : 'text-gray-700' }}">
                                 {{ number_format($entry->total_credit, 0, ',', ' ') }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-center">
+                        <td class="text-center">
                             @php $color = $entry->statusColor(); @endphp
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-{{ $color }}-100 text-{{ $color }}-700">
                                 {{ $entry->statusLabel() }}
                             </span>
                         </td>
-                        <td class="px-4 py-3">
+                        <td>
                             <div class="flex items-center justify-end gap-1">
                                 <a href="{{ route('comptabilite.journaux.show', $entry) }}"
                                    class="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded transition-colors" title="Voir">
@@ -144,7 +144,10 @@
                                 @if($entry->status === 'brouillon')
                                 @can('accounting.validate')
                                 <form action="{{ route('comptabilite.journaux.validate', $entry) }}" method="POST"
-                                      onsubmit="return confirm('Valider cette écriture ? Cette action est irréversible.')">
+                                      data-confirm="Valider cette écriture ? Cette action est irréversible."
+                                      data-confirm-title="Valider l'écriture"
+                                      data-confirm-label="Valider"
+                                      data-confirm-danger="false">
                                     @csrf
                                     <button type="submit" class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Valider">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,7 +157,8 @@
                                 </form>
                                 @endcan
                                 <form action="{{ route('comptabilite.journaux.destroy', $entry) }}" method="POST"
-                                      onsubmit="return confirm('Supprimer cette écriture ?')">
+                                      data-confirm="Supprimer cette écriture ?"
+                                      data-confirm-title="Supprimer l'écriture">
                                     @csrf @method('DELETE')
                                     <button type="submit" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Supprimer">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
