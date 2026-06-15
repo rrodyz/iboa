@@ -12,21 +12,8 @@
         $company = \App\Models\Company::first();
     }
 
-    /* ── Logo (base64 so DomPDF can render it inline) ─────────────────── */
-    $__logoBase64 = null;
-    if ($company?->logo) {
-        $__logoPath = storage_path('app/public/' . $company->logo);
-        if (file_exists($__logoPath)) {
-            $__ext         = strtolower(pathinfo($__logoPath, PATHINFO_EXTENSION));
-            $__mime        = match($__ext) {
-                'png'  => 'image/png',
-                'svg'  => 'image/svg+xml',
-                'gif'  => 'image/gif',
-                default => 'image/jpeg',
-            };
-            $__logoBase64  = 'data:' . $__mime . ';base64,' . base64_encode(file_get_contents($__logoPath));
-        }
-    }
+    /* ── Logo (base64 so DomPDF can render it inline ; jamais bloquant) ── */
+    $__logoBase64 = pdf_image_data($company?->logo);
 
     /* ── Address line ─────────────────────────────────────────────────── */
     $__addressParts = array_filter([

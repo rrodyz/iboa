@@ -67,28 +67,28 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-rose-50">
-                @foreach($overdue as $sch)
-                @php $days = now()->diffInDays($sch->due_date); @endphp
+                @foreach($overdue as $r)
+                @php $days = (int) $r['due_date']->diffInDays(now()->startOfDay()); @endphp
                 <tr class="hover:bg-rose-50">
                     <td class="px-4 py-2.5">
-                        <a href="{{ route('ventes.factures.show', $sch->invoice_id) }}" class="text-indigo-700 hover:underline font-medium">
-                            {{ $sch->invoice?->number ?? '—' }}
+                        <a href="{{ route('ventes.factures.show', $r['invoice_id']) }}" class="text-indigo-700 hover:underline font-medium">
+                            {{ $r['number'] ?? '—' }}
                         </a>
-                        @if($sch->label)
-                        <div class="text-xs text-gray-400">{{ $sch->label }}</div>
+                        @if($r['label'])
+                        <div class="text-xs text-gray-400">{{ $r['label'] }}</div>
                         @endif
                     </td>
-                    <td class="px-4 py-2.5 font-medium text-gray-800">{{ $sch->invoice?->client?->name ?? '—' }}</td>
-                    <td class="px-4 py-2.5 text-center text-rose-700 font-medium">{{ $sch->due_date->format('d/m/Y') }}</td>
+                    <td class="px-4 py-2.5 font-medium text-gray-800">{{ $r['client'] }}</td>
+                    <td class="px-4 py-2.5 text-center text-rose-700 font-medium">{{ $r['due_date']->format('d/m/Y') }}</td>
                     <td class="px-4 py-2.5 text-center">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">
                             {{ $days }} j
                         </span>
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($sch->amount, 0, ',', ' ') }}</td>
-                    <td class="px-4 py-2.5 text-right tabular-nums font-bold text-rose-700">{{ number_format($sch->remainingAmount(), 0, ',', ' ') }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($r['amount'], 0, ',', ' ') }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums font-bold text-rose-700">{{ number_format($r['remaining'], 0, ',', ' ') }}</td>
                     <td class="px-4 py-2.5 text-center">
-                        <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $sch->invoice?->client_id]) }}"
+                        <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $r['client_id']]) }}"
                            class="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
                             Encaisser
                         </a>
@@ -122,28 +122,28 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-amber-50">
-                @foreach($upcoming as $sch)
-                @php $days = now()->diffInDays($sch->due_date); @endphp
+                @foreach($upcoming as $r)
+                @php $days = (int) now()->startOfDay()->diffInDays($r['due_date']); @endphp
                 <tr class="hover:bg-amber-50">
                     <td class="px-4 py-2.5">
-                        <a href="{{ route('ventes.factures.show', $sch->invoice_id) }}" class="text-indigo-700 hover:underline font-medium">
-                            {{ $sch->invoice?->number ?? '—' }}
+                        <a href="{{ route('ventes.factures.show', $r['invoice_id']) }}" class="text-indigo-700 hover:underline font-medium">
+                            {{ $r['number'] ?? '—' }}
                         </a>
-                        @if($sch->label)
-                        <div class="text-xs text-gray-400">{{ $sch->label }}</div>
+                        @if($r['label'])
+                        <div class="text-xs text-gray-400">{{ $r['label'] }}</div>
                         @endif
                     </td>
-                    <td class="px-4 py-2.5 font-medium text-gray-800">{{ $sch->invoice?->client?->name ?? '—' }}</td>
-                    <td class="px-4 py-2.5 text-center font-medium text-gray-700">{{ $sch->due_date->format('d/m/Y') }}</td>
+                    <td class="px-4 py-2.5 font-medium text-gray-800">{{ $r['client'] }}</td>
+                    <td class="px-4 py-2.5 text-center font-medium text-gray-700">{{ $r['due_date']->format('d/m/Y') }}</td>
                     <td class="px-4 py-2.5 text-center">
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                            J{{ $days > 0 ? '-'.$days : 'Aujourd\'hui' }}
+                            {{ $days === 0 ? "Aujourd'hui" : 'J-' . $days }}
                         </span>
                     </td>
-                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($sch->amount, 0, ',', ' ') }}</td>
-                    <td class="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{{ number_format($sch->remainingAmount(), 0, ',', ' ') }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($r['amount'], 0, ',', ' ') }}</td>
+                    <td class="px-4 py-2.5 text-right tabular-nums font-bold text-amber-700">{{ number_format($r['remaining'], 0, ',', ' ') }}</td>
                     <td class="px-4 py-2.5 text-center">
-                        <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $sch->invoice?->client_id]) }}"
+                        <a href="{{ route('tresorerie.encaissements.create', ['client_id' => $r['client_id']]) }}"
                            class="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-lg font-medium transition-colors">
                             Encaisser
                         </a>
@@ -156,7 +156,7 @@
     @endif
 
     @if($overdue->isEmpty() && $upcoming->isEmpty())
-    <div class="bg-white rounded-xl border border-gray-200 p-12 text-center">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
         <svg class="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>

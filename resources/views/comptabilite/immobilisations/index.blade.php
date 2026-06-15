@@ -85,9 +85,9 @@
     </form>
 
     {{-- Table --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="tbl-scroll">
-        <table class="tbl tbl-sticky">
+        <table class="tbl tbl-sticky w-full">
             <thead>
                 <tr>
                     <th class="text-left">Code / Désignation</th>

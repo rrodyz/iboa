@@ -76,7 +76,7 @@
         {{-- Items --}}
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">Lignes demandées ({{ $rfq->items->count() }})</h2></div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Description</th><th class="px-4 py-2 text-right">Quantité</th></tr>
                 </thead>
@@ -97,7 +97,7 @@
         {{-- Suppliers + statut --}}
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">Fournisseurs consultés ({{ $rfq->rfqSuppliers->count() }})</h2></div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th class="px-4 py-2 text-left">Fournisseur</th>
@@ -136,7 +136,7 @@
                                     <div><label class="block font-medium mb-1">Valide jusqu'au</label><input type="date" name="valid_until" class="w-full border border-gray-300 rounded px-2 py-1.5"></div>
                                     <div><label class="block font-medium mb-1">Délai (jours)</label><input type="number" name="delivery_days" min="0" class="w-full border border-gray-300 rounded px-2 py-1.5"></div>
                                 </div>
-                                <table class="min-w-full text-xs">
+                                <table class="w-full text-xs">
                                     <thead><tr class="border-b"><th class="text-left py-1">Ligne</th><th class="text-right py-1">Prix unitaire</th><th class="text-right py-1">Remise %</th><th class="text-right py-1">TVA %</th></tr></thead>
                                     <tbody>
                                         @foreach($rfq->items as $item)
@@ -173,7 +173,7 @@
             <h2 class="text-sm font-semibold text-gray-700">Cotations reçues ({{ $rfq->quotes->count() }})</h2>
             <a href="{{ route('achats.rfq.compare', $rfq) }}" class="text-xs text-violet-600 hover:underline font-medium">Voir le comparatif détaillé →</a>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Fournisseur</th>

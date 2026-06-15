@@ -510,3 +510,18 @@ function initAutoSubmitForms() {
 
 // Init au premier chargement et à chaque navigation Turbo
 document.addEventListener('turbo:load', initAutoSubmitForms);
+
+// ── Garde global : avale les rejets fetch « NetworkError » bénins ────────────
+// (requête annulée par navigation Turbo, source-map, extension navigateur).
+// Les vraies erreurs applicatives restent visibles (on ne masque que les
+// échecs réseau de type TypeError fetch).
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const msg = (reason && (reason.message || reason.name || String(reason))) || '';
+    // Match par message (robuste cross-realm : worker, extension, source-map).
+    const benign = /NetworkError|Failed to fetch|Load failed|aborted|AbortError|TypeError: NetworkError/i.test(msg);
+    if (benign) {
+        event.preventDefault(); // supprime le « Uncaught (in promise) » en console
+        if (console && console.debug) console.debug('[fetch] requête réseau ignorée :', msg);
+    }
+});

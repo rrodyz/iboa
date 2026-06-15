@@ -7,6 +7,7 @@ use App\Models\AccountClass;
 use App\Models\AccountingPeriodLock;
 use App\Models\BankDeposit;
 use App\Models\CashAccount;
+use App\Models\CashTransfer;
 use App\Models\ClientPayment;
 use App\Models\Company;
 use App\Models\CreditNote;
@@ -14,6 +15,7 @@ use App\Models\InventorySession;
 use App\Models\Invoice;
 use App\Models\JournalEntry;
 use App\Models\JournalType;
+use App\Modules\Production\Models\ProductionOrder;
 use App\Models\SupplierInvoice;
 use App\Models\SupplierPayment;
 use App\Models\SupplierReturn;
@@ -60,6 +62,21 @@ class AccountingService
         'virements_internes'  => ['585',  'Virements de fonds',              'actif',   5],
         // [BUG-2] Retenue à la source : créance sur l'État (impôt prélevé par le client)
         'retenues_etat'       => ['4473', 'État — retenues à la source',      'actif',   4],
+        // [TRESO] Écarts de caisse (clôture journalière)
+        'ecart_caisse_manque'   => ['6588', 'Manquants de caisse',           'charge',  6],
+        'ecart_caisse_excedent' => ['7588', 'Excédents de caisse',           'produit', 7],
+        // [TRESO] Frais bancaires (rapprochement)
+        'frais_bancaires'       => ['6312', 'Frais bancaires',               'charge',  6],
+        // [TRESO] Opérations diverses de caisse (entrées/sorties manuelles)
+        'autre_charge_caisse'   => ['6588', 'Charges diverses',              'charge',  6],
+        'autre_produit_caisse'  => ['7588', 'Produits divers',              'produit', 7],
+        // [TRESO] Contentieux : perte sur créance irrécouvrable
+        'pertes_creances'       => ['6514', 'Pertes sur créances clients',   'charge',  6],
+        // [PRODUCTION] Fabrication tôles bac — stocks matières / produits finis (SYSCOHADA)
+        'stocks_matieres'           => ['321',  'Stocks de matières premières',               'actif',   3],
+        'variation_stocks_matieres' => ['6032', 'Variation des stocks de matières premières', 'charge',  6],
+        'stocks_produits_finis'     => ['361',  'Stocks de produits finis',                   'actif',   3],
+        'production_stockee'        => ['736',  'Variation des stocks de produits finis',     'produit', 7],
     ];
 
     // =========================================================================
@@ -186,6 +203,166 @@ class AccountingService
         // [AUDIT-ERP-E] Lier l'écriture au paiement source
         if ($entry) {
             $payment->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
+    }
+
+    /**
+     * [TRESO] Virement interne entre deux comptes de trésorerie.
+     *   DR compte destination (caisse 571 / banque 521)
+     *   CR compte source      (caisse 571 / banque 521)
+     * Total trésorerie inchangé — déplacement entre comptes.
+     */
+    public function postCashTransfer(CashTransfer $transfer): ?JournalEntry
+    {
+        $company = $this->company($transfer->company_id);
+        if (!$company) return null;
+
+        $amount = (int) $transfer->amount;
+        if ($amount <= 0) return null;
+
+        $fromAccount = $this->tresorerieAccount($company, $transfer->from_cash_account_id);
+        $toAccount   = $this->tresorerieAccount($company, $transfer->to_cash_account_id);
+
+        $label = 'Virement '.$transfer->number;
+        $entry = $this->post($company, 'operations_diverses', [
+            'entry_date'  => $transfer->transfer_date ?? today(),
+            'reference'   => $transfer->number,
+            'description' => 'Virement interne '.$transfer->number
+                . ' — ' . ($transfer->fromAccount?->name ?? '?') . ' → ' . ($transfer->toAccount?->name ?? '?'),
+        ], [
+            $this->line($toAccount,   $label, $amount, 0),   // DR destination
+            $this->line($fromAccount, $label, 0, $amount),   // CR source
+        ]);
+
+        if ($entry) {
+            $transfer->updateQuietly(['journal_entry_id' => $entry->id]);
+        }
+
+        return $entry;
+    }
+
+    /**
+     * [TRESO] Frais bancaires constatés au rapprochement (ligne relevé non comptabilisée).
+     *   DR 6312 Frais bancaires / CR 521 Banque
+     */
+    public function postBankFee(\App\Models\CashAccount $cashAccount, int $amount, string $label, ?string $date = null): ?JournalEntry
+    {
+        $company = $this->company($cashAccount->company_id);
+        if (!$company || $amount <= 0) return null;
+
+        $banque = $this->tresorerieAccount($company, $cashAccount->id);
+        $entryDate = $date ? \Illuminate\Support\Carbon::parse($date) : today();
+
+        return $this->post($company, 'banque', [
+            'entry_date'  => $entryDate,
+            'reference'   => 'FRAIS-' . now()->format('YmdHis'),
+            'description' => $label ?: 'Frais bancaires',
+        ], [
+            $this->line($this->account($company, 'frais_bancaires'), $label ?: 'Frais bancaires', $amount, 0),
+            $this->line($banque, $label ?: 'Frais bancaires', 0, $amount),
+        ]);
+    }
+
+    /**
+     * [TRESO] Opération diverse de caisse (entrée/sortie manuelle).
+     *   Entrée (apport, recette diverse) : DR 571 Caisse / CR 758 Produits divers
+     *   Sortie (dépense diverse, petty cash) : DR 658 Charges diverses / CR 571 Caisse
+     */
+    public function postCashOperation(\App\Models\CashOperation $operation): ?JournalEntry
+    {
+        $company = $this->company($operation->company_id);
+        if (!$company) return null;
+
+        $amount = (int) $operation->amount;
+        if ($amount <= 0) return null;
+
+        $tresorerie = $this->tresorerieAccount($company, $operation->cash_account_id);
+        $label      = $operation->label ?: ($operation->category ?: 'Opération de caisse');
+        $journalCode = ($tresorerie->code === '571') ? 'caisse' : 'banque';
+
+        if ($operation->direction === 'entree') {
+            $lines = [
+                $this->line($tresorerie, $label, $amount, 0),
+                $this->line($this->account($company, 'autre_produit_caisse'), $label, 0, $amount),
+            ];
+        } else {
+            $lines = [
+                $this->line($this->account($company, 'autre_charge_caisse'), $label, $amount, 0),
+                $this->line($tresorerie, $label, 0, $amount),
+            ];
+        }
+
+        return $this->post($company, $journalCode, [
+            'entry_date'  => $operation->operation_date ?? today(),
+            'reference'   => $operation->number,
+            'description' => $label,
+        ], $lines);
+    }
+
+    /**
+     * [TRESO] Contentieux : passage d'une créance en perte (irrécouvrable).
+     *   DR 6514 Pertes sur créances clients / CR 411 Clients
+     */
+    public function postBadDebt(\App\Models\LitigationCase $case): ?JournalEntry
+    {
+        $company = $this->company($case->company_id);
+        if (!$company) return null;
+
+        $amount = (int) $case->amount;
+        if ($amount <= 0) return null;
+
+        $label = 'Créance irrécouvrable — dossier ' . $case->number;
+
+        return $this->post($company, 'operations_diverses', [
+            'entry_date'  => $case->closed_at ?? today(),
+            'reference'   => $case->number,
+            'description' => $label,
+        ], [
+            $this->line($this->account($company, 'pertes_creances'), $label, $amount, 0),
+            $this->line($this->account($company, 'clients'), $label, 0, $amount),
+        ]);
+    }
+
+    /**
+     * [TRESO] Écart de clôture de caisse.
+     *   Excédent (compté > théorique) : DR 571 Caisse / CR 7588 Excédents
+     *   Manque   (compté < théorique) : DR 6588 Manquants / CR 571 Caisse
+     */
+    public function postCashClosureDifference(\App\Models\CashClosure $closure): ?JournalEntry
+    {
+        $company = $this->company($closure->company_id);
+        if (!$company) return null;
+
+        $diff = (int) $closure->difference; // compté - théorique
+        if ($diff === 0) return null;
+
+        $caisse = $this->tresorerieAccount($company, $closure->cash_account_id);
+        $label  = 'Écart clôture ' . $closure->number;
+
+        if ($diff > 0) {
+            $lines = [
+                $this->line($caisse, $label, $diff, 0),
+                $this->line($this->account($company, 'ecart_caisse_excedent'), $label, 0, $diff),
+            ];
+        } else {
+            $m = abs($diff);
+            $lines = [
+                $this->line($this->account($company, 'ecart_caisse_manque'), $label, $m, 0),
+                $this->line($caisse, $label, 0, $m),
+            ];
+        }
+
+        $entry = $this->post($company, 'operations_diverses', [
+            'entry_date'  => $closure->closure_date ?? today(),
+            'reference'   => $closure->number,
+            'description' => 'Écart de clôture de caisse ' . $closure->number
+                . ' — ' . ($closure->cashAccount?->name ?? ''),
+        ], $lines);
+
+        if ($entry) {
+            $closure->updateQuietly(['journal_entry_id' => $entry->id]);
         }
 
         return $entry;
@@ -741,6 +918,69 @@ class AccountingService
         }
 
         return $reversal;
+    }
+
+    // =========================================================================
+    // [PRODUCTION] Écritures de fabrication (SYSCOHADA) — idempotentes par référence
+    // =========================================================================
+
+    /**
+     * Consommation de matière sur OF (sortie de stock matières premières).
+     *   DR 6032 Variation des stocks de matières premières
+     *   CR 321  Stocks de matières premières
+     */
+    public function postProductionConsumption(ProductionOrder $order, int $amount): ?JournalEntry
+    {
+        $company = $this->company($order->company_id);
+        if (! $company || $amount <= 0) {
+            return null;
+        }
+
+        $reference = $order->number . '-CONS';
+        if ($this->entryExists($company, $reference)) {
+            return null;
+        }
+
+        return $this->post($company, 'operations_diverses', [
+            'entry_date'  => $order->finished_at ?? today(),
+            'reference'   => $reference,
+            'description' => 'Consommation matière production ' . $order->number,
+        ], [
+            $this->line($this->account($company, 'variation_stocks_matieres'), 'Conso matière ' . $order->number, $amount, 0),
+            $this->line($this->account($company, 'stocks_matieres'), 'Conso matière ' . $order->number, 0, $amount),
+        ]);
+    }
+
+    /**
+     * Production stockée (entrée de produits finis en stock).
+     *   DR 361  Stocks de produits finis
+     *   CR 736  Variation des stocks de produits finis (production stockée)
+     */
+    public function postProductionStockEntry(ProductionOrder $order, int $amount): ?JournalEntry
+    {
+        $company = $this->company($order->company_id);
+        if (! $company || $amount <= 0) {
+            return null;
+        }
+
+        $reference = $order->number . '-PROD';
+        if ($this->entryExists($company, $reference)) {
+            return null;
+        }
+
+        return $this->post($company, 'operations_diverses', [
+            'entry_date'  => $order->finished_at ?? today(),
+            'reference'   => $reference,
+            'description' => 'Production stockée ' . $order->number,
+        ], [
+            $this->line($this->account($company, 'stocks_produits_finis'), 'Entrée PF ' . $order->number, $amount, 0),
+            $this->line($this->account($company, 'production_stockee'), 'Entrée PF ' . $order->number, 0, $amount),
+        ]);
+    }
+
+    private function entryExists(Company $company, string $reference): bool
+    {
+        return JournalEntry::where('company_id', $company->id)->where('reference', $reference)->exists();
     }
 
     // =========================================================================

@@ -20,6 +20,7 @@ class SupplierPaymentService
         protected DocumentSequenceService $sequenceService,
         protected CashAccountService $cashService,
         protected AccountingService $accountingService,
+        protected TreasuryApprovalService $approvalService,
     ) {}
 
     public function create(array $data): SupplierPayment
@@ -46,16 +47,56 @@ class SupplierPaymentService
             $data['unallocated_amount'] = $data['amount'];
             $data['allocated_amount']   = 0;
 
-            $payment = $this->repository->create($data);
+            // [TRESO-WORKFLOW] Déterminer si une validation par seuil est requise.
+            // Si le créateur possède déjà l'autorité du seuil, le décaissement est
+            // auto-validé (pas de double étape inutile). Sinon il est différé.
+            // _pre_authorized : déjà validé en amont (ex. demande de paiement) → pas de re-contrôle.
+            $preAuthorized = (bool) ($data['_pre_authorized'] ?? false);
+            unset($data['_pre_authorized']);
+            $rule       = $this->approvalService->findRequiredRule((int) $data['company_id'], (int) $data['amount']);
+            $needsOther = $rule && ! $preAuthorized && ! $this->approvalService->userCanApprove(Auth::user(), $rule);
 
+            if ($needsOther) {
+                // Différé : aucun effet (GL/caisse/allocation) avant validation.
+                $data['status']              = 'en_attente';
+                $data['validation_status']   = 'en_attente_validation';
+                $data['required_role']       = $rule->required_role;
+                $data['pending_allocations'] = array_values($allocations);
+                $data['submitted_by']        = Auth::id();
+                $data['submitted_at']        = now();
+
+                return $this->repository->create($data);
+            }
+
+            // Pas d'approbation requise (ou créateur habilité) : application directe.
+            $data['validation_status'] = 'valide';
+            if ($rule) {
+                $data['validated_by'] = Auth::id();
+                $data['validated_at'] = now();
+            }
+            $payment = $this->repository->create($data);
+            $this->applySideEffects($payment, $allocations);
+
+            return $payment->fresh();
+        });
+    }
+
+    /**
+     * [TRESO-WORKFLOW] Applique les effets d'un décaissement : allocation aux
+     * factures, mise à jour des soldes, écriture GL, sortie de caisse, événement.
+     * Appelé soit à la création (sans approbation), soit à la validation.
+     */
+    private function applySideEffects(SupplierPayment $payment, array $allocations): void
+    {
+        DB::transaction(function () use ($payment, $allocations) {
             $totalAllocated = 0;
 
             // Pre-validate: total allocations must not exceed payment amount
             $requestedTotal = collect($allocations)->sum(fn($a) => (int) ($a['allocated_amount'] ?? 0));
-            if ($requestedTotal > (int) $data['amount']) {
+            if ($requestedTotal > (int) $payment->amount) {
                 throw new \RuntimeException(
                     'Le total des allocations (' . number_format($requestedTotal, 0, ',', ' ') . ' FCFA) '
-                    . 'dépasse le montant du paiement (' . number_format($data['amount'], 0, ',', ' ') . ' FCFA).'
+                    . 'dépasse le montant du paiement (' . number_format($payment->amount, 0, ',', ' ') . ' FCFA).'
                 );
             }
 
@@ -135,11 +176,27 @@ class SupplierPaymentService
             ]);
 
             // Post to GL synchronously — must be in the same transaction
-            $this->accountingService->postSupplierPayment($payment->fresh(['supplier', 'company']));
+            $paymentEntry = $this->accountingService->postSupplierPayment($payment->fresh(['supplier', 'company']))
+                ?? $payment->fresh()->journalEntry;
+
+            // [AUTO-LETTRAGE] Symétrie fournisseur : lettre chaque facture soldée 1:1
+            // (401 crédit facture ↔ 401 débit décaissement). Garde montant-exact = sûr.
+            if ($paymentEntry) {
+                foreach ($allocations as $alloc) {
+                    $siId = $alloc['supplier_invoice_id'] ?? null;
+                    if (! $siId) {
+                        continue;
+                    }
+                    $si = \App\Models\SupplierInvoice::find($siId);
+                    if ($si && $si->status === 'payee' && $si->journal_entry_id) {
+                        app(\App\Services\LettrageService::class)->lettrerPaiementFacture($si->journalEntry, $paymentEntry);
+                    }
+                }
+            }
 
             // Enregistrer la transaction de caisse si un compte est lié
-            if (!empty($data['cash_account_id'])) {
-                $cashAccount = CashAccount::find($data['cash_account_id']);
+            if (!empty($payment->cash_account_id)) {
+                $cashAccount = CashAccount::find($payment->cash_account_id);
                 if ($cashAccount) {
                     $this->cashService->recordTransaction($cashAccount, [
                         'type'             => 'debit',
@@ -154,8 +211,74 @@ class SupplierPaymentService
 
             // Fire event — queued listeners update supplier balance + log after commit
             event(new SupplierPaymentCreated($payment));
+        });
+    }
 
-            return $payment;
+    /**
+     * [TRESO-WORKFLOW] Approuve un décaissement en attente → applique les effets.
+     * @throws \RuntimeException
+     */
+    public function approve(SupplierPayment $payment): SupplierPayment
+    {
+        return DB::transaction(function () use ($payment) {
+            $payment = SupplierPayment::lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->validation_status !== 'en_attente_validation') {
+                throw new \RuntimeException('Ce décaissement n\'est pas en attente de validation.');
+            }
+
+            $user = Auth::user();
+            $rule = $this->approvalService->findRequiredRule((int) $payment->company_id, (int) $payment->amount);
+            if (! $this->approvalService->userCanApprove($user, $rule)) {
+                throw new \RuntimeException(
+                    "Vous n'avez pas le niveau requis pour valider ce décaissement"
+                    . ($rule?->required_role ? " (rôle « {$rule->required_role} » requis)." : '.')
+                );
+            }
+
+            $allocations = $payment->pending_allocations ?? [];
+            $this->applySideEffects($payment, $allocations);
+
+            $payment->update([
+                'status'              => 'confirme',
+                'validation_status'   => 'valide',
+                'pending_allocations' => null,
+                'validated_by'        => $user->id,
+                'validated_at'        => now(),
+            ]);
+
+            return $payment->fresh();
+        });
+    }
+
+    /**
+     * [TRESO-WORKFLOW] Rejette un décaissement en attente (motif obligatoire).
+     * Aucun effet n'avait été appliqué → rien à contre-passer.
+     * @throws \RuntimeException
+     */
+    public function reject(SupplierPayment $payment, string $motif): SupplierPayment
+    {
+        $motif = trim($motif);
+        if ($motif === '') {
+            throw new \RuntimeException('Le motif de rejet est obligatoire.');
+        }
+
+        return DB::transaction(function () use ($payment, $motif) {
+            $payment = SupplierPayment::lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->validation_status !== 'en_attente_validation') {
+                throw new \RuntimeException('Ce décaissement n\'est pas en attente de validation.');
+            }
+
+            $payment->update([
+                'status'            => 'rejete',
+                'validation_status' => 'rejete',
+                'rejected_by'       => Auth::id(),
+                'rejected_at'       => now(),
+                'rejection_reason'  => $motif,
+            ]);
+
+            return $payment->fresh();
         });
     }
 

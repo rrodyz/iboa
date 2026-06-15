@@ -11,25 +11,10 @@
         /* ── Données société ────────────────────────── */
         $company = \App\Models\Company::with('bankAccounts')->first();
 
-        /* ── Encodage logo ──────────────────────────── */
-        $logoBase64 = null;
-        if ($settings?->show_logo !== false && $company?->logo) {
-            $path = storage_path('app/public/' . $company->logo);
-            if (file_exists($path)) {
-                $ext  = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-                $mime = match($ext) { 'png' => 'image/png', 'svg' => 'image/svg+xml', default => 'image/jpeg' };
-                $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
-            }
-        }
-
-        /* ── Encodage signature / cachet ────────────── */
-        $sigBase64 = $stampBase64 = null;
-        foreach (['signature_image' => 'sigBase64', 'stamp_image' => 'stampBase64'] as $field => $var) {
-            if ($settings?->$field) {
-                $p = storage_path('app/public/' . $settings->$field);
-                if (file_exists($p)) $$var = 'data:image/png;base64,' . base64_encode(file_get_contents($p));
-            }
-        }
+        /* ── Encodage logo / signature / cachet (jamais bloquant) ──── */
+        $logoBase64  = $settings?->show_logo !== false ? pdf_image_data($company?->logo) : null;
+        $sigBase64   = pdf_image_data($settings?->signature_image);
+        $stampBase64 = pdf_image_data($settings?->stamp_image);
 
         /* ── Récapitulatif TVA par taux ─────────────── */
         $tvaRecap = [];
@@ -74,11 +59,8 @@
             $verifyUrl = \Illuminate\Support\Facades\URL::signedRoute(
                 'invoice.verify', ['number' => $invoice->number]
             );
-            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
-                ->size(110)
-                ->errorCorrection('M')
-                ->generate($verifyUrl);
-            $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+            // PNG (GD) plutôt que SVG : DomPDF rend mal le SVG (fichier gonflé + pages fantômes).
+            $qrDataUri = app(\App\Services\QrPngService::class)->dataUri($verifyUrl);
         } catch (\Throwable) {}
     @endphp
 
@@ -159,6 +141,11 @@
         .items-table tbody td { padding:5.5px 7px; color:#374151; vertical-align:top; }
         .items-table tbody td.r { text-align:right; }
         .items-table tfoot td { padding:5px 7px; font-size:9px; color:#6b7280; }
+        /* Mode compact : colonnes supplémentaires (Longueur/Épaisseur) — évite le débordement A4 portrait */
+        .items-table.cols-extra { font-size:8.5px; }
+        .items-table.cols-extra thead th { font-size:7px; padding:5px 4px; letter-spacing:0; }
+        .items-table.cols-extra tbody td { padding:4px 4px; }
+        .items-table.cols-extra tfoot td { padding:4px 4px; font-size:8px; }
 
         /* ── Bloc totaux + TVA (table deux colonnes) ── */
         .bottom-wrap { display:table; width:100%; margin-top:10px; }
@@ -458,62 +445,61 @@
     {{-- ════════════════════════════════════════════════
          TABLEAU DES ARTICLES
     ════════════════════════════════════════════════ --}}
-    <table class="items-table">
+    @php
+        // Colonnes pilotées par le paramétrage société (Documents → Colonnes affichées).
+        $selected = (array) ($settings?->product_columns ?? ['reference','description','quantity','unit_price','discount','tax','total_ht','total_ttc']);
+        $needDims = in_array('longueur', $selected, true) || in_array('epaisseur', $selected, true);
+        $dims     = $needDims ? $invoice->productionDimensions() : [];
+        $fmtDim   = fn ($v, $u) => $v !== null ? rtrim(rtrim(number_format($v, 2, ',', ''), '0'), ',') . ' ' . $u : '—';
+
+        // Catalogue : key => [label, align(l|r), width, render(item)]
+        $catalog = [
+            'reference'   => ['Réf.',        'l', '60px', fn($it) => e($it->product?->reference ?? '—')],
+            'description' => ['Désignation', 'l', '',     fn($it) => '<strong>'.e($it->description).'</strong>'],
+            'longueur'    => ['Long.',       'r', '42px', fn($it) => $fmtDim($dims[$it->product_id]['length'] ?? null, 'm')],
+            'epaisseur'   => ['Épais.',      'r', '42px', fn($it) => $fmtDim($dims[$it->product_id]['thickness'] ?? null, 'mm')],
+            'quantity'    => ['Qté',         'r', '42px', fn($it) => number_format($it->quantity, 2, ',', ' ')],
+            'unit_price'  => ['P.U. HT',     'r', '72px', fn($it) => number_format($it->unit_price, 0, ',', ' ')],
+            'discount'    => ['Rem.%',       'r', '38px', fn($it) => $it->discount_percent > 0 ? number_format($it->discount_percent, 1, ',', '').'%' : '—'],
+            'tax'         => ['TVA%',        'r', '36px', fn($it) => number_format($it->tax_rate_value, 0, ',', '').'%'],
+            'total_ht'    => ['Montant HT',  'r', '75px', fn($it) => number_format($it->line_total_ht, 0, ',', ' ')],
+            'total_ttc'   => ['Total TTC',   'r', '78px', fn($it) => number_format($it->line_total_ttc, 0, ',', ' ')],
+        ];
+
+        // Ordre d'affichage canonique, filtré par la sélection. Désignation toujours présente.
+        $order = ['reference','description','longueur','epaisseur','quantity','unit_price','discount','tax','total_ht','total_ttc'];
+        $columns = array_values(array_filter($order, fn($k) => $k === 'description' || in_array($k, $selected, true)));
+        $colCount = count($columns) + 1; // +1 pour la colonne #
+        $compact  = count($columns) > 8;
+    @endphp
+    <table class="items-table {{ $compact ? 'cols-extra' : '' }}">
         <thead>
             <tr>
                 <th style="width:22px">#</th>
-                <th>Désignation</th>
-                <th class="r" style="width:40px">Qté</th>
-                <th style="width:28px">Unité</th>
-                <th class="r" style="width:75px">P.U. HT</th>
-                <th class="r" style="width:38px">Rem.%</th>
-                <th class="r" style="width:75px">Montant HT</th>
-                <th class="r" style="width:35px">TVA%</th>
-                <th class="r" style="width:68px">Montant TVA</th>
-                <th class="r" style="width:78px">Total TTC</th>
+                @foreach($columns as $key)
+                    <th class="{{ $catalog[$key][1] === 'r' ? 'r' : '' }}" @if($catalog[$key][2]) style="width:{{ $catalog[$key][2] }}" @endif>{{ $catalog[$key][0] }}</th>
+                @endforeach
             </tr>
         </thead>
         <tbody>
             @forelse($invoice->items as $item)
             <tr>
                 <td style="color:#9ca3af;">{{ $loop->iteration }}</td>
-                <td>
-                    <strong>{{ $item->description }}</strong>
-                    @if($item->product?->reference)
-                    <br><span style="color:#9ca3af; font-size:7.5px;">Réf. {{ $item->product->reference }}</span>
-                    @endif
-                </td>
-                <td class="r nobr">{{ number_format($item->quantity, 2, ',', ' ') }}</td>
-                <td style="color:#6b7280;">{{ $item->unit?->abbreviation ?? '' }}</td>
-                <td class="r nobr">{{ number_format($item->unit_price, 0, ',', ' ') }}</td>
-                <td class="r">{{ $item->discount_percent > 0 ? number_format($item->discount_percent, 1, ',', '').'%' : '—' }}</td>
-                <td class="r nobr">{{ number_format($item->line_total_ht, 0, ',', ' ') }}</td>
-                <td class="r">{{ number_format($item->tax_rate_value, 0, ',', '') }}%</td>
-                <td class="r nobr">{{ number_format($item->line_tax, 0, ',', ' ') }}</td>
-                <td class="r nobr" style="font-weight:600;">{{ number_format($item->line_total_ttc, 0, ',', ' ') }}</td>
+                @foreach($columns as $key)
+                    <td class="{{ $catalog[$key][1] === 'r' ? 'r nobr' : '' }}">{!! $catalog[$key][3]($item) !!}</td>
+                @endforeach
             </tr>
             @empty
-            <tr>
-                <td colspan="10" style="text-align:center; color:#9ca3af; padding:14px;">Aucune ligne de facturation</td>
-            </tr>
+            <tr><td colspan="{{ $colCount }}" style="text-align:center; color:#9ca3af; padding:14px;">Aucune ligne de facturation</td></tr>
             @endforelse
         </tbody>
         @if($invoice->items->count() > 0)
         <tfoot>
             <tr style="border-top:2px solid #e5e7eb;">
-                <td colspan="6" style="text-align:right; color:#6b7280; font-style:italic;">
-                    {{ $invoice->items->count() }} article(s)
+                <td colspan="{{ $colCount - 1 }}" style="text-align:right; color:#374151; font-weight:600;">
+                    {{ $invoice->items->count() }} article(s) · Total HT {{ number_format($invoice->subtotal_ht, 0, ',', ' ') }} · TVA {{ number_format($invoice->total_tax, 0, ',', ' ') }}
                 </td>
-                <td class="r" style="font-weight:600; color:#111827;">
-                    {{ number_format($invoice->subtotal_ht, 0, ',', ' ') }}
-                </td>
-                <td></td>
-                <td class="r" style="font-weight:600; color:#111827;">
-                    {{ number_format($invoice->total_tax, 0, ',', ' ') }}
-                </td>
-                <td class="r" style="font-weight:bold; color:#111827;">
-                    {{ number_format($invoice->total_ttc, 0, ',', ' ') }}
-                </td>
+                <td class="r" style="font-weight:bold; color:#111827;">{{ number_format($invoice->total_ttc, 0, ',', ' ') }}</td>
             </tr>
         </tfoot>
         @endif

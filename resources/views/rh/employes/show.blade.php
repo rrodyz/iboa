@@ -103,7 +103,7 @@
                     class="text-xs text-blue-600 hover:underline">+ Ajouter</button>
         </div>
         @if($employe->allowances->isNotEmpty())
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead><tr class="text-xs text-gray-400 border-b">
                 <th class="pb-2 text-left">Type</th>
                 <th class="pb-2 text-center">Imposable</th>

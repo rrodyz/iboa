@@ -109,8 +109,10 @@ return [
 
         /**
          * Whether to enable font subsetting or not.
+         * [PERF] Activé : n'embarque que les glyphes utilisés → PDF ~10× plus léger
+         * (1.3 Mo → ~130 Ko), génération + chargement + envoi email plus rapides.
          */
-        'enable_font_subsetting' => false,
+        'enable_font_subsetting' => true,
 
         /**
          * The PDF rendering backend to use

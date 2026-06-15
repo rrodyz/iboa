@@ -75,7 +75,11 @@ class OrderController extends Controller
         $this->authorize('view', $commande);
         $order = $this->service->repository->findWithDetails($commande->id);
 
-        return view('ventes.commandes.show', compact('order'));
+        $salesProd = app(\App\Modules\Production\Services\SalesProductionService::class);
+        $productionSummary = $salesProd->summary($order);
+        $stockAnalysis     = $salesProd->stockAnalysis($order);
+
+        return view('ventes.commandes.show', compact('order', 'productionSummary', 'stockAnalysis'));
     }
 
     public function edit(Order $commande)

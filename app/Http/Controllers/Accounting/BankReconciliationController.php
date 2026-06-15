@@ -29,14 +29,14 @@ class BankReconciliationController extends Controller
             ->orderByDesc('id');
 
         $reconciliations = $query->paginate(20)->withQueryString();
-        $cashAccounts    = CashAccount::where('type', 'banque')->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
+        $cashAccounts    = CashAccount::whereIn('type', ['banque', 'mobile_money'])->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']);
 
         return view('comptabilite.rapprochement.index', compact('reconciliations', 'filters', 'cashAccounts'));
     }
 
     public function create(): View
     {
-        $cashAccounts = CashAccount::where('type', 'banque')->where('is_active', true)->orderBy('name')->get();
+        $cashAccounts = CashAccount::whereIn('type', ['banque', 'mobile_money'])->where('is_active', true)->orderBy('name')->get();
         return view('comptabilite.rapprochement.create', compact('cashAccounts'));
     }
 
@@ -103,6 +103,21 @@ class BankReconciliationController extends Controller
         }
     }
 
+    /**
+     * [TRESO] Comptabilise une ligne de relevé non rapprochée en frais bancaire.
+     */
+    public function postAsFee(Request $request, BankStatementLine $line): JsonResponse
+    {
+        $request->validate(['label' => ['nullable', 'string', 'max:255']]);
+
+        try {
+            $this->service->postAsFee($line, $request->input('label'));
+            return response()->json(['ok' => true, 'message' => 'Frais bancaire comptabilisé et rapproché.']);
+        } catch (\Exception $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
     // ─── Validate ────────────────────────────────────────────────────────────
     public function validateReconciliation(BankReconciliation $rapprochement): RedirectResponse
     {
@@ -122,18 +137,18 @@ class BankReconciliationController extends Controller
     public function importCsv(Request $request, BankReconciliation $rapprochement): RedirectResponse
     {
         $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:2048',
+            'csv_file' => 'required|file|mimes:csv,txt,xlsx,xls|max:5120',
         ]);
 
         try {
-            $result = $this->service->importCsv($rapprochement, $request->file('csv_file'));
+            $result = $this->service->importStatement($rapprochement, $request->file('csv_file'));
             $msg = "{$result['imported']} ligne(s) importée(s), {$result['skipped']} ignorée(s).";
             if (!empty($result['errors'])) {
                 $msg .= "\nErreurs : " . implode(' | ', array_slice($result['errors'], 0, 5));
             }
             return back()->with('success', $msg);
         } catch (\Exception $e) {
-            return back()->with('error', 'Import CSV : ' . $e->getMessage());
+            return back()->with('error', 'Import relevé : ' . $e->getMessage());
         }
     }
 

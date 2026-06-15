@@ -379,7 +379,7 @@ class EtatController extends Controller
         $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant
 
         $query = Invoice::where('company_id', $companyId)
-            ->whereIn('status', ['envoyee', 'partiellement_payee', 'en_retard', 'validee'])
+            ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
             ->where('remaining_amount', '>', 0)
             ->whereNotNull('due_at')
             ->with('client:id,name,phone')

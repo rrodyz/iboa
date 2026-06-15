@@ -100,7 +100,7 @@
             <div class="py-12 text-center text-gray-400 text-sm">Aucune donnée sur cette période</div>
         @else
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm divide-y divide-gray-100">
+            <table class="w-full text-sm divide-y divide-gray-100">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rang</th>

@@ -25,7 +25,8 @@ class SupplierPaymentController extends Controller
         protected SupplierPaymentService    $service,
     ) {
         $this->middleware('can:payments.view')->only(['index', 'show']);
-        $this->middleware('can:payments.create')->except(['index', 'show']);
+        $this->middleware('can:payments.create')->except(['index', 'show', 'approve', 'reject']);
+        $this->middleware('can:treasury.validate')->only(['approve', 'reject']);
     }
 
     /**
@@ -175,6 +176,36 @@ class SupplierPaymentController extends Controller
             return redirect()
                 ->route('tresorerie.decaissements.show', $decaissement)
                 ->with('success', 'Décaissement ' . $decaissement->number . ' annulé. Contre-passation comptable et restauration de la facture effectuées.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * [TRESO-WORKFLOW] Valide un décaissement en attente (selon seuil).
+     */
+    public function approve(SupplierPayment $decaissement): RedirectResponse
+    {
+        try {
+            $this->service->approve($decaissement);
+            return back()->with('success', "Décaissement {$decaissement->number} validé et comptabilisé.");
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * [TRESO-WORKFLOW] Rejette un décaissement en attente (motif obligatoire).
+     */
+    public function reject(Request $request, SupplierPayment $decaissement): RedirectResponse
+    {
+        $data = $request->validate([
+            'motif' => ['required', 'string', 'min:5', 'max:500'],
+        ], ['motif.required' => 'Le motif de rejet est obligatoire.']);
+
+        try {
+            $this->service->reject($decaissement, $data['motif']);
+            return back()->with('success', "Décaissement {$decaissement->number} rejeté.");
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }

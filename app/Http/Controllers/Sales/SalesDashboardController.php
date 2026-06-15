@@ -28,9 +28,10 @@ class SalesDashboardController extends Controller
         $monthly      = $this->insights->monthlyEvolution(12);
         $pipeline     = $this->insights->quotesPipeline();
         $workflowKpis = $this->workflow->getDashboardKpis();
+        $prodKpis     = app(\App\Modules\Production\Services\SalesProductionService::class)->dashboardKpis();
 
         return view('ventes.dashboard', compact(
-            'kpis', 'dueSoon', 'topClients', 'topProducts', 'monthly', 'pipeline', 'workflowKpis'
+            'kpis', 'dueSoon', 'topClients', 'topProducts', 'monthly', 'pipeline', 'workflowKpis', 'prodKpis'
         ));
     }
 }

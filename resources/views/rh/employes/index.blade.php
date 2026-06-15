@@ -79,7 +79,7 @@
 
 {{-- Table --}}
 <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200 text-sm">
+    <table class="w-full divide-y divide-gray-200 text-sm">
         <thead class="bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
                 <th class="px-4 py-3 text-left">Matricule</th>

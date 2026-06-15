@@ -20,7 +20,24 @@
         @endcan
     </div>
 
-    <form method="GET" class="bg-white rounded-xl border border-gray-200 p-4">
+    {{-- Stats --}}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Brouillons</p>
+            <p class="text-lg font-bold text-amber-600 mt-1">{{ $stats['brouillons'] }}</p>
+            <p class="text-xs text-gray-400">à valider</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Remises validées</p>
+            <p class="text-lg font-bold text-emerald-600 mt-1">{{ $stats['valide_count'] }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total remis (validé)</p>
+            <p class="text-lg font-bold text-indigo-600 tabular-nums mt-1">{{ number_format($stats['valide_total'], 0, ',', ' ') }} <span class="text-xs font-normal text-gray-400">F</span></p>
+        </div>
+    </div>
+
+    <form method="GET" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div class="flex flex-wrap gap-3 items-end">
             <select name="cash_account_id" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
                 <option value="">Tous les comptes</option>
@@ -44,9 +61,9 @@
         </div>
     </form>
 
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N°</th>

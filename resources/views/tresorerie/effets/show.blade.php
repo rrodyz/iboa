@@ -50,7 +50,7 @@
     </div>
 
     {{-- Main info --}}
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-8 text-sm">
             <div><p class="text-xs text-gray-500">Montant</p><p class="text-2xl font-bold tabular-nums text-indigo-700">{{ number_format($effet->amount, 0, ',', ' ') }} {{ $effet->currency_code }}</p></div>
             <div><p class="text-xs text-gray-500">Date émission</p><p class="font-medium">{{ $effet->issue_date?->format('d/m/Y') }}</p></div>
@@ -87,7 +87,7 @@
     </div>
 
     {{-- Lifecycle --}}
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h3 class="text-sm font-semibold text-gray-700 mb-4">Cycle de vie</h3>
         @php
             $steps = [

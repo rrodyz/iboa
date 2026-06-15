@@ -37,7 +37,7 @@
         <div class="px-5 py-3 border-b border-red-200 bg-red-50 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-red-800">🛑 {{ count($expired) }} lot(s) périmé(s) — à isoler / détruire</h2>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Article</th>
@@ -77,7 +77,7 @@
         @if($expiring->isEmpty())
             <div class="p-6 text-center text-emerald-700 text-sm">✓ Aucun lot ne va expirer dans la fenêtre.</div>
         @else
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Article</th>

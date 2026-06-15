@@ -9,6 +9,7 @@ use App\Models\ClientPaymentSchedule;
 use App\Models\Invoice;
 use App\Repositories\ClientPaymentRepository;
 use App\Services\AccountingService;
+use App\Services\LettrageService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -83,6 +84,15 @@ class ClientPaymentService
                     throw new \RuntimeException(
                         'La facture ' . $invoice->number . ' n\'appartient pas au client sélectionné.'
                     );
+                }
+
+                // [INVOICE-VALIDATION-GUARD] La facture doit être validée avant tout
+                // encaissement — refus des factures encore en brouillon / attente de validation.
+                if (in_array($invoice->status, ['brouillon', 'en_attente_validation'], true)) {
+                    throw new \RuntimeException(sprintf(
+                        "La facture %s n'est pas encore validée — validez-la avant d'enregistrer un encaissement.",
+                        $invoice->number
+                    ));
                 }
 
                 // [INVOICE-LOCKED-GUARD] Refus explicite d'allouer un paiement à une facture
@@ -162,7 +172,23 @@ class ClientPaymentService
             }
 
             // Post to GL synchronously — must be in the same transaction
-            $this->accountingService->postClientPayment($payment->fresh(['client', 'company']));
+            $paymentEntry = $this->accountingService->postClientPayment($payment->fresh(['client', 'company']));
+
+            // [AUTO-LETTRAGE] Lettre automatiquement chaque facture soldée 1:1 par ce
+            // paiement (411 débit facture = 411 crédit paiement). La garde de montant
+            // exact dans lettrerPaiementFacture() neutralise les cas partiels/multiples.
+            if ($paymentEntry) {
+                foreach ($allocations as $alloc) {
+                    $invoiceId = $alloc['invoice_id'] ?? null;
+                    if (! $invoiceId) {
+                        continue;
+                    }
+                    $inv = \App\Models\Invoice::find($invoiceId);
+                    if ($inv && $inv->status === 'payee' && $inv->journal_entry_id) {
+                        app(LettrageService::class)->lettrerPaiementFacture($inv->journalEntry, $paymentEntry);
+                    }
+                }
+            }
 
             // Fire event — listener recalculates client balance after commit
             event(new PaymentReceived($payment));

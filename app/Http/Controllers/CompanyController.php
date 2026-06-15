@@ -60,15 +60,17 @@ class CompanyController extends Controller
     public function storeBankAccount(StoreBankAccountRequest $request): RedirectResponse
     {
         $company = $this->service->getOrCreate();
-        $this->service->upsertBankAccount($company, $request->validated());
-        return back()->with('success', 'Compte bancaire ajouté.');
+        $this->service->upsertBankAccount($company, $request->validated(), null, $request->boolean('sync_treasury'));
+        return back()->with('success', 'Compte bancaire ajouté.'
+            . ($request->boolean('sync_treasury') ? ' Compte de trésorerie associé créé.' : ''));
     }
 
     public function updateBankAccount(StoreBankAccountRequest $request, CompanyBankAccount $account): RedirectResponse
     {
         $company = $this->service->getOrCreate();
-        $this->service->upsertBankAccount($company, $request->validated(), $account->id);
-        return back()->with('success', 'Compte bancaire mis à jour.');
+        $this->service->upsertBankAccount($company, $request->validated(), $account->id, $request->boolean('sync_treasury'));
+        return back()->with('success', 'Compte bancaire mis à jour.'
+            . ($request->boolean('sync_treasury') ? ' Compte de trésorerie synchronisé.' : ''));
     }
 
     public function destroyBankAccount(CompanyBankAccount $account): RedirectResponse

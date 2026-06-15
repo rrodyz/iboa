@@ -312,6 +312,16 @@
                     @if($quote->client?->trade_name)
                     <dd class="text-gray-500 text-xs">{{ $quote->client->trade_name }}</dd>
                     @endif
+                    @if($quote->client)
+                    <dd class="mt-1">
+                        @if($quote->client->is_tax_exempt)
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="{{ $quote->client->tax_exemption_reason }}">Exonéré TVA</span>
+                        @else
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Assujetti TVA</span>
+                        @endif
+                        @if($quote->client->tax_regime)<span class="ml-1 text-xs text-gray-400">{{ $quote->client->tax_regime }}</span>@endif
+                    </dd>
+                    @endif
                 </div>
                 <div>
                     <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Numéro</dt>
@@ -382,7 +392,7 @@
             <h2 class="text-base font-semibold text-gray-900">Lignes du devis</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>

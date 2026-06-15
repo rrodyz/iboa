@@ -12,7 +12,7 @@
 @endsection
 
 @section('content')
-<div class="max-w-2xl mx-auto space-y-6"
+<div class="max-w-4xl mx-auto space-y-6"
      x-data="{
          movType: '{{ old('movement_type', request()->query('type', '')) }}',
          hasLot: false, hasSerial: false, hasExpiry: false, isKit: false,

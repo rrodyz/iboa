@@ -127,7 +127,9 @@
                     @endcan
                 @endif
 
-                {{-- Confirmé: Créer BL + Créer Facture + Annuler --}}
+                {{-- Confirmé: Créer BL + Annuler.
+                     Facturation interdite avant livraison — le bouton « Créer facture »
+                     n'apparaît qu'à partir de « en préparation » (un BL existe). --}}
                 @if($order->status === 'confirme')
                     <form action="{{ route('ventes.commandes.delivery-note', $order) }}" method="POST"
                           onsubmit="return confirm('Créer un bon de livraison depuis cette commande ?')">
@@ -138,17 +140,6 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8l1 12h12l1-12M10 12v6m4-6v6"/>
                             </svg>
                             Créer BL
-                        </button>
-                    </form>
-                    <form action="{{ route('ventes.commandes.invoice', $order) }}" method="POST"
-                          onsubmit="return confirm('Créer une facture directe depuis cette commande ?')">
-                        @csrf
-                        <button type="submit"
-                                class="inline-flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            Créer facture
                         </button>
                     </form>
                     <form action="{{ route('ventes.commandes.cancel', $order) }}" method="POST"
@@ -205,6 +196,19 @@
                     </form>
                 @endif
 
+                {{-- Lancer en production (fabrication tôles bac) --}}
+                @can('production.create')
+                @if(!in_array($order->status, ['brouillon', 'annule']))
+                    <a href="{{ route('production.orders.create', ['order_id' => $order->id]) }}"
+                       class="inline-flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                        Lancer en production
+                    </a>
+                @endif
+                @endcan
+
                 <a href="{{ route('ventes.commandes.index') }}"
                    class="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,6 +252,16 @@
                 <div>
                     <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Client</dt>
                     <dd class="mt-0.5 font-semibold text-gray-900">{{ $order->client?->name ?? '—' }}</dd>
+                    @if($order->client)
+                    <dd class="mt-1">
+                        @if($order->client->is_tax_exempt)
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="{{ $order->client->tax_exemption_reason }}">Exonéré TVA</span>
+                        @else
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Assujetti TVA</span>
+                        @endif
+                        @if($order->client->tax_regime)<span class="ml-1 text-xs text-gray-400">{{ $order->client->tax_regime }}</span>@endif
+                    </dd>
+                    @endif
                 </div>
                 <div>
                     <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Numéro</dt>
@@ -316,13 +330,134 @@
         </div>
     </div>
 
+    {{-- ══ Suivi production (cockpit Vente → Production) ══ --}}
+    @if(isset($productionSummary))
+    @php $ps = $productionSummary; $agg = $ps['aggregate']; @endphp
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <h2 class="text-base font-semibold text-gray-900">Suivi production</h2>
+                @php $ac = ['gray'=>'bg-gray-100 text-gray-600','green'=>'bg-green-100 text-green-700','sky'=>'bg-sky-100 text-sky-700','amber'=>'bg-amber-100 text-amber-700','teal'=>'bg-teal-100 text-teal-700','red'=>'bg-red-100 text-red-700'][$agg['color']] ?? 'bg-gray-100 text-gray-600'; @endphp
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $ac }}">{{ $agg['label'] }}</span>
+            </div>
+            @can('production.create')
+            @if(!in_array($order->status, ['brouillon','annule']))
+            <a href="{{ route('production.orders.create', ['order_id' => $order->id]) }}"
+               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                {{ $ps['count'] ? 'Nouvel OF' : 'Lancer en production' }}
+            </a>
+            @endif
+            @endcan
+        </div>
+
+        @if($ps['count'])
+        <div class="overflow-x-auto">
+            <table class="w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr class="text-left text-xs text-gray-500 uppercase">
+                        <th class="px-5 py-2">N° OF</th>
+                        <th class="px-3 py-2">Statut</th>
+                        <th class="px-3 py-2 text-right">Demandé</th>
+                        <th class="px-3 py-2 text-right">Produit</th>
+                        <th class="px-3 py-2">Qualité</th>
+                        <th class="px-3 py-2">PF stock</th>
+                        <th class="px-3 py-2"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach($ps['orders'] as $of)
+                    <tr>
+                        <td class="px-5 py-2.5 font-mono text-xs text-indigo-600">{{ $of['number'] }}</td>
+                        <td class="px-3 py-2.5">
+                            @php $sc = match($of['status']){ 'brouillon'=>'bg-gray-100 text-gray-600','lance'=>'bg-amber-100 text-amber-700','en_cours'=>'bg-sky-100 text-sky-700','termine'=>'bg-green-100 text-green-700',default=>'bg-red-100 text-red-700' }; @endphp
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $sc }}">{{ $of['status_label'] }}</span>
+                        </td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($of['qty_requested'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-gray-900">{{ number_format($of['qty_produced'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5">
+                            @if($of['qc_status'])
+                                @php $qc = match($of['qc_status']){ 'conforme'=>'bg-green-100 text-green-700','a_reprendre'=>'bg-amber-100 text-amber-700',default=>'bg-red-100 text-red-700' }; @endphp
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $qc }}">{{ $of['qc_label'] }}</span>
+                            @else <span class="text-gray-400 text-xs">—</span> @endif
+                        </td>
+                        <td class="px-3 py-2.5">{!! $of['has_output'] ? '<span class="text-green-600 text-xs">✓ Entré</span>' : '<span class="text-gray-400 text-xs">—</span>' !!}</td>
+                        <td class="px-3 py-2.5 text-right">
+                            @can('production.view')
+                            <a href="{{ route('production.orders.show', $of['id']) }}" class="text-indigo-600 hover:underline text-xs font-medium">Voir OF →</a>
+                            @endcan
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        @else
+        <p class="px-5 py-8 text-center text-gray-400 text-sm">Aucun ordre de fabrication. Lancez la production pour cette commande.</p>
+        @endif
+    </div>
+    @endif
+
+    {{-- ══ Disponibilité produit fini (V2) ══ --}}
+    @if(isset($stockAnalysis) && $stockAnalysis['lines']->isNotEmpty())
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-gray-900">Disponibilité produit fini</h2>
+            @can('production.update')
+            @if($stockAnalysis['reservable'] > 0 && !in_array($order->status, ['brouillon','annule']))
+            <form method="POST" action="{{ route('production.sales.reserve-stock', $order) }}">@csrf
+                <button class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Réserver le stock disponible ({{ number_format($stockAnalysis['reservable'],0,',',' ') }})
+                </button>
+            </form>
+            @endif
+            @endcan
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr class="text-left text-xs text-gray-500 uppercase">
+                        <th class="px-5 py-2">Produit</th>
+                        <th class="px-3 py-2 text-right">Commandé</th>
+                        <th class="px-3 py-2 text-right">Dispo stock</th>
+                        <th class="px-3 py-2 text-right">Déjà réservé</th>
+                        <th class="px-3 py-2 text-right">À réserver</th>
+                        <th class="px-3 py-2 text-right">À produire</th>
+                        <th class="px-3 py-2">Décision</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    @foreach($stockAnalysis['lines'] as $l)
+                    <tr>
+                        <td class="px-5 py-2.5 text-gray-800">{{ $l['product'] }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($l['ordered'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-gray-700">{{ number_format($l['available'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-gray-500">{{ number_format($l['reserved'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-teal-700 font-medium">{{ number_format($l['reservable'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5 text-right tabular-nums text-orange-700 font-medium">{{ number_format($l['to_produce'],0,',',' ') }}</td>
+                        <td class="px-3 py-2.5">
+                            @php [$dc,$dl] = match($l['decision']){ 'stock'=>['bg-green-100 text-green-700','Stock suffisant'],'produce'=>['bg-orange-100 text-orange-700','À produire'],default=>['bg-amber-100 text-amber-700','Mixte (stock + prod)'] }; @endphp
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $dc }}">{{ $dl }}</span>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+        @if($stockAnalysis['to_produce'] > 0)
+        <p class="px-5 py-3 text-xs text-orange-600 border-t border-gray-100">⚠ {{ number_format($stockAnalysis['to_produce'],0,',',' ') }} unité(s) à produire — lancez un ordre de fabrication.</p>
+        @endif
+    </div>
+    @endif
+
     {{-- Lignes --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-200">
             <h2 class="text-base font-semibold text-gray-900">Lignes de commande</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
@@ -364,7 +499,7 @@
             <h2 class="text-base font-semibold text-gray-900">Bons de livraison</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>
@@ -405,7 +540,7 @@
             <h2 class="text-base font-semibold text-gray-900">Factures</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>

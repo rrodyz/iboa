@@ -1,12 +1,18 @@
 
 
 
-<script>
-    window.__flash_success = <?php echo json_encode(session('success'), 15, 512) ?>;
-    window.__flash_error   = <?php echo json_encode(session('error'), 15, 512) ?>;
-    window.__flash_warning = <?php echo json_encode(session('warning'), 15, 512) ?>;
-    window.__flash_info    = <?php echo json_encode(session('info'), 15, 512) ?>;
-</script>
+<?php if(session('success')): ?>
+<meta name="flash-success" content="<?php echo e(session('success')); ?>" data-turbo-temporary>
+<?php endif; ?>
+<?php if(session('error')): ?>
+<meta name="flash-error" content="<?php echo e(session('error')); ?>" data-turbo-temporary>
+<?php endif; ?>
+<?php if(session('warning')): ?>
+<meta name="flash-warning" content="<?php echo e(session('warning')); ?>" data-turbo-temporary>
+<?php endif; ?>
+<?php if(session('info')): ?>
+<meta name="flash-info" content="<?php echo e(session('info')); ?>" data-turbo-temporary>
+<?php endif; ?>
 
 
 <div x-data="toastManager"

@@ -78,6 +78,9 @@ class CommercialWorkflowService
         $this->assertPermission('sales.validate');
         $dn->assertCanValidate();
 
+        // [VENTE↔PRODUCTION] Blocages livraison pour commandes fabriquées (QC + qté produite).
+        app(\App\Modules\Production\Services\ProductionDeliveryGuard::class)->assertDeliverable($dn);
+
         DB::transaction(function () use ($dn, $motif) {
             // [CONCURRENCE] Verrou + re-check statut frais : empêche la double
             // validation (double-clic) → double sortie de stock.
@@ -181,6 +184,11 @@ class CommercialWorkflowService
         };
 
         $document->cancelDocument($cancelledStatus, $motif);
+
+        // [V4] Annulation d'une commande → libère les réservations de produit fini.
+        if ($document instanceof \App\Models\Order) {
+            app(\App\Modules\Production\Services\ReservationService::class)->releaseForOrder($document);
+        }
     }
 
     // ── Dashboard KPIs ────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@
     </div>
 
     {{-- Filters --}}
-    <form method="GET" class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <select name="cash_account_id" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500">
                 <option value="">Tous les comptes</option>
@@ -51,9 +51,9 @@
     </form>
 
     {{-- Table --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="tbl-scroll">
-            <table class="tbl tbl-sticky">
+            <table class="tbl tbl-sticky w-full">
                 <thead>
                     <tr>
                         <th class="text-left">N°</th>

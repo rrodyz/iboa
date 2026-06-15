@@ -50,7 +50,7 @@ $formConfig = [
         <div class="space-y-5">
 
             {{-- ── Section 1 : Informations du paiement ───────────────────── --}}
-            <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <h2 class="text-base font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <span class="w-6 h-6 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                     Informations du paiement
@@ -170,6 +170,20 @@ $formConfig = [
                                   placeholder="Observations, informations complémentaires...">{{ old('notes') }}</textarea>
                     </div>
 
+                    {{-- Acompte client (avance, sans facture imputée) --}}
+                    <div class="md:col-span-2">
+                        <label class="inline-flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                            <input type="checkbox" name="is_acompte" value="1"
+                                   {{ old('is_acompte') ? 'checked' : '' }}
+                                   class="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500">
+                            <span>
+                                <span class="font-medium text-green-700">Acompte client (avance)</span><br>
+                                <span class="text-gray-500">Encaissement reçu d'avance, non rattaché à une facture précise.
+                                Sera imputable ultérieurement sur les factures du client.</span>
+                            </span>
+                        </label>
+                    </div>
+
                     {{-- [DUP-FORCE] Confirmer un doublon légitime --}}
                     <div class="md:col-span-2">
                         <label class="inline-flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
@@ -191,7 +205,7 @@ $formConfig = [
 
             {{-- ── Section 2 : Imputation sur factures ─────────────────────── --}}
             <div x-show="clientId" x-transition x-cloak
-                 class="bg-white rounded-xl border border-gray-200 p-5">
+                 class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
 
                 <div class="flex items-center justify-between mb-4">
                     <div>
@@ -232,7 +246,7 @@ $formConfig = [
 
                 {{-- Invoices table --}}
                 <div x-show="!loading && invoices.length > 0" class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
+                    <table class="w-full text-sm">
                         <thead>
                             <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                                 <th class="pb-2 text-left">Facture</th>

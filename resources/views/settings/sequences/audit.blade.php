@@ -65,7 +65,7 @@
     {{-- Audit table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="tbl-rx">
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 border-b border-gray-100">
                 <tr>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>

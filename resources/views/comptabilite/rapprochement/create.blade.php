@@ -89,7 +89,7 @@
             </div>
 
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b border-gray-200">
                             <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase w-32">Date valeur</th>

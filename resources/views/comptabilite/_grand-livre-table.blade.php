@@ -1,5 +1,5 @@
 <div class="tbl-scroll">
-    <table class="tbl">
+    <table class="tbl w-full">
         <thead>
             <tr>
                 <th class="text-left">Date</th>

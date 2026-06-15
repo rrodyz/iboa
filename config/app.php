@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // [PERF] Email admin pour alertes système — défini ici pour rester compatible config:cache.
+    'admin_email' => env('ADMIN_EMAIL'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

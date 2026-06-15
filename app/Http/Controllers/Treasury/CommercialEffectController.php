@@ -36,7 +36,16 @@ class CommercialEffectController extends Controller
         // Upcoming due (next 7 days)
         $upcomingDue = $this->service->getUpcomingDue(7);
 
-        return view('tresorerie.effets.index', compact('effects', 'filters', 'upcomingDue'));
+        // KPI : portefeuille d'effets en cours (non dénoués)
+        $outstanding = ['en_attente', 'accepte', 'remis_banque'];
+        $stats = [
+            'a_recevoir' => (int) CommercialEffect::where('direction', 'a_recevoir')->whereIn('status', $outstanding)->sum('amount'),
+            'a_payer'    => (int) CommercialEffect::where('direction', 'a_payer')->whereIn('status', $outstanding)->sum('amount'),
+            'en_attente' => CommercialEffect::where('status', 'en_attente')->count(),
+            'echus'      => CommercialEffect::whereIn('status', $outstanding)->whereDate('due_date', '<', now())->count(),
+        ];
+
+        return view('tresorerie.effets.index', compact('effects', 'filters', 'upcomingDue', 'stats'));
     }
 
     public function create(): View

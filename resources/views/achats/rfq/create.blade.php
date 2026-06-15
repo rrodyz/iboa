@@ -60,7 +60,7 @@
                 <h2 class="text-base font-semibold text-gray-800">Lignes à coter</h2>
                 <button type="button" @click="addItem()" class="text-sm text-blue-600 font-medium">+ Ajouter une ligne</button>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead><tr class="border-b border-gray-200">
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase w-4/12">Article (catalogue)</th>
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase w-5/12">Description</th>

@@ -88,15 +88,39 @@
         </div>
     </div>
 
+    {{-- Coordonnées bancaires --}}
+    @if($account->type === 'banque' && ($account->bank_name || $account->account_number || $account->iban || $account->bank_branch || $account->swift_bic))
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Coordonnées bancaires</h2>
+        <dl class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            @if($account->bank_name)
+            <div><dt class="text-xs text-gray-400 uppercase tracking-wider">Banque</dt><dd class="text-gray-900 font-medium mt-0.5">{{ $account->bank_name }}</dd></div>
+            @endif
+            @if($account->bank_branch)
+            <div><dt class="text-xs text-gray-400 uppercase tracking-wider">Agence</dt><dd class="text-gray-900 font-medium mt-0.5">{{ $account->bank_branch }}</dd></div>
+            @endif
+            @if($account->account_number)
+            <div><dt class="text-xs text-gray-400 uppercase tracking-wider">N° de compte (RIB)</dt><dd class="text-gray-900 font-mono mt-0.5">{{ $account->account_number }}</dd></div>
+            @endif
+            @if($account->iban)
+            <div><dt class="text-xs text-gray-400 uppercase tracking-wider">IBAN</dt><dd class="text-gray-900 font-mono mt-0.5">{{ $account->iban }}</dd></div>
+            @endif
+            @if($account->swift_bic)
+            <div><dt class="text-xs text-gray-400 uppercase tracking-wider">SWIFT / BIC</dt><dd class="text-gray-900 font-mono mt-0.5">{{ $account->swift_bic }}</dd></div>
+            @endif
+        </dl>
+    </div>
+    @endif
+
     {{-- Transactions table --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
             <h2 class="text-sm font-semibold text-gray-700">Historique des transactions</h2>
             <span class="text-xs text-gray-400">{{ $transactions->total() }} transaction(s)</span>
         </div>
 
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-sm">
+            <table class="w-full divide-y divide-gray-100 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>

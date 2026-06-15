@@ -40,12 +40,14 @@
         <?php
         $ag = match(true) {
             request()->routeIs('ventes.*')                                                                                            => 'ventes',
-            request()->routeIs('achats.*')                                                                                            => 'achats',
+request()->routeIs('achats.*')                                                                                            => 'achats',
             request()->routeIs('clients*','suppliers*','products*','brands*','product-families*','promotions*','product-price-tiers*') => 'gestion',
             request()->routeIs('stocks.*','stocks.warehouses*')                                                                        => 'stocks',
             request()->routeIs('reports.*')                                                                                           => 'analytique',
             request()->routeIs('tresorerie.*')                                                                                        => 'tresorerie',
             request()->routeIs('comptabilite.*')                                                                                      => 'comptabilite',
+            request()->routeIs('rh.*','rh.dashboard')                                                                                  => 'rh',
+            request()->routeIs('crm.*')                                                                                               => 'crm',
             request()->routeIs('users*','roles*','audit*','company*','units*')                                                        => 'parametres',
             default => null,
         };
@@ -75,6 +77,19 @@
                 </div>
             </a>
 
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('reports.view')): ?>
+            <a href="<?php echo e(route('direction.dashboard')); ?>"
+               class="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                      <?php echo e(request()->routeIs('direction.dashboard') ? 'bg-white/15 text-white shadow-sm' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white'); ?>">
+                <?php if(request()->routeIs('direction.dashboard')): ?><span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-300 rounded-r-full"></span><?php endif; ?>
+                <svg class="w-[18px] h-[18px] flex-shrink-0 <?php echo e(request()->routeIs('direction.dashboard') ? 'text-white' : 'text-indigo-400 group-hover:text-white'); ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span x-show="!$store.sidebar.collapsed" class="truncate">Direction</span>
+                <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">Direction<div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div></div>
+            </a>
+            <?php endif; ?>
+
             <?php
             // Macro pour générer un groupe accordéon
             // Utilisé inline via @include ou directement en Blade
@@ -86,6 +101,7 @@
             
 
             
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['quotes.view','orders.view','invoices.view','deliveries.view','credit_notes.view','sales.view_all'])): ?>
             <?php $gId = 'ventes'; $gActive = request()->routeIs('ventes.*'); ?>
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
@@ -112,6 +128,7 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         <?php $__currentLoopData = array_filter([
+                            auth()->user()->can('invoices.view')     ? [route('ventes.dashboard'),           '📊 Tableau de bord','ventes.dashboard']         : null,
                             auth()->user()->can('quotes.view')       ? [route('ventes.devis.index'),         'Devis',            'ventes.devis*']            : null,
                             auth()->user()->can('orders.view')       ? [route('ventes.commandes.index'),     'Commandes',        'ventes.commandes*']         : null,
                             auth()->user()->can('deliveries.view')   ? [route('ventes.bons-livraison.index'),'Bons de livraison','ventes.bons-livraison*']    : null,
@@ -130,6 +147,8 @@
                     </div>
                 </div>
             </div>
+
+            <?php endif; ?>
 
             
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['purchase_requests.view', 'purchase_orders.view', 'receptions.view', 'supplier_invoices.view', 'supplier_returns.view'])): ?>
@@ -178,6 +197,7 @@
             <?php endif; ?>
 
             
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['clients.view','suppliers.view','products.view'])): ?>
             <?php $gId = 'gestion'; $gActive = request()->routeIs('clients*','suppliers*','products*','brands*','product-families*','promotions*','product-price-tiers*'); ?>
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
@@ -223,6 +243,8 @@
                 </div>
             </div>
 
+            <?php endif; ?>
+
             
             <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['stocks.view', 'stocks.adjust', 'inventory.view'])): ?>
             <?php $gId = 'stocks'; $gActive = request()->routeIs('stocks.*'); ?>
@@ -249,10 +271,14 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         <?php $__currentLoopData = array_filter([
-                            auth()->user()->can('stocks.view')     ? [route('stocks.index'),              'Niveaux de stock',  'stocks.index']                          : null,
-                            auth()->user()->can('stocks.view')     ? [route('stocks.movements'),          'Mouvements',        'stocks.movements,stocks.movement*']      : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.dashboard'),          'Tableau de bord',   'stocks.dashboard']                       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.index'),              'Niveaux de stock',  'stocks.index']                           : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.movements'),          'Mouvements',        'stocks.movements,stocks.movement*']       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.transfers.index'),    'Transferts',        'stocks.transfers*']                       : null,
                             auth()->user()->can('stocks.view')     ? [route('stocks.valuation'),          'Valorisation',      'stocks.valuation']                       : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.dashboard.restock'),  'Alertes réappro',   'stocks.dashboard.restock']               : null,
                             auth()->user()->can('inventory.view')  ? [route('stocks.inventaires.index'),  'Inventaires',       'stocks.inventaires*']                    : null,
+                            auth()->user()->can('stocks.adjust')   ? [route('stocks.seuils'),             'Seuils min / max',  'stocks.seuils']                          : null,
                             auth()->user()->can('stocks.view')     ? [route('stocks.lots'),               'Lots & Traçabilité','stocks.lots']                            : null,
                             auth()->user()->can('stocks.adjust')   ? [route('stocks.warehouses.index'),   'Entrepôts',         'stocks.warehouses*']                     : null,
                         ]); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
@@ -261,6 +287,63 @@
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
                                   <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
                             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-emerald-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('production.view')): ?>
+            <?php $gId = 'production'; $gActive = request()->routeIs('production.*'); ?>
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               <?php echo e($gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white'); ?>">
+                    <?php if($gActive): ?><span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-orange-300 rounded-r-full"></span><?php endif; ?>
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 <?php echo e($gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white'); ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">Production</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '<?php echo e($gId); ?>' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        Production <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '<?php echo e($gId); ?>' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        <?php $__currentLoopData = array_filter([
+                            [route('production.dashboard'),      'Tableau de bord',       'production.dashboard'],
+                            [route('production.orders.index'),   'Ordres de fabrication', 'production.orders*'],
+                            [route('production.coils.index'),    'Bobines (matière)', 'production.coils*'],
+                            [route('production.bom.index'),      'Nomenclatures',     'production.bom*'],
+                            [route('production.routings.index'), 'Gammes',            'production.routings*'],
+                            [route('production.machines.index'), 'Machines',          'production.machines*'],
+                            [route('production.work-centers.index'), 'Centres de travail', 'production.work-centers*'],
+                            [route('production.maintenance.index'), 'Maintenance',       'production.maintenance*'],
+                            [route('production.lines.index'),    'Lignes',            'production.lines*'],
+                            [route('production.planning'),       'Plan de charge',    'production.planning'],
+                            [route('production.cutting'),        'Optimisation découpe', 'production.cutting'],
+                            [route('qualite.inspections.index'), 'Contrôles qualité', 'qualite.inspections*'],
+                            [route('qualite.non-conformities.index'), 'Non-conformités', 'qualite.non-conformities*'],
+                            [route('production.mrp'),            'Réappro (MRP)',     'production.mrp'],
+                            auth()->user()->can('production.cost.view') ? [route('production.treasury'), 'Prévision trésorerie', 'production.treasury'] : null,
+                            auth()->user()->can('production.report.view') ? [route('production.reports'), 'Rapports', 'production.reports'] : null,
+                        ]); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-orange-300' : 'bg-white/20'); ?>"></span>
                             <?php echo e($label); ?>
 
                         </a>
@@ -296,10 +379,17 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         <?php $__currentLoopData = [
-                            [route('reports.index'),            'Rapports & BI',          'reports.index'],
-                            [route('reports.ca'),               'Chiffre d\'affaires',    'reports.ca'],
-                            [route('reports.margins'),          'Marges',                 'reports.margins'],
-                            [route('reports.sales-performance'),'Performance commerciale','reports.sales-performance'],
+                            [route('reports.index'),              'Rapports & BI',          'reports.index'],
+                            [route('reports.ca'),                 'Chiffre d\'affaires',    'reports.ca'],
+                            [route('reports.journal-ventes'),     'Journal des ventes',     'reports.journal-ventes'],
+                            [route('reports.liste-factures'),     'Liste des factures',     'reports.liste-factures'],
+                            [route('reports.liste-devis'),        'Liste des devis',        'reports.liste-devis'],
+                            [route('reports.liste-commandes'),    'Liste des commandes',    'reports.liste-commandes'],
+                            [route('reports.impayes'),            'Impayés clients',        'reports.impayes'],
+                            [route('reports.etat-tva'),           'État de TVA',            'reports.etat-tva'],
+                            [route('reports.etat-stocks'),        'État des stocks',        'reports.etat-stocks'],
+                            [route('reports.margins'),            'Marges produits',        'reports.margins'],
+                            [route('reports.sales-performance'),  'Performance commerciale','reports.sales-performance'],
                         ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                         <?php $sub = request()->routeIs($match); ?>
                         <a href="<?php echo e($href); ?>"
@@ -341,14 +431,54 @@
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         <?php $__currentLoopData = array_filter([
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'),'Encaissements',      'tresorerie.encaissements*'] : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'),'Décaissements',      'tresorerie.decaissements*'] : null,
-                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),      'Comptes bancaires',  'tresorerie.caisses*']       : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),   'Prévisions',         'tresorerie.previsions*']    : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.remises.index'),      'Remises en banque',  'tresorerie.remises*']       : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.effets.index'),       'Effets de commerce', 'tresorerie.effets*']        : null,
-                            auth()->user()->can('clients.view')       ? [route('relances.index'),                'Relances',           'relances*']                 : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.dashboard'),             'Tableau de bord',    'tresorerie.dashboard']         : null,
+
+                            // ── Banques & Caisses ──
+                            auth()->user()->can('cash_accounts.view') ? [null, 'Banques & Caisses', null] : null,
+                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),       'Comptes (banques/caisses)', 'tresorerie.caisses*']  : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.operations.index'),    'Entrées / Sorties caisse', 'tresorerie.operations*'] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.clotures.index'),      'Clôtures de caisse', 'tresorerie.clotures*']       : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.virements.index'),     'Virements internes', 'tresorerie.virements*']       : null,
+
+                            // ── Opérations ──
+                            auth()->user()->can('payments.view')      ? [null, 'Opérations', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'), 'Encaissements',      'tresorerie.encaissements*']    : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'), 'Décaissements',      'tresorerie.decaissements*']  : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.demandes.index'),      'Demandes de paiement','tresorerie.demandes*']       : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.remises.index'),       'Remises en banque',  'tresorerie.remises*']        : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.effets.index'),        'Effets de commerce', 'tresorerie.effets*']         : null,
+
+                            // ── Échéances & Recouvrement ──
+                            auth()->user()->can('payments.view')      ? [null, 'Échéances & Recouvrement', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-clients'),  'Échéancier clients', 'tresorerie.echeancier-clients'] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-fournisseurs'), 'Échéancier fournisseurs', 'tresorerie.echeancier-fournisseurs'] : null,
+                            auth()->user()->can('clients.view')       ? [route('relances.index'),                 'Relances',           'relances*']                  : null,
+                            auth()->user()->can('clients.view')       ? [route('promesses.index'),                'Promesses de paiement', 'promesses*']              : null,
+                            auth()->user()->can('clients.view')       ? [route('contentieux.index'),             'Contentieux',        'contentieux*']               : null,
+                            auth()->user()->can('clients.view')       ? [route('clients.balance-agee'),           'Balance âgée tiers', 'clients.balance-agee']       : null,
+                            auth()->user()->can('reports.view')       ? [route('reports.impayes'),                'Impayés clients',    'reports.impayes']            : null,
+
+                            // ── Prévisions & Budget ──
+                            auth()->user()->can('payments.view')      ? [null, 'Prévisions & Budget', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),    'Prévisions',         'tresorerie.previsions*']     : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.simulations.index'),   'Simulations',        'tresorerie.simulations*']    : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.budgets.index'),       'Budgets trésorerie', 'tresorerie.budgets*']        : null,
+
+                            // ── Rapprochement & Lettrage ──
+                            auth()->user()->can('accounting.view')    ? [null, 'Rapprochement & Lettrage', null] : null,
+                            auth()->user()->can('accounting.view')    ? [route('comptabilite.rapprochement.index'), 'Rapprochement bancaire', 'comptabilite.rapprochement*'] : null,
+                            auth()->user()->can('accounting.view')    ? [route('comptabilite.lettrage.index'),    'Lettrage',           'comptabilite.lettrage*']     : null,
+
+                            // ── Rapports & Audit ──
+                            auth()->user()->can('payments.view')      ? [null, 'Rapports & Audit', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.etat'),                'État de trésorerie', 'tresorerie.etat']            : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.journal'),             'Journal de trésorerie','tresorerie.journal']        : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.alertes'),             'Alertes',            'tresorerie.alertes']         : null,
+                            auth()->user()->can('audit.view')         ? [route('audit.index'),                    'Journal des actions', 'audit.index']               : null,
                         ]); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php if($href === null): ?>
+                            <div class="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400/60 select-none"><?php echo e($label); ?></div>
+                        <?php else: ?>
                         <?php $sub = request()->routeIs($match); ?>
                         <a href="<?php echo e($href); ?>"
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
@@ -357,6 +487,7 @@
                             <?php echo e($label); ?>
 
                         </a>
+                        <?php endif; ?>
                         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </div>
                 </div>
@@ -390,6 +521,7 @@
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         <?php $__currentLoopData = array_filter([
                             auth()->user()->can('accounting.view') ? [route('comptabilite.plan-comptable.index'), 'Plan comptable',      'comptabilite.plan-comptable*']    : null,
+                            auth()->user()->can('accounting.view') ? [route('comptabilite.journal-types.index'),   'Codes journaux',      'comptabilite.journal-types*']     : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.journaux.index'),        'Journaux',            'comptabilite.journaux*']          : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.grand-livre'),           'Grand livre',         'comptabilite.grand-livre']        : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.balance'),               'Balance générale',    'comptabilite.balance']            : null,
@@ -401,6 +533,8 @@
                             auth()->user()->can('accounting.view') ? [route('comptabilite.lettrage.index'),        'Lettrage',            'comptabilite.lettrage*']          : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.rapprochement.index'),   'Rapprochement banc.', 'comptabilite.rapprochement*']     : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.tva.index'),             'Déclarations TVA',    'comptabilite.tva*']               : null,
+                            auth()->user()->can('accounting.validate') ? [route('comptabilite.periods.index'),    'Verrouillage périodes','comptabilite.periods*']           : null,
+                            auth()->user()->can('accounting.view') ? [route('comptabilite.immobilisations.index'), 'Immobilisations',     'comptabilite.immobilisations*']    : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.bilan'),                 'Bilan',               'comptabilite.bilan']              : null,
                             auth()->user()->can('accounting.view') ? [route('comptabilite.compte-de-resultat'),    'Compte de résultat',  'comptabilite.compte-de-resultat']  : null,
                         ]); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
@@ -419,6 +553,223 @@
             <?php endif; ?>
 
             
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['rh.view','rh.employees.view','rh.payroll.view','rh.payroll.manage','rh.settings','rh.portail'])): ?>
+            <?php $gId = 'rh'; $gActive = request()->routeIs('rh.*'); ?>
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               <?php echo e($gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white'); ?>">
+                    <?php if($gActive): ?><span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-rose-300 rounded-r-full"></span><?php endif; ?>
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 <?php echo e($gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white'); ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">RH / Paie</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '<?php echo e($gId); ?>' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        RH / Paie <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '<?php echo e($gId); ?>' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        
+                        <div class="px-3 pt-2 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Salariés</span>
+                        </div>
+                        <?php $__currentLoopData = [
+                            [route('rh.dashboard'),         'Tableau de bord',     'rh.dashboard'],
+                            [route('rh.portail.dashboard'), 'Mon Espace RH',       'rh.portail*'],
+                            [route('rh.employes.index'),    'Employés',            'rh.employes*'],
+                            [route('rh.contrats.index'),    'Contrats',            'rh.contrats*'],
+                            [route('rh.departments.index'), 'Départements',        'rh.departments*'],
+                            [route('rh.presences.index'),   'Présences & absences','rh.presences*'],
+                            [route('rh.conges.index'),      'Congés',              'rh.conges*'],
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-rose-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+
+                        
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Paie</span>
+                        </div>
+                        <?php $__currentLoopData = [
+                            [route('rh.variables.index'),   'Variables mensuelles','rh.variables*'],
+                            [route('rh.paie.create'),       'Préparation de la paie','rh.paie.create'],
+                            [route('rh.paie.index'),        'Bulletins de paie',  'rh.paie*'],
+                            [route('rh.paie.simulateur.index'), '🧮 Simulateur salaire','rh.paie.simulateur*'],
+                            [route('rh.avances.index'),     'Avances salaire',    'rh.avances*'],
+                            [route('rh.prets.index'),       'Prêts salariés',     'rh.prets*'],
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-rose-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+
+                        
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Configuration</span>
+                        </div>
+                        <?php $__currentLoopData = [
+                            [route('rh.types-primes.index'),       'Types de primes',         'rh.types-primes*'],
+                            [route('rh.rubriques.index'),          'Rubriques de paie',      'rh.rubriques*'],
+                            [route('rh.plans.index'),              'Plans de paie',           'rh.plans*'],
+                            [route('rh.profils.index'),            'Profils de paie',         'rh.profils*'],
+                            [route('rh.constantes.index'),         'Constantes',              'rh.constantes*'],
+                            [route('rh.baremes.index'),            'Barèmes fiscaux',         'rh.baremes*'],
+                            [route('rh.cotisations.index'),        'Cotisations sociales',    'rh.cotisations*'],
+                            [route('rh.numerotation.index'),       'Numérotation bulletins',  'rh.numerotation*'],
+                            [route('rh.modeles-bulletins.index'),  'Modèles de bulletins',    'rh.modeles-bulletins*'],
+                            [route('rh.periodes.index'),           'Périodes de paie',        'rh.periodes*'],
+                            [route('rh.parametrage.edit'),         'Paramétrage général',     'rh.parametrage*'],
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-rose-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+
+                        
+                        <div class="px-3 pt-3 pb-0.5">
+                            <span class="text-[9px] font-bold uppercase tracking-widest text-white/25">Éditions</span>
+                        </div>
+                        <?php $__currentLoopData = [
+                            [route('rh.etats.index'),           'États de paie',        'rh.etats*'],
+                            [route('rh.comptabilisation.index'),'Comptabilisation paie', 'rh.comptabilisation*'],
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-rose-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php endif; ?>
+
+            
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['clients.view','sales.view_all','quotes.view'])): ?>
+            <?php $gId = 'crm'; $gActive = request()->routeIs('crm.*'); ?>
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               <?php echo e($gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white'); ?>">
+                    <?php if($gActive): ?><span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-cyan-300 rounded-r-full"></span><?php endif; ?>
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 <?php echo e($gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white'); ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">CRM</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '<?php echo e($gId); ?>' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        CRM <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '<?php echo e($gId); ?>' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        <?php $__currentLoopData = [
+                            [route('crm.dashboard'),         'Tableau de bord',  'crm.dashboard'],
+                            [route('crm.contacts.index'),    'Contacts',         'crm.contacts*'],
+                            [route('crm.opportunities.index'),'Pipeline',        'crm.opportunities*'],
+                            [route('crm.activities.index'),  'Activités',        'crm.activities*'],
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-cyan-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php endif; ?>
+
+            
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('integrations.view')): ?>
+            <?php $gId = 'integrations'; $gActive = request()->routeIs('integrations.*'); ?>
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               <?php echo e($gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white'); ?>">
+                    <?php if($gActive): ?><span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-orange-300 rounded-r-full"></span><?php endif; ?>
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 <?php echo e($gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white'); ?>" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">Intégrations</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '<?php echo e($gId); ?>' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        Intégrations <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '<?php echo e($gId); ?>' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        <?php
+                            $intLinks = [
+                                [route('integrations.dashboard'), 'Tableau de bord',    'integrations.dashboard'],
+                                [route('integrations.index'),     'Toutes les intégrations', 'integrations.index'],
+                            ];
+                            if (auth()->user()->can('integrations.manage')) {
+                                $intLinks[] = [route('integrations.create'), 'Nouvelle intégration', 'integrations.create'];
+                            }
+                        ?>
+                        <?php $__currentLoopData = $intLinks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as [$href, $label, $match]): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <?php $sub = request()->routeIs($match); ?>
+                        <a href="<?php echo e($href); ?>"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  <?php echo e($sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8'); ?>">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 <?php echo e($sub ? 'bg-orange-300' : 'bg-white/20'); ?>"></span>
+                            <?php echo e($label); ?>
+
+                        </a>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php endif; ?>
+
+            
+            <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->any(['settings.manage','users.manage','roles.manage','company.edit'])): ?>
             <?php $gId = 'parametres'; $gActive = request()->routeIs('users*','roles*','audit*','company*','units*','settings.*','payment-terms*','sequences*'); ?>
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '<?php echo e($gId); ?>' ? null : '<?php echo e($gId); ?>'"
@@ -526,9 +877,25 @@
                 </div>
             </div>
 
+            <?php endif; ?> 
+
             <div class="h-4"></div>
 
         </nav>
+
+        
+        <div x-show="!$store.sidebar.collapsed"
+             class="flex-shrink-0 px-3 pb-3"
+             style="border-top:1px solid rgba(255,255,255,.06);">
+            <button @click="$dispatch('open-palette')"
+                    class="w-full mt-2 flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-indigo-300/70 hover:text-white hover:bg-white/8 transition-all group">
+                <svg class="w-3.5 h-3.5 flex-shrink-0 text-indigo-400 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                </svg>
+                <span class="flex-1 text-left">Recherche rapide</span>
+                <kbd class="text-[9px] font-bold bg-white/10 border border-white/10 rounded px-1.5 py-0.5">Ctrl K</kbd>
+            </button>
+        </div>
 
     </aside>
 

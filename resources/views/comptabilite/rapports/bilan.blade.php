@@ -120,7 +120,7 @@
                         Comparatif {{ $selectedFy->label }} vs {{ $prevFy->label }}
                     </h2>
                 </div>
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                         <tr>
                             <th class="px-4 py-2 text-left">Poste</th>
@@ -231,7 +231,7 @@
                 <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
                     <h3 class="text-sm font-semibold text-blue-800">{{ $sectionName }}</h3>
                 </div>
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <tbody class="divide-y divide-gray-100">
                         @foreach($sectionAccounts as $account)
                         @if($account->net != 0)
@@ -274,7 +274,7 @@
                 <div class="px-4 py-3 bg-green-50 border-b border-green-100">
                     <h3 class="text-sm font-semibold text-green-800">{{ $sectionName }}</h3>
                 </div>
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <tbody class="divide-y divide-gray-100">
                         @foreach($sectionAccounts as $account)
                         @if($account->net != 0)

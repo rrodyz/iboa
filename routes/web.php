@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 // [UI] La racine redirige toujours vers la zone de travail.
 // Pas de page d'accueil publique — l'ERP est un outil interne.
-Route::get('/', function () {
-    return redirect()->route(auth()->check() ? 'dashboard' : 'login');
-});
+Route::get('/', \App\Http\Controllers\RootRedirectController::class);
 
 /*
  * ── Vérification publique de facture (URL signée, aucune auth requise) ──────
@@ -178,6 +176,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('clients/{client}/interactions', [ClientController::class, 'storeInteraction'])->name('clients.interactions.store');
             Route::get('relances', [\App\Http\Controllers\ClientRelanceController::class, 'index'])->name('relances.index');
             Route::post('relances/send', [\App\Http\Controllers\ClientRelanceController::class, 'send'])->name('relances.send');
+            Route::get('relances/lettre', [\App\Http\Controllers\ClientRelanceController::class, 'letter'])->name('relances.letter');
+
+            Route::get('promesses', [\App\Http\Controllers\PaymentPromiseController::class, 'index'])->name('promesses.index');
+            Route::post('promesses', [\App\Http\Controllers\PaymentPromiseController::class, 'store'])->name('promesses.store');
+            Route::patch('promesses/{promise}/status', [\App\Http\Controllers\PaymentPromiseController::class, 'updateStatus'])->name('promesses.status');
+            Route::delete('promesses/{promise}', [\App\Http\Controllers\PaymentPromiseController::class, 'destroy'])->name('promesses.destroy');
+
+            Route::get('contentieux', [\App\Http\Controllers\LitigationCaseController::class, 'index'])->name('contentieux.index');
+            Route::post('contentieux', [\App\Http\Controllers\LitigationCaseController::class, 'store'])->name('contentieux.store');
+            Route::patch('contentieux/{case}', [\App\Http\Controllers\LitigationCaseController::class, 'update'])->name('contentieux.update');
+            Route::delete('contentieux/{case}', [\App\Http\Controllers\LitigationCaseController::class, 'destroy'])->name('contentieux.destroy');
         });
 
         // Fournisseurs — Rapports
@@ -630,6 +639,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('rapprochement',         [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'store'])->name('rapprochement.store');
             Route::post('rapprochement/lines/{line}/match',   [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'matchLine'])->name('rapprochement.match');
             Route::post('rapprochement/lines/{line}/unmatch', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'unmatchLine'])->name('rapprochement.unmatch');
+            // [TRESO] Comptabiliser une ligne relevé en frais bancaire
+            Route::post('rapprochement/lines/{line}/fee',     [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'postAsFee'])->name('rapprochement.fee');
             // [PRIO-5] Import CSV + matching automatique
             Route::post('rapprochement/{rapprochement}/import-csv', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'importCsv'])->name('rapprochement.import-csv');
             Route::post('rapprochement/{rapprochement}/auto-match', [\App\Http\Controllers\Accounting\BankReconciliationController::class, 'autoMatch'])->name('rapprochement.auto-match');
@@ -725,6 +736,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('decaissements/{decaissement}/recu', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'recu'])->name('decaissements.recu');
             // [TRESO] Annulation décaissement : contre-passation compta + restauration facture
             Route::post('decaissements/{decaissement}/cancel', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'cancel'])->name('decaissements.cancel');
+            // [TRESO-WORKFLOW] Validation / rejet par seuil
+            Route::post('decaissements/{decaissement}/approve', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'approve'])->name('decaissements.approve');
+            Route::post('decaissements/{decaissement}/reject',  [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'reject'])->name('decaissements.reject');
             Route::resource('decaissements', \App\Http\Controllers\Treasury\SupplierPaymentController::class)
                 ->only(['index', 'create', 'store', 'show'])
                 ->parameters(['decaissements' => 'decaissement']);
@@ -732,6 +746,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // ── Échéancier clients ──────────────────────────────────────────────
             Route::get('echeancier-clients', [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'upcoming'])->name('echeancier-clients');
             Route::delete('schedules-clients/{schedule}', [\App\Http\Controllers\Treasury\ClientPaymentScheduleController::class, 'destroy'])->name('schedules-clients.destroy');
+
+            // ── Échéancier fournisseurs ─────────────────────────────────────────
+            Route::get('echeancier-fournisseurs', [\App\Http\Controllers\Treasury\SupplierDueController::class, 'upcoming'])->name('echeancier-fournisseurs');
+
+            // ── État de trésorerie ──────────────────────────────────────────────
+            Route::get('etat',     [\App\Http\Controllers\Treasury\TresorerieReportController::class, 'etat'])->name('etat');
+            Route::get('etat/pdf', [\App\Http\Controllers\Treasury\TresorerieReportController::class, 'etatPdf'])->name('etat.pdf');
+            // ── Journal de trésorerie + Alertes ─────────────────────────────────
+            Route::get('journal', [\App\Http\Controllers\Treasury\TresorerieReportController::class, 'journal'])->name('journal');
+            Route::get('alertes', [\App\Http\Controllers\Treasury\TresorerieReportController::class, 'alertes'])->name('alertes');
         });
 
         // Routes manage en PREMIER pour éviter que {caisse} intercepte /create
@@ -748,6 +772,66 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->parameters(['caisses' => 'caisse']);
         });
 
+        // ── Budgets de trésorerie ───────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('budgets/create', [\App\Http\Controllers\Treasury\TreasuryBudgetController::class, 'create'])->name('budgets.create');
+            Route::post('budgets',       [\App\Http\Controllers\Treasury\TreasuryBudgetController::class, 'store'])->name('budgets.store');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('budgets',           [\App\Http\Controllers\Treasury\TreasuryBudgetController::class, 'index'])->name('budgets.index');
+            Route::get('budgets/{budget}',  [\App\Http\Controllers\Treasury\TreasuryBudgetController::class, 'show'])->name('budgets.show');
+        });
+
+        // ── Demandes de paiement ────────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('demandes/create', [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'create'])->name('demandes.create');
+            Route::post('demandes',       [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'store'])->name('demandes.store');
+            Route::post('demandes/{demande}/submit', [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'submit'])->name('demandes.submit');
+        });
+        Route::middleware('permission:treasury.validate')->group(function () {
+            Route::post('demandes/{demande}/approve', [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'approve'])->name('demandes.approve');
+            Route::post('demandes/{demande}/reject',  [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'reject'])->name('demandes.reject');
+        });
+        Route::middleware('permission:payments.create')->group(function () {
+            Route::post('demandes/{demande}/pay', [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'pay'])->name('demandes.pay');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('demandes',           [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'index'])->name('demandes.index');
+            Route::get('demandes/{demande}', [\App\Http\Controllers\Treasury\PaymentRequestController::class, 'show'])->name('demandes.show');
+        });
+
+        // ── Clôtures de caisse ──────────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('clotures/create', [\App\Http\Controllers\Treasury\CashClosureController::class, 'create'])->name('clotures.create');
+            Route::post('clotures',       [\App\Http\Controllers\Treasury\CashClosureController::class, 'store'])->name('clotures.store');
+            Route::post('clotures/{cloture}/validate', [\App\Http\Controllers\Treasury\CashClosureController::class, 'validateClosure'])->name('clotures.validate');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('clotures',            [\App\Http\Controllers\Treasury\CashClosureController::class, 'index'])->name('clotures.index');
+            Route::get('clotures/{cloture}',  [\App\Http\Controllers\Treasury\CashClosureController::class, 'show'])->name('clotures.show');
+        });
+
+        // ── Virements internes ──────────────────────────────────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('virements/create', [\App\Http\Controllers\Treasury\CashTransferController::class, 'create'])->name('virements.create');
+            Route::post('virements',       [\App\Http\Controllers\Treasury\CashTransferController::class, 'store'])->name('virements.store');
+            Route::post('virements/{virement}/cancel', [\App\Http\Controllers\Treasury\CashTransferController::class, 'cancel'])->name('virements.cancel');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('virements',            [\App\Http\Controllers\Treasury\CashTransferController::class, 'index'])->name('virements.index');
+            Route::get('virements/{virement}', [\App\Http\Controllers\Treasury\CashTransferController::class, 'show'])->name('virements.show');
+        });
+
+        // ── Opérations diverses de caisse (entrées / sorties) ────────────────────
+        Route::middleware('permission:treasury.write')->group(function () {
+            Route::get('operations/create', [\App\Http\Controllers\Treasury\CashOperationController::class, 'create'])->name('operations.create');
+            Route::post('operations',       [\App\Http\Controllers\Treasury\CashOperationController::class, 'store'])->name('operations.store');
+            Route::post('operations/{operation}/cancel', [\App\Http\Controllers\Treasury\CashOperationController::class, 'cancel'])->name('operations.cancel');
+        });
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('operations', [\App\Http\Controllers\Treasury\CashOperationController::class, 'index'])->name('operations.index');
+        });
+
         // ── Prévisions de trésorerie ────────────────────────────────────────────
         Route::middleware('permission:treasury.write')->group(function () {
             Route::get('previsions/create',         [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'create'])->name('previsions.create');
@@ -758,6 +842,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('previsions',                [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'index'])->name('previsions.index');
             Route::get('previsions/{prevision}',    [\App\Http\Controllers\Treasury\CashFlowForecastController::class, 'show'])->name('previsions.show');
+            Route::get('simulations',               [\App\Http\Controllers\Treasury\TreasurySimulationController::class, 'index'])->name('simulations.index');
         });
 
         // ── Remises en banque ───────────────────────────────────────────────────
@@ -1156,25 +1241,119 @@ Route::middleware(['auth', 'verified'])->prefix('exports')->name('exports.')->gr
 Route::middleware(['auth', 'verified'])->get('/search', [\App\Http\Controllers\SearchController::class, 'search'])->name('search');
 
 // ── CRM ───────────────────────────────────────────────────────────────────────
-Route::middleware(['auth', 'verified', 'permission:clients.view|sales.view_all|quotes.view'])->prefix('crm')->name('crm.')->group(function () {
+Route::middleware(['auth', 'verified', 'permission:crm.view'])->prefix('crm')->name('crm.')->group(function () {
 
     // Dashboard
     Route::get('/', [\App\Http\Controllers\Crm\DashboardController::class, 'index'])->name('dashboard');
 
-    // Contacts / Prospects
-    Route::resource('contacts', \App\Http\Controllers\Crm\ContactController::class);
-    Route::post('contacts/{contact}/convert', [\App\Http\Controllers\Crm\ContactController::class, 'convert'])
-        ->name('contacts.convert');
+    // ── Écriture CRM (crm.manage) — déclaré AVANT les reads pour l'ordre create/{id} ──
+    Route::middleware('permission:crm.manage')->group(function () {
+        Route::post('contacts/{contact}/convert', [\App\Http\Controllers\Crm\ContactController::class, 'convert'])
+            ->name('contacts.convert');
+        Route::resource('contacts', \App\Http\Controllers\Crm\ContactController::class)
+            ->only(['create', 'store', 'edit', 'update', 'destroy']);
 
-    // Opportunités (pipeline Kanban)
-    Route::resource('opportunities', \App\Http\Controllers\Crm\OpportunityController::class);
-    Route::patch('opportunities/{opportunity}/move-stage', [\App\Http\Controllers\Crm\OpportunityController::class, 'moveStage'])
-        ->name('opportunities.move-stage');
+        Route::patch('opportunities/{opportunity}/move-stage', [\App\Http\Controllers\Crm\OpportunityController::class, 'moveStage'])
+            ->name('opportunities.move-stage');
+        Route::resource('opportunities', \App\Http\Controllers\Crm\OpportunityController::class)
+            ->only(['create', 'store', 'edit', 'update', 'destroy']);
 
-    // Activités (pas de page show — affichées inline dans contact/opportunité)
-    Route::resource('activities', \App\Http\Controllers\Crm\ActivityController::class)->except(['show']);
-    Route::patch('activities/{activity}/toggle-done', [\App\Http\Controllers\Crm\ActivityController::class, 'toggleDone'])
-        ->name('activities.toggle-done');
+        Route::patch('activities/{activity}/toggle-done', [\App\Http\Controllers\Crm\ActivityController::class, 'toggleDone'])
+            ->name('activities.toggle-done');
+        Route::resource('activities', \App\Http\Controllers\Crm\ActivityController::class)
+            ->only(['create', 'store', 'edit', 'update', 'destroy']);
+    });
+
+    // ── Lecture CRM (crm.view) ──
+    Route::resource('contacts', \App\Http\Controllers\Crm\ContactController::class)->only(['index', 'show']);
+    Route::resource('opportunities', \App\Http\Controllers\Crm\OpportunityController::class)->only(['index', 'show']);
+    Route::resource('activities', \App\Http\Controllers\Crm\ActivityController::class)->only(['index']);
+});
+
+// ═══ Production / Fabrication tôles bac ═══
+Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('production')->name('production.')->group(function () {
+    // Tableau de bord & rapports
+    Route::get('dashboard', [\App\Modules\Production\Controllers\ProductionDashboardController::class, 'index'])->name('dashboard');
+    Route::get('reports', [\App\Modules\Production\Controllers\ProductionReportController::class, 'index'])->name('reports');
+
+    // Planification — plan de charge
+    Route::get('planning', [\App\Modules\Production\Controllers\ProductionPlanningController::class, 'index'])->name('planning');
+
+    // Optimisation de découpe (nesting 1D)
+    Route::get('cutting', [\App\Modules\Production\Controllers\CuttingController::class, 'index'])->name('cutting');
+    Route::post('cutting', [\App\Modules\Production\Controllers\CuttingController::class, 'optimize'])->name('cutting.optimize');
+
+    // Maintenance machines
+    Route::resource('maintenance', \App\Modules\Production\Controllers\MaintenanceController::class)->except('show')->parameters(['maintenance' => 'maintenance']);
+    Route::post('maintenance/{maintenance}/start', [\App\Modules\Production\Controllers\MaintenanceController::class, 'start'])->name('maintenance.start');
+    Route::post('maintenance/{maintenance}/finish', [\App\Modules\Production\Controllers\MaintenanceController::class, 'finish'])->name('maintenance.finish');
+
+    // MRP — réapprovisionnement bobines
+    Route::get('mrp', [\App\Modules\Production\Controllers\MrpController::class, 'index'])->name('mrp');
+    Route::post('mrp/generate', [\App\Modules\Production\Controllers\MrpController::class, 'generate'])->name('mrp.generate');
+
+    // Réception bobine ← Achats : génère des Coil depuis une réception validée
+    Route::post('receptions/{reception}/coils', [\App\Modules\Production\Controllers\CoilReceptionController::class, 'generate'])->name('receptions.coils');
+
+    // Prévision trésorerie production
+    Route::get('treasury-forecast', [\App\Modules\Production\Controllers\ProductionTreasuryController::class, 'index'])->name('treasury');
+
+    // Pointage temps (main-d'œuvre ← RH)
+    Route::post('orders/{order}/time', [\App\Modules\Production\Controllers\ProductionTimeController::class, 'store'])->name('orders.time');
+    Route::delete('time-logs/{timeLog}', [\App\Modules\Production\Controllers\ProductionTimeController::class, 'destroy'])->name('time-logs.destroy');
+
+    // Lots de fabrication (batch/traçabilité)
+    Route::post('orders/{order}/batches', [\App\Modules\Production\Controllers\BatchController::class, 'store'])->name('orders.batches');
+    Route::post('batches/{batch}/close', [\App\Modules\Production\Controllers\BatchController::class, 'close'])->name('batches.close');
+
+    // Réservation produit fini ← Ventes
+    Route::post('orders/{order}/reserve', [\App\Modules\Production\Controllers\ProductionReservationController::class, 'reserve'])->name('orders.reserve');
+    Route::post('reservations/{reservation}/release', [\App\Modules\Production\Controllers\ProductionReservationController::class, 'release'])->name('reservations.release');
+    Route::post('sales/{commande}/reserve-stock', [\App\Modules\Production\Controllers\ProductionReservationController::class, 'reserveStock'])->name('sales.reserve-stock');
+
+    // Ordres de fabrication — workflow
+    Route::post('orders/{order}/launch', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'launch'])->name('orders.launch');
+    Route::post('orders/{order}/start',  [\App\Modules\Production\Controllers\ProductionOrderController::class, 'start'])->name('orders.start');
+    Route::post('orders/{order}/finish', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'finish'])->name('orders.finish');
+    Route::post('orders/{order}/cancel', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'cancel'])->name('orders.cancel');
+
+    // Exécution : consommation matière, sorties PF, chutes
+    Route::post('orders/{order}/consume', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'consume'])->name('orders.consume');
+    Route::delete('consumptions/{consumption}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyConsumption'])->name('consumptions.destroy');
+    Route::post('orders/{order}/output', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'output'])->name('orders.output');
+    Route::delete('outputs/{output}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyOutput'])->name('outputs.destroy');
+    Route::post('orders/{order}/waste', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'waste'])->name('orders.waste');
+    Route::delete('wastes/{waste}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyWaste'])->name('wastes.destroy');
+
+    // Coût de revient + contrôle qualité
+    Route::post('orders/{order}/cost', [\App\Modules\Production\Controllers\ProductionCostController::class, 'compute'])->name('orders.cost');
+    Route::post('orders/{order}/quality', [\App\Modules\Production\Controllers\ProductionQualityController::class, 'store'])->name('orders.quality');
+    Route::delete('quality/{qualityControl}', [\App\Modules\Production\Controllers\ProductionQualityController::class, 'destroy'])->name('quality.destroy');
+
+    Route::resource('orders', \App\Modules\Production\Controllers\ProductionOrderController::class);
+
+    // Référentiel
+    Route::resource('machines', \App\Modules\Production\Controllers\ProductionMachineController::class)->except('show');
+    Route::resource('lines', \App\Modules\Production\Controllers\ProductionLineController::class)->except('show');
+    Route::resource('work-centers', \App\Modules\Production\Controllers\WorkCenterController::class)->except('show')->parameters(['work-centers' => 'workCenter']);
+    Route::resource('routings', \App\Modules\Production\Controllers\RoutingController::class)->except('show');
+
+    // Work Orders — opérations d'un OF (gammes)
+    Route::post('orders/{order}/operations', [\App\Modules\Production\Controllers\WorkOrderController::class, 'generate'])->name('orders.operations');
+    Route::post('operations/{operation}/start', [\App\Modules\Production\Controllers\WorkOrderController::class, 'start'])->name('operations.start');
+    Route::post('operations/{operation}/finish', [\App\Modules\Production\Controllers\WorkOrderController::class, 'finish'])->name('operations.finish');
+    Route::resource('coils', \App\Modules\Production\Controllers\CoilController::class);
+    Route::resource('bom', \App\Modules\Production\Controllers\BillOfMaterialController::class)->parameter('bom', 'bom');
+});
+
+// ═══ Direction — tableau de bord exécutif (cross-module) ═══
+Route::middleware(['auth', 'verified', 'permission:reports.view'])
+    ->get('direction', [\App\Http\Controllers\DirectionDashboardController::class, 'index'])->name('direction.dashboard');
+
+// ═══ Qualité — contrôles & non-conformités (CAPA) ═══
+Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('qualite')->name('qualite.')->group(function () {
+    Route::resource('inspections', \App\Modules\Quality\Controllers\QualityInspectionController::class)->except('show');
+    Route::resource('non-conformities', \App\Modules\Quality\Controllers\NonConformityController::class)->except('show')->parameters(['non-conformities' => 'nonConformity']);
 });
 
 require __DIR__.'/auth.php';

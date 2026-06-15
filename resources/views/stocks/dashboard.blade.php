@@ -90,7 +90,7 @@
                 <h2 class="text-sm font-semibold text-gray-700">Top 10 par valorisation</h2>
                 <a href="{{ route('stocks.valuation') }}" class="text-xs text-blue-600 hover:underline">Voir tout →</a>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th class="px-4 py-2 text-left">Article</th>
@@ -122,7 +122,7 @@
                 <h2 class="text-sm font-semibold text-gray-700">Top 10 mouvementés — {{ now()->translatedFormat('F Y') }}</h2>
                 <a href="{{ route('stocks.movements') }}" class="text-xs text-blue-600 hover:underline">Tous →</a>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th class="px-4 py-2 text-left">Article</th>

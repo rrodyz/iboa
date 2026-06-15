@@ -20,7 +20,17 @@
             </nav>
 
             
-            <div class="hidden md:flex flex-1 max-w-xs mx-4"
+            <button @click="$dispatch('open-palette')"
+                    class="hidden md:flex items-center gap-2 flex-1 max-w-xs mx-4 px-3 py-1.5 text-sm text-gray-400 bg-gray-50 border border-gray-200 rounded-lg hover:border-indigo-300 hover:bg-white hover:text-gray-600 transition-all cursor-text">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+                </svg>
+                <span class="flex-1 text-left">Rechercher…</span>
+                <kbd class="flex-shrink-0 text-[10px] font-semibold bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-400 shadow-sm">Ctrl K</kbd>
+            </button>
+
+            
+            <div class="hidden"
                  x-data="{
                     q: '', results: [], open: false, loading: false,
                     async search() {
@@ -91,16 +101,89 @@
                     </svg>
                 </button>
                 
+                <button @click="$store.darkMode.toggle()"
+                        :title="$store.darkMode.dark ? 'Mode clair' : 'Mode sombre'"
+                        class="flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                    <svg x-show="!$store.darkMode.dark" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                    <svg x-show="$store.darkMode.dark" class="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.592-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.592z"/>
+                    </svg>
+                </button>
+
+                
                 <span class="hidden xl:block text-xs text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
                     <?php echo e(now()->locale('fr')->isoFormat('ddd D MMM YYYY')); ?>
 
                 </span>
 
                 
-                <span class="hidden lg:block text-xs font-medium text-gray-600 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100">
-                    <?php echo e(optional(auth()->user()->company)->name ?? config('app.name')); ?>
+                <?php
+                    $activeCompany = currentCompany();
+                    $user = auth()->user();
+                    $allCompanies = $user->hasRole('super-admin')
+                        ? \App\Models\Company::orderBy('name')->get()
+                        : collect([$activeCompany]);
+                ?>
+                <div class="hidden lg:block relative"
+                     x-data="{ open: false }"
+                     @click.outside="open = false">
 
-                </span>
+                    
+                    <button @click="open = !open"
+                            type="button"
+                            class="flex items-center gap-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full border border-indigo-200 transition-colors focus:outline-none"
+                            title="Changer de société">
+                        <svg class="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                        </svg>
+                        <span class="max-w-[140px] truncate"><?php echo e($activeCompany->name); ?></span>
+                        <?php if($allCompanies->count() > 1): ?>
+                            <svg class="w-3 h-3 text-indigo-400 flex-shrink-0" :class="open ? 'rotate-180' : ''" style="transition:transform .2s" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        <?php endif; ?>
+                    </button>
+
+                    
+                    <?php if($allCompanies->count() > 1): ?>
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 -translate-y-1 scale-95"
+                         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave-end="opacity-0 -translate-y-1 scale-95"
+                         class="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden py-1"
+                         style="display:none">
+
+                        <p class="px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Changer de société</p>
+
+                        <?php $__currentLoopData = $allCompanies; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $co): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                        <form method="POST" action="<?php echo e(route('company.switch', $co)); ?>">
+                            <?php echo csrf_field(); ?>
+                            <button type="submit"
+                                    class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-indigo-50 transition-colors text-left
+                                           <?php echo e($co->id === $activeCompany->id ? 'text-indigo-700 font-semibold bg-indigo-50/60' : 'text-gray-700'); ?>">
+                                <span class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0
+                                             <?php echo e($co->id === $activeCompany->id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'); ?>">
+                                    <?php echo e(strtoupper(substr($co->name, 0, 1))); ?>
+
+                                </span>
+                                <span class="flex-1 truncate"><?php echo e($co->name); ?></span>
+                                <?php if($co->id === $activeCompany->id): ?>
+                                <svg class="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                                <?php endif; ?>
+                            </button>
+                        </form>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
 
                 
                 <div class="relative" x-data="{ open: false, unread: 0, items: [] }"
@@ -158,6 +241,14 @@
                         </div>
                     </div>
                 </div>
+
+                
+                
+                <button @click="$dispatch('open-shortcuts')"
+                        title="Raccourcis clavier (?)"
+                        class="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold">
+                    ?
+                </button>
 
                 
                 <?php if (app(\Illuminate\Contracts\Auth\Access\Gate::class)->check('invoices.create')): ?>

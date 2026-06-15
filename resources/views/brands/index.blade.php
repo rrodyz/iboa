@@ -56,7 +56,7 @@
             <p class="text-xs mt-1">Créez votre première marque pour commencer</p>
         </div>
         @else
-        <table data-dt="simple" class="min-w-full divide-y divide-gray-100 text-sm">
+        <table data-dt="simple" class="w-full divide-y divide-gray-100 text-sm">
             <thead class="bg-gray-50">
                 <tr>
                     <th data-sortable class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nom</th>

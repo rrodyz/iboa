@@ -52,7 +52,7 @@
                 <button type="button" @click="showCsvModal = true"
                         class="inline-flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-medium px-3 py-1.5 rounded-lg transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                    Importer CSV
+                    Importer relevé
                 </button>
                 @endcan
 
@@ -121,7 +121,7 @@
          @keydown.escape.window="showCsvModal = false">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" @click.stop>
             <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-gray-900">Importer un relevé CSV</h3>
+                <h3 class="font-semibold text-gray-900">Importer un relevé (CSV / Excel)</h3>
                 <button @click="showCsvModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div class="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800 space-y-1">
@@ -129,13 +129,14 @@
                 <p class="font-mono">date;libelle;reference;debit;credit</p>
                 <p>Ex: 2026-05-01;Virement client;VIR-001;0;500000</p>
                 <p class="text-blue-600">La 1re ligne (header) est détectée et ignorée automatiquement.</p>
+                <p class="text-blue-600">Formats acceptés : .csv, .txt, .xlsx, .xls — colonnes dans le même ordre.</p>
             </div>
             <form method="POST" action="{{ route('comptabilite.rapprochement.import-csv', $rapprochement) }}"
                   enctype="multipart/form-data" class="space-y-3">
                 @csrf
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Fichier CSV</label>
-                    <input type="file" name="csv_file" accept=".csv,.txt" required
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Fichier (CSV ou Excel)</label>
+                    <input type="file" name="csv_file" accept=".csv,.txt,.xlsx,.xls" required
                            class="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-violet-500 focus:border-violet-500">
                 </div>
                 <div class="flex justify-end gap-2">
@@ -193,6 +194,10 @@
                                 <span x-show="selectedBankLine != {{ $line->id }}">Associer →</span>
                                 <span x-show="selectedBankLine == {{ $line->id }}">✓ Sélectionné</span>
                             </button>
+                            @if($line->debit > 0)
+                            <button type="button" @click="postFee({{ $line->id }}, @js($line->label))"
+                                    class="text-xs text-amber-600 hover:text-amber-800 font-medium" title="Comptabiliser en frais bancaire (DR 6312 / CR 521)">Frais</button>
+                            @endif
                             @else
                             <button type="button" @click="unmatch({{ $line->id }})"
                                     class="text-xs text-red-500 hover:text-red-700 font-medium">Dissocier</button>
@@ -318,6 +323,32 @@ function matchingPanel() {
 
         selectBankLine(id) {
             this.selectedBankLine = this.selectedBankLine === id ? null : id;
+        },
+
+        async postFee(lineId, label) {
+            const ok = await window.erpConfirm({
+                message: 'Comptabiliser cette ligne en frais bancaire (DR 6312 / CR 521) et la rapprocher ?',
+                title: 'Frais bancaire',
+                confirmLabel: 'Comptabiliser',
+                isDanger: false,
+            });
+            if (!ok) return;
+            try {
+                const resp = await fetch(`${matchUrlBase}/${lineId}/fee`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                    body: JSON.stringify({ label }),
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    window.toast(data.message, 'success');
+                    window.location.reload();
+                } else {
+                    window.toast(data.message || 'Erreur.', 'error');
+                }
+            } catch (e) {
+                window.toast('Erreur réseau. Réessayez.', 'error');
+            }
         },
 
         async matchLine(journalLineId) {

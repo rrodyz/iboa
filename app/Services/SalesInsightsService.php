@@ -52,7 +52,7 @@ class SalesInsightsService
                          AND issued_at BETWEEN ? AND ? THEN subtotal_ht ELSE 0 END) AS ca_prev_year,
                 -- CA 90 derniers jours (pour DSO)
                 SUM(CASE WHEN status NOT IN ('brouillon','annulee') AND type != 'avoir'
-                         AND issued_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN subtotal_ht ELSE 0 END) AS ca_90d,
+                         AND issued_at >= ? THEN subtotal_ht ELSE 0 END) AS ca_90d,
                 -- Encours (non payées)
                 SUM(CASE WHEN status IN ('emise','envoyee','partiellement_payee','en_retard')
                          THEN remaining_amount ELSE 0 END) AS outstanding,
@@ -74,6 +74,7 @@ class SalesInsightsService
                     $startPrevMonth, $endPrevMonth,
                     $startOfYear,
                     $startPrevYear,  $endPrevYear,
+                    now()->subDays(90)->startOfDay()->toDateTimeString(),
                     $todayStr, $todayStr,
                     $startOfMonth,   $endOfMonth,
                 ]

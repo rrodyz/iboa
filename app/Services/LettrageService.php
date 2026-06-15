@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\JournalEntry;
 use App\Models\JournalEntryLine;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,54 @@ use Illuminate\Support\Facades\DB;
 class LettrageService
 {
     // ─── Lettrage ─────────────────────────────────────────────────────────────
+
+    /**
+     * [AUTO-LETTRAGE] Lettre automatiquement la ligne de tiers d'une facture
+     * avec celle d'un paiement quand les montants se compensent exactement
+     * (cas 1:1 : règlement total d'une facture en un paiement). Bidirectionnel :
+     *   - Client : 411 débit (facture) ↔ 411 crédit (encaissement)
+     *   - Fournisseur : 401 crédit (facture) ↔ 401 débit (décaissement)
+     * Le rapprochement se fait sur le compte commun (le seul partagé entre les deux
+     * écritures est le compte de tiers). Les cas partiels/multi restent manuels.
+     * Non bloquant : retourne null en cas d'échec (le paiement reste valide).
+     *
+     * @return string|null  La lettre attribuée, ou null si pas de correspondance exacte
+     */
+    public function lettrerPaiementFacture(?JournalEntry $invoiceEntry, ?JournalEntry $paymentEntry): ?string
+    {
+        if (! $invoiceEntry || ! $paymentEntry) {
+            return null;
+        }
+
+        try {
+            $invLines = $invoiceEntry->lines()->whereNull('reconciliation_ref')->get();
+            $payLines = $paymentEntry->lines()->whereNull('reconciliation_ref')->get();
+
+            foreach ($invLines as $iL) {
+                $iDebit  = (int) $iL->debit;
+                $iCredit = (int) $iL->credit;
+
+                $match = $payLines->first(function ($p) use ($iL, $iDebit, $iCredit) {
+                    if ((int) $p->account_id !== (int) $iL->account_id) {
+                        return false;
+                    }
+                    // Compensation exacte : débit facture ↔ crédit paiement (client),
+                    // ou crédit facture ↔ débit paiement (fournisseur).
+                    return ($iDebit > 0 && (int) $p->credit === $iDebit)
+                        || ($iCredit > 0 && (int) $p->debit === $iCredit);
+                });
+
+                if ($match) {
+                    return $this->lettre([$iL->id, $match->id], (int) $invoiceEntry->company_id);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Lettrage best-effort : ne jamais casser le flux de paiement.
+            report($e);
+        }
+
+        return null;
+    }
 
     /**
      * Lettre un ensemble de lignes d'écritures appartenant au même compte.

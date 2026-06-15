@@ -92,7 +92,7 @@
             Solution : un <tbody> par famille avec x-data="{ open: true }".
             HTML5 autorise plusieurs <tbody> dans une même <table>.
         --}}
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 border-b border-gray-100">
                 <tr>
                     <th class="w-12 px-4 py-3"></th>

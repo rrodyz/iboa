@@ -55,19 +55,18 @@ class PeriodLockController extends Controller
                 ->keyBy(fn ($l) => $l->year . '-' . $l->month);
 
             // ── Stats écritures — 1 seule requête agrégée par année/mois ─────────
+            // [PORTABILITÉ] Agrégation en PHP (évite YEAR()/MONTH() MySQL-only ; volume = 1 exercice).
             $statsByMonth = DB::table('journal_entries')
                 ->where('company_id', $company->id)
                 ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
                 ->whereNull('deleted_at')
-                ->selectRaw('
-                    YEAR(entry_date) as y, MONTH(entry_date) as m,
-                    COUNT(*) as total_count,
-                    SUM(CASE WHEN status = "brouillon" THEN 1 ELSE 0 END) as draft_count,
-                    SUM(CASE WHEN status != "brouillon" THEN total_debit ELSE 0 END) as total_volume
-                ')
-                ->groupBy('y', 'm')
-                ->get()
-                ->keyBy(fn ($r) => ((int) $r->y) . '-' . ((int) $r->m));
+                ->get(['entry_date', 'status', 'total_debit'])
+                ->groupBy(fn ($r) => \Illuminate\Support\Carbon::parse($r->entry_date)->format('Y-n'))
+                ->map(fn ($g) => (object) [
+                    'total_count'  => $g->count(),
+                    'draft_count'  => $g->where('status', 'brouillon')->count(),
+                    'total_volume' => $g->where('status', '!=', 'brouillon')->sum('total_debit'),
+                ]);
 
             $cursor = $start->copy();
             while ($cursor <= $end) {

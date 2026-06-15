@@ -86,7 +86,7 @@
     {{-- Table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="tbl-scroll">
-            <table class="tbl tbl-sticky">
+            <table class="tbl tbl-sticky w-full">
                 <thead>
                     <tr>
                         <th class="text-left w-24">Code</th>

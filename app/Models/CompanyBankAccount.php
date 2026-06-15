@@ -16,6 +16,7 @@ class CompanyBankAccount extends Model
 
     protected $fillable = [
         'company_id',
+        'cash_account_id',
         'bank_name',
         'account_holder',
         'account_number',
@@ -41,5 +42,11 @@ class CompanyBankAccount extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    /** Compte de trésorerie opérationnel lié (pont bancaire). */
+    public function cashAccount(): BelongsTo
+    {
+        return $this->belongsTo(CashAccount::class);
     }
 }

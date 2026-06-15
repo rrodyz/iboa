@@ -18,7 +18,7 @@ class UpdateDocumentSettingRequest extends FormRequest
             'show_watermark'    => 'boolean',
             'watermark_text'    => 'nullable|string|max:50',
             'product_columns'   => 'nullable|array',
-            'product_columns.*' => 'string|in:reference,description,quantity,unit_price,discount,tax,total_ht,total_ttc',
+            'product_columns.*' => 'string|in:reference,description,longueur,epaisseur,quantity,unit_price,discount,tax,total_ht,total_ttc',
             'footer_text'       => 'nullable|string|max:500',
             'terms_conditions'  => 'nullable|string',
             'signature_name'    => 'nullable|string|max:100',

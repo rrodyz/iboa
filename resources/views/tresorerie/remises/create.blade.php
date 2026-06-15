@@ -27,7 +27,7 @@
     <form method="POST" action="{{ route('tresorerie.remises.store') }}" class="space-y-5">
         @csrf
 
-        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
             <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Informations</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
@@ -67,7 +67,7 @@
         </div>
 
         {{-- Items --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Valeurs remises</h2>
                 <button type="button" @click="addItem()"
@@ -92,7 +92,7 @@
             @endif
 
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <thead><tr class="border-b border-gray-200">
                         <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase w-28">Type</th>
                         <th class="pb-2 text-right text-xs font-semibold text-gray-500 uppercase w-28">Montant</th>

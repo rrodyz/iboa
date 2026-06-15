@@ -31,6 +31,9 @@
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Annulé</span>
                         @break
                 @endswitch
+                @if($payment->is_acompte)
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">Acompte</span>
+                @endif
             </div>
             <p class="text-sm text-gray-500 mt-1">
                 Encaissement du {{ $payment->payment_date?->format('d/m/Y') }}
@@ -60,7 +63,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {{-- Info card --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Détails du paiement</h2>
 
             <dl class="space-y-3">
@@ -137,12 +140,12 @@
         </div>
 
         {{-- Allocations --}}
-        <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Factures imputées</h2>
 
             @if($payment->allocations->count() > 0)
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <thead>
                         <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                             <th class="pb-2 text-left">Facture</th>

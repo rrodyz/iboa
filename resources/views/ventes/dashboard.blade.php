@@ -27,6 +27,29 @@
         </div>
     </div>
 
+    {{-- ── KPIs Production (Vente ↔ Production) ───────────────────────────── --}}
+    @if(isset($prodKpis))
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <a href="{{ route('production.orders.index', ['status' => 'en_cours']) }}" class="bg-sky-50 border border-sky-200 rounded-2xl p-4 hover:bg-sky-100 transition-colors">
+            <p class="text-xs font-medium text-sky-600 uppercase tracking-wider">Commandes en production</p>
+            <p class="text-2xl font-bold text-sky-800 mt-1">{{ $prodKpis['en_production'] }}</p>
+        </a>
+        <div class="bg-green-50 border border-green-200 rounded-2xl p-4">
+            <p class="text-xs font-medium text-green-600 uppercase tracking-wider">Prêtes à livrer</p>
+            <p class="text-2xl font-bold text-green-800 mt-1">{{ $prodKpis['pretes_a_livrer'] }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">PF produit, non livré</p>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <p class="text-xs font-medium text-amber-600 uppercase tracking-wider">Livrées non facturées</p>
+            <p class="text-2xl font-bold text-amber-800 mt-1">{{ $prodKpis['livrees_non_facturees'] }}</p>
+        </div>
+        <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
+            <p class="text-xs font-medium text-indigo-600 uppercase tracking-wider">Transfo devis → commande</p>
+            <p class="text-2xl font-bold text-indigo-800 tabular-nums mt-1">{{ number_format($prodKpis['taux_transfo'], 1, ',', ' ') }} %</p>
+        </div>
+    </div>
+    @endif
+
     {{-- ── KPIs Workflow Validation — alertes temps réel ───────────────────── --}}
     @if($workflowKpis['total_pending'] > 0 || $workflowKpis['recently_rejected'] > 0)
     <div class="rounded-xl border-2 border-yellow-300 bg-yellow-50 p-4">
@@ -212,7 +235,7 @@
             @if($dueSoon->isEmpty())
                 <div class="p-6 text-center text-emerald-700 text-sm">✓ Aucune échéance proche.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Facture</th><th class="px-4 py-2 text-left">Client</th><th class="px-4 py-2 text-right">Reste dû</th><th class="px-4 py-2 text-right">Échéance</th></tr>
                 </thead>
@@ -241,7 +264,7 @@
             @if($topClients->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucune vente sur 12 mois.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Client</th><th class="px-4 py-2 text-right">CA HT</th><th class="px-4 py-2 text-right">Encours</th></tr>
                 </thead>
@@ -270,7 +293,7 @@
             @if($topProducts->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucune vente.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Article</th><th class="px-4 py-2 text-right">Quantité</th><th class="px-4 py-2 text-right">CA HT</th></tr>
                 </thead>
@@ -295,7 +318,7 @@
             @if($monthly->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Pas de données.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Mois</th><th class="px-4 py-2 text-right">CA HT</th><th class="px-4 py-2 text-right"># factures</th></tr>
                 </thead>

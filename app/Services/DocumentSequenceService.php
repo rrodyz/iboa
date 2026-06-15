@@ -50,6 +50,12 @@ class DocumentSequenceService
         'ecriture_comptable'  => 'journal_entries',
         'rapprochement'       => 'bank_reconciliations',
         'declaration_tva'     => 'vat_declarations',
+        'virement_interne'    => 'cash_transfers',
+        'cloture_caisse'      => 'cash_closures',
+        'operation_caisse'    => 'cash_operations',
+        'contentieux'         => 'litigation_cases',
+        'demande_paiement'    => 'payment_requests',
+        'ordre_fabrication'   => 'production_orders',
     ];
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -419,6 +425,12 @@ class DocumentSequenceService
             'declaration_tva'     => ['prefix' => 'TVA-', 'padding' => 3],
             'prevision_tresorerie'=> ['prefix' => 'PT-',  'padding' => 3],
             'immobilisation'      => ['prefix' => 'IMB-', 'padding' => 3],
+            'virement_interne'    => ['prefix' => 'VIR-', 'padding' => 3],
+            'cloture_caisse'      => ['prefix' => 'CLC-', 'padding' => 3],
+            'operation_caisse'    => ['prefix' => 'OPC-', 'padding' => 4],
+            'contentieux'         => ['prefix' => 'CTX-', 'padding' => 4],
+            'demande_paiement'    => ['prefix' => 'DP-',  'padding' => 3],
+            'ordre_fabrication'   => ['prefix' => 'OF-',  'padding' => 4],
         ];
 
         $specific = $configs[$type] ?? ['prefix' => strtoupper(substr($type, 0, 3)) . '-', 'padding' => 3];

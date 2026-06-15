@@ -103,7 +103,7 @@
         <div class="px-5 py-4 border-b border-gray-100">
             <h3 class="text-sm font-semibold text-gray-700">Masse salariale par département — {{ $lastRun?->period_label }}</h3>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
                 <tr>
                     <th class="px-4 py-2 text-left">Département</th>
@@ -157,7 +157,7 @@
         <h3 class="text-sm font-semibold text-gray-700">Avances en attente d'approbation</h3>
         <a href="{{ route('rh.avances.index') }}" class="text-xs text-indigo-600 hover:underline">Voir tout</a>
     </div>
-    <table class="min-w-full text-sm">
+    <table class="w-full text-sm">
         <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
             <tr>
                 <th class="px-4 py-2 text-left">Employé</th>

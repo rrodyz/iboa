@@ -90,6 +90,19 @@ request()->routeIs('achats.*')                                                  
                 </div>
             </a>
 
+            @can('reports.view')
+            <a href="{{ route('direction.dashboard') }}"
+               class="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                      {{ request()->routeIs('direction.dashboard') ? 'bg-white/15 text-white shadow-sm' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white' }}">
+                @if(request()->routeIs('direction.dashboard'))<span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-300 rounded-r-full"></span>@endif
+                <svg class="w-[18px] h-[18px] flex-shrink-0 {{ request()->routeIs('direction.dashboard') ? 'text-white' : 'text-indigo-400 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span x-show="!$store.sidebar.collapsed" class="truncate">Direction</span>
+                <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">Direction<div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div></div>
+            </a>
+            @endcan
+
             @php
             // Macro pour générer un groupe accordéon
             // Utilisé inline via @include ou directement en Blade
@@ -296,6 +309,62 @@ request()->routeIs('achats.*')                                                  
             </div>
             @endcanany
 
+            {{-- ── PRODUCTION ───────────────────────────── --}}
+            @can('production.view')
+            @php $gId = 'production'; $gActive = request()->routeIs('production.*'); @endphp
+            <div class="space-y-0.5">
+                <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
+                        class="group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150
+                               {{ $gActive ? 'bg-white/15 text-white' : 'text-indigo-200/80 hover:bg-white/8 hover:text-white' }}">
+                    @if($gActive)<span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-orange-300 rounded-r-full"></span>@endif
+                    <svg class="w-[18px] h-[18px] flex-shrink-0 {{ $gActive ? 'text-white' : 'text-indigo-400 group-hover:text-white' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                    <span x-show="!$store.sidebar.collapsed" class="flex-1 text-left truncate">Production</span>
+                    <svg x-show="!$store.sidebar.collapsed" class="w-4 h-4 text-indigo-400 transition-transform duration-200 flex-shrink-0"
+                         :class="open === '{{ $gId }}' ? 'rotate-180 text-white' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <div x-show="$store.sidebar.collapsed" class="absolute left-full ml-3 px-2.5 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+                        Production <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-gray-900"></div>
+                    </div>
+                </button>
+                <div x-show="open === '{{ $gId }}' && !$store.sidebar.collapsed"
+                     x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+                     x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
+                    <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
+                        @foreach(array_filter([
+                            [route('production.dashboard'),      'Tableau de bord',       'production.dashboard'],
+                            [route('production.orders.index'),   'Ordres de fabrication', 'production.orders*'],
+                            [route('production.coils.index'),    'Bobines (matière)', 'production.coils*'],
+                            [route('production.bom.index'),      'Nomenclatures',     'production.bom*'],
+                            [route('production.routings.index'), 'Gammes',            'production.routings*'],
+                            [route('production.machines.index'), 'Machines',          'production.machines*'],
+                            [route('production.work-centers.index'), 'Centres de travail', 'production.work-centers*'],
+                            [route('production.maintenance.index'), 'Maintenance',       'production.maintenance*'],
+                            [route('production.lines.index'),    'Lignes',            'production.lines*'],
+                            [route('production.planning'),       'Plan de charge',    'production.planning'],
+                            [route('production.cutting'),        'Optimisation découpe', 'production.cutting'],
+                            [route('qualite.inspections.index'), 'Contrôles qualité', 'qualite.inspections*'],
+                            [route('qualite.non-conformities.index'), 'Non-conformités', 'qualite.non-conformities*'],
+                            [route('production.mrp'),            'Réappro (MRP)',     'production.mrp'],
+                            auth()->user()->can('production.cost.view') ? [route('production.treasury'), 'Prévision trésorerie', 'production.treasury'] : null,
+                            auth()->user()->can('production.report.view') ? [route('production.reports'), 'Rapports', 'production.reports'] : null,
+                        ]) as [$href, $label, $match])
+                        @php $sub = request()->routeIs($match); @endphp
+                        <a href="{{ $href }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-white/15 text-white' : 'text-indigo-300/70 hover:text-white hover:bg-white/8' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-orange-300' : 'bg-white/20' }}"></span>
+                            {{ $label }}
+                        </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            @endcan
+
             {{-- ── ANALYTIQUE ───────────────────────────── --}}
             @canany(['reports.view', 'reports.export'])
             @php $gId = 'analytique'; $gActive = request()->routeIs('reports.*'); @endphp
@@ -374,15 +443,53 @@ request()->routeIs('achats.*')                                                  
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
                         @foreach(array_filter([
                             auth()->user()->can('payments.view')      ? [route('tresorerie.dashboard'),             'Tableau de bord',    'tresorerie.dashboard']         : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'),   'Encaissements',      'tresorerie.encaissements*']    : null,
+
+                            // ── Banques & Caisses ──
+                            auth()->user()->can('cash_accounts.view') ? [null, 'Banques & Caisses', null] : null,
+                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),       'Comptes (banques/caisses)', 'tresorerie.caisses*']  : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.operations.index'),    'Entrées / Sorties caisse', 'tresorerie.operations*'] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.clotures.index'),      'Clôtures de caisse', 'tresorerie.clotures*']       : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.virements.index'),     'Virements internes', 'tresorerie.virements*']       : null,
+
+                            // ── Opérations ──
+                            auth()->user()->can('payments.view')      ? [null, 'Opérations', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.encaissements.index'), 'Encaissements',      'tresorerie.encaissements*']    : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.decaissements.index'), 'Décaissements',      'tresorerie.decaissements*']  : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-clients'),  'Échéancier clients', 'tresorerie.echeancier-clients'] : null,
-                            auth()->user()->can('cash_accounts.view') ? [route('tresorerie.caisses.index'),       'Comptes bancaires',  'tresorerie.caisses*']        : null,
-                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),    'Prévisions',         'tresorerie.previsions*']     : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.demandes.index'),      'Demandes de paiement','tresorerie.demandes*']       : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.remises.index'),       'Remises en banque',  'tresorerie.remises*']        : null,
                             auth()->user()->can('payments.view')      ? [route('tresorerie.effets.index'),        'Effets de commerce', 'tresorerie.effets*']         : null,
+
+                            // ── Échéances & Recouvrement ──
+                            auth()->user()->can('payments.view')      ? [null, 'Échéances & Recouvrement', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-clients'),  'Échéancier clients', 'tresorerie.echeancier-clients'] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.echeancier-fournisseurs'), 'Échéancier fournisseurs', 'tresorerie.echeancier-fournisseurs'] : null,
                             auth()->user()->can('clients.view')       ? [route('relances.index'),                 'Relances',           'relances*']                  : null,
+                            auth()->user()->can('clients.view')       ? [route('promesses.index'),                'Promesses de paiement', 'promesses*']              : null,
+                            auth()->user()->can('clients.view')       ? [route('contentieux.index'),             'Contentieux',        'contentieux*']               : null,
+                            auth()->user()->can('clients.view')       ? [route('clients.balance-agee'),           'Balance âgée tiers', 'clients.balance-agee']       : null,
+                            auth()->user()->can('reports.view')       ? [route('reports.impayes'),                'Impayés clients',    'reports.impayes']            : null,
+
+                            // ── Prévisions & Budget ──
+                            auth()->user()->can('payments.view')      ? [null, 'Prévisions & Budget', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.previsions.index'),    'Prévisions',         'tresorerie.previsions*']     : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.simulations.index'),   'Simulations',        'tresorerie.simulations*']    : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.budgets.index'),       'Budgets trésorerie', 'tresorerie.budgets*']        : null,
+
+                            // ── Rapprochement & Lettrage ──
+                            auth()->user()->can('accounting.view')    ? [null, 'Rapprochement & Lettrage', null] : null,
+                            auth()->user()->can('accounting.view')    ? [route('comptabilite.rapprochement.index'), 'Rapprochement bancaire', 'comptabilite.rapprochement*'] : null,
+                            auth()->user()->can('accounting.view')    ? [route('comptabilite.lettrage.index'),    'Lettrage',           'comptabilite.lettrage*']     : null,
+
+                            // ── Rapports & Audit ──
+                            auth()->user()->can('payments.view')      ? [null, 'Rapports & Audit', null] : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.etat'),                'État de trésorerie', 'tresorerie.etat']            : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.journal'),             'Journal de trésorerie','tresorerie.journal']        : null,
+                            auth()->user()->can('payments.view')      ? [route('tresorerie.alertes'),             'Alertes',            'tresorerie.alertes']         : null,
+                            auth()->user()->can('audit.view')         ? [route('audit.index'),                    'Journal des actions', 'audit.index']               : null,
                         ]) as [$href, $label, $match])
+                        @if($href === null)
+                            <div class="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-400/60 select-none">{{ $label }}</div>
+                        @else
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
@@ -390,6 +497,7 @@ request()->routeIs('achats.*')                                                  
                             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-cyan-300' : 'bg-white/20' }}"></span>
                             {{ $label }}
                         </a>
+                        @endif
                         @endforeach
                     </div>
                 </div>

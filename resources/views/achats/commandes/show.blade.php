@@ -238,7 +238,7 @@
             <h2 class="text-base font-semibold text-gray-900">Lignes de commande</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
@@ -288,7 +288,7 @@
             <span class="text-sm text-gray-500">{{ $purchaseOrder->receptions->count() }} réception(s)</span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>
@@ -334,7 +334,7 @@
             <span class="text-sm text-gray-500">{{ $purchaseOrder->supplierInvoices->count() }} facture(s)</span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>

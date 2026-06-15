@@ -109,7 +109,7 @@
             @if($dueSoon->isEmpty())
                 <div class="p-6 text-center text-emerald-700 text-sm">✓ Aucune échéance proche.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th class="px-4 py-2 text-left">Facture</th>
@@ -151,7 +151,7 @@
             @if($topScorecards->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucun fournisseur actif.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
                         <th class="px-4 py-2 text-left">Fournisseur</th>
@@ -211,7 +211,7 @@
             @if($topSuppliers->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucun achat sur 12 mois.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Fournisseur</th><th class="px-4 py-2 text-right">CA TTC</th><th class="px-4 py-2 text-right">Reste à payer</th></tr>
                 </thead>
@@ -237,7 +237,7 @@
             @if($topProducts->isEmpty())
                 <div class="p-6 text-center text-gray-400 text-sm">Aucun achat.</div>
             @else
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr><th class="px-4 py-2 text-left">Article</th><th class="px-4 py-2 text-right">Quantité</th><th class="px-4 py-2 text-right">CA HT</th></tr>
                 </thead>
@@ -264,7 +264,7 @@
         @if($monthly->isEmpty())
             <div class="p-6 text-center text-gray-400 text-sm">Pas de données.</div>
         @else
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr><th class="px-4 py-2 text-left">Mois</th><th class="px-4 py-2 text-right">CA TTC</th><th class="px-4 py-2 text-right"># factures</th></tr>
             </thead>

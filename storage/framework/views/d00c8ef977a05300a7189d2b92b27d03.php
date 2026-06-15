@@ -1,7 +1,20 @@
 
+
+<script data-turbo-eval="false">
+(function(){var d=localStorage.getItem('erp_dark');if(d==='true'||(d===null&&window.matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark');})();
+</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
+
+<script>
+    window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason, m = (r && (r.message || r.name)) || String(r || '');
+        if (/NetworkError|Failed to fetch|Load failed|aborted|AbortError/i.test(m)) {
+            e.preventDefault();
+        }
+    });
+</script>
 
 <meta name="turbo-prefetch" content="false">
 <title><?php echo $__env->yieldContent('title', 'Dashboard'); ?> — <?php echo e(config('app.name')); ?></title>

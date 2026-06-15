@@ -412,7 +412,22 @@ class PayrollRunController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        return view('rh.etats.index', compact('runs', 'company'));
+        $year  = now()->year;
+        $stats = [
+            'runs_total'   => PayrollRun::where('company_id', $company->id)->count(),
+            'runs_year'    => PayrollRun::where('company_id', $company->id)->where('period_year', $year)->count(),
+            'net_year'     => (int) PayrollRun::where('company_id', $company->id)
+                                ->where('period_year', $year)
+                                ->whereIn('status', ['valide', 'paye'])
+                                ->sum('total_net'),
+            'employes'     => (int) PayrollRun::where('company_id', $company->id)
+                                ->where('period_year', $year)
+                                ->orderByDesc('period_month')
+                                ->value('employee_count'),
+            'year'         => $year,
+        ];
+
+        return view('rh.etats.index', compact('runs', 'company', 'stats'));
     }
 
     /**
