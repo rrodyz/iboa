@@ -64,6 +64,55 @@ class ProductionService
     {
         $this->assertStatus($order, 'brouillon');
         $order->update(['status' => 'lance', 'launched_at' => now()]);
+
+        // [§3] Chargement automatique des opérations depuis la gamme opératoire
+        // (si une gamme existe et que les opérations n'ont pas déjà été générées).
+        // Non bloquant : absence de gamme ou opérations déjà présentes = no-op.
+        try {
+            $order->loadMissing('billOfMaterial.routing');
+            if (! $order->operations()->exists() && $order->billOfMaterial?->routing) {
+                app(RoutingService::class)->generateWorkOrders($order);
+            }
+        } catch (\Throwable $e) {
+            // gamme absente / déjà générée — on ne bloque pas le lancement
+        }
+    }
+
+    /**
+     * [§3 — option C] Pénuries de matière (avertissement NON bloquant).
+     * Compare le besoin (BOM × quantité) au stock disponible (product_stocks).
+     * Ignore les composants non suivis en product_stocks (ex. bobines, gérées
+     * dans `coils`) pour éviter les faux positifs. Respecte allow_negative_stock.
+     *
+     * @return array<int,array{product:string,need:float,available:float}>
+     */
+    public function materialShortages(ProductionOrder $order): array
+    {
+        $order->loadMissing('billOfMaterial.lines.product');
+        $bom = $order->billOfMaterial;
+        $qty = (float) ($order->quantity_requested ?: 0);
+        if (! $bom || $qty <= 0) {
+            return [];
+        }
+
+        $shortages = [];
+        foreach ($bom->lines as $line) {
+            $product = $line->product;
+            if (! $product || $product->allow_negative_stock) {
+                continue;
+            }
+            $rows = \App\Models\ProductStock::where('product_id', $product->id)->get(['quantity', 'reserved_quantity']);
+            if ($rows->isEmpty()) {
+                continue; // composant non suivi en product_stocks (bobines…) — pas d'alerte
+            }
+            $available = (float) $rows->sum(fn ($s) => (float) $s->quantity - (float) $s->reserved_quantity);
+            $need = (float) $line->quantity_per_meter * $qty;
+            if ($need > $available) {
+                $shortages[] = ['product' => $product->name, 'need' => round($need, 2), 'available' => round($available, 2)];
+            }
+        }
+
+        return $shortages;
     }
 
     /** lance → en_cours */

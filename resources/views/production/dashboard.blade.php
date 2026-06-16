@@ -49,6 +49,61 @@
         </div>
     </div>
 
+    {{-- [§10] KPIs complémentaires --}}
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">OF en retard</p>
+            <p class="text-2xl font-bold {{ $kpis['of_en_retard'] > 0 ? 'text-red-600' : 'text-gray-700' }} mt-1">{{ $kpis['of_en_retard'] }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">livraison dépassée</p>
+        </div>
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">MP critiques</p>
+            <p class="text-2xl font-bold {{ $kpis['mp_critiques'] > 0 ? 'text-amber-600' : 'text-gray-700' }} mt-1">{{ $kpis['mp_critiques'] }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">sous le stock min</p>
+        </div>
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">PF disponibles</p>
+            <p class="text-2xl font-bold text-green-700 tabular-nums mt-1">{{ number_format($kpis['pf_disponibles'], 0, ',', ' ') }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">en stock</p>
+        </div>
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Production du jour</p>
+            <p class="text-2xl font-bold text-orange-700 tabular-nums mt-1">{{ number_format($kpis['meters_today'], 0, ',', ' ') }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">mètres aujourd'hui</p>
+        </div>
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Avariés générés</p>
+            <p class="text-2xl font-bold text-red-700 tabular-nums mt-1">{{ number_format($kpis['avaries'], 0, ',', ' ') }}</p>
+            <p class="text-xs text-gray-400 mt-0.5">sur la période</p>
+        </div>
+        <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-4">
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Ventes du jour</p>
+            <p class="text-2xl font-bold text-blue-700 tabular-nums mt-1">{{ number_format($kpis['ventes_jour'], 0, ',', ' ') }} F</p>
+            <p class="text-xs text-gray-400 mt-0.5">factures émises ce jour</p>
+        </div>
+    </div>
+
+    {{-- [§10] Stock disponible par dépôt --}}
+    <div class="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100"><h2 class="font-semibold text-gray-900">Stock disponible par dépôt</h2></div>
+        <div class="tbl-scroll">
+            <table class="tbl w-full">
+                <thead><tr><th class="text-left">Dépôt</th><th class="text-left">Type</th><th class="text-right">Disponible</th></tr></thead>
+                <tbody>
+                    @forelse($stockParDepot as $row)
+                    <tr>
+                        <td class="font-medium text-gray-900">{{ $row->n }}</td>
+                        <td class="text-gray-500 text-xs">{{ \App\Models\Warehouse::TYPES[$row->t] ?? ($row->t ?? '—') }}</td>
+                        <td class="text-right tabular-nums">{{ number_format((float) $row->dispo, 0, ',', ' ') }}</td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="3" class="text-center text-gray-400 py-6">Aucun stock</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {{-- Production journalière --}}
         <div class="lg:col-span-2 bg-white border border-gray-100 shadow-sm rounded-2xl p-6">

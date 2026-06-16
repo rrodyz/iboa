@@ -140,9 +140,21 @@ class ProductionOrderController extends Controller
 
     public function launch(ProductionOrder $order): RedirectResponse
     {
+        // Avertissement matière (non bloquant) AVANT le lancement.
+        $shortages = $this->service->materialShortages($order);
+
         $this->service->launch($order);
 
-        return back()->with('success', 'OF lancé.');
+        $resp = back()->with('success', 'OF lancé.');
+        if ($shortages) {
+            $msg = collect($shortages)->map(fn ($s) => sprintf(
+                '%s (besoin %s / dispo %s)',
+                $s['product'], number_format($s['need'], 0, ',', ' '), number_format($s['available'], 0, ',', ' ')
+            ))->implode(' · ');
+            $resp->with('warning', 'Matière insuffisante : ' . $msg);
+        }
+
+        return $resp;
     }
 
     public function start(ProductionOrder $order): RedirectResponse

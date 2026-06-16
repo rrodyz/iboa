@@ -3,6 +3,10 @@
 namespace App\Modules\Production\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Invoice;
+use App\Models\Product;
+use App\Models\ProductStock;
+use App\Models\StockMovement;
 use App\Modules\Production\Models\Coil;
 use App\Modules\Production\Models\ProductionConsumption;
 use App\Modules\Production\Models\ProductionCost;
@@ -11,6 +15,7 @@ use App\Modules\Production\Models\ProductionOutput;
 use App\Modules\Production\Models\ProductionWaste;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class ProductionDashboardController extends Controller
@@ -36,6 +41,29 @@ class ProductionDashboardController extends Controller
             'waste_weight'  => (float) ProductionWaste::whereHas('productionOrder', fn ($q) => $q->whereBetween('updated_at', [$f, $t]))->sum('weight'),
             'coils_stock'   => (float) Coil::where('status', '!=', 'epuisee')->sum('remaining_weight'),
         ];
+
+        // [§10] KPIs complémentaires
+        $kpis['of_en_retard'] = ProductionOrder::whereIn('status', ['lance', 'en_cours'])
+            ->whereHas('order', fn ($q) => $q->whereNotNull('delivery_date')->whereDate('delivery_date', '<', today()))
+            ->count();
+        $kpis['mp_critiques'] = Product::whereHas('family', fn ($q) => $q->whereIn('code', ['MP', 'BPRE', 'BGAL']))
+            ->where('stock_min', '>', 0)
+            ->whereRaw('(SELECT COALESCE(SUM(quantity - reserved_quantity), 0) FROM product_stocks WHERE product_stocks.product_id = products.id) < products.stock_min')
+            ->count();
+        $kpis['pf_disponibles'] = (float) ProductStock::whereHas('product.family', fn ($q) => $q->where('code', 'PF'))
+            ->sum(DB::raw('quantity - reserved_quantity'));
+        $kpis['meters_today'] = (float) ProductionOutput::whereDate('produced_at', today())->sum('total_meters');
+        $kpis['avaries'] = (float) StockMovement::where('type', 'entree')
+            ->whereHas('product.family', fn ($q) => $q->where('code', 'AVAR'))
+            ->whereBetween('occurred_at', [$f, $t])->sum('quantity');
+        $kpis['ventes_jour'] = (int) Invoice::whereDate('issued_at', today())
+            ->where('status', '!=', 'annulee')->sum('total_ttc');
+
+        // Stock disponible par dépôt
+        $stockParDepot = ProductStock::join('warehouses', 'warehouses.id', '=', 'product_stocks.warehouse_id')
+            ->selectRaw('warehouses.name n, warehouses.type t, SUM(product_stocks.quantity - product_stocks.reserved_quantity) dispo')
+            ->groupBy('warehouses.id', 'warehouses.name', 'warehouses.type')
+            ->orderBy('warehouses.name')->get();
 
         // Rendement matière moyen sur la période (OF terminés)
         $consumed = (float) ProductionConsumption::whereBetween('consumed_at', [$f, $t])->sum('weight_consumed');
@@ -64,6 +92,6 @@ class ProductionDashboardController extends Controller
         // Coût de revient moyen récent
         $avgCost = (float) ProductionCost::avg('cost_per_meter');
 
-        return view('production.dashboard', compact('kpis', 'chartDaily', 'byStatus', 'topClients', 'avgCost', 'from', 'to'));
+        return view('production.dashboard', compact('kpis', 'chartDaily', 'byStatus', 'topClients', 'avgCost', 'stockParDepot', 'from', 'to'));
     }
 }
