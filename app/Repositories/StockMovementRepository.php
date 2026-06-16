@@ -17,7 +17,7 @@ class StockMovementRepository extends BaseRepository
         $query = $this->model
             ->leftJoin('products', 'stock_movements.product_id', '=', 'products.id')
             ->select('stock_movements.*')
-            ->with(['product', 'warehouse', 'createdBy']);
+            ->with(['product.family', 'warehouse', 'createdBy']);
 
         if (!empty($filters['product_id'])) {
             $query->where('stock_movements.product_id', $filters['product_id']);

@@ -127,6 +127,18 @@ window._orderFormData = {
                                 <input type="number" :name="'items[' + index + '][quantity]'"
                                        x-model.number="item.quantity" min="1" step="1" inputmode="numeric"
                                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm text-right focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+                                {{-- [§5 TÔLE BAC] nb tôles × métrage → quantité en MTL (optionnel) --}}
+                                <div class="flex gap-1 mt-1">
+                                    <input type="number" :name="'items[' + index + '][nb_toles]'" x-model.number="item.nb_toles"
+                                           @input="if(item.nb_toles && item.metrage_par_tole) item.quantity = +(item.nb_toles*item.metrage_par_tole).toFixed(2)"
+                                           placeholder="nb" min="0" step="1" title="Nombre de tôles"
+                                           class="w-1/2 border border-gray-200 rounded px-1 py-0.5 text-[11px] text-right">
+                                    <input type="number" :name="'items[' + index + '][metrage_par_tole]'" x-model.number="item.metrage_par_tole"
+                                           @input="if(item.nb_toles && item.metrage_par_tole) item.quantity = +(item.nb_toles*item.metrage_par_tole).toFixed(2)"
+                                           placeholder="m/tôle" min="0" step="0.01" title="Métrage par tôle (m)"
+                                           class="w-1/2 border border-gray-200 rounded px-1 py-0.5 text-[11px] text-right">
+                                </div>
+                                <span class="text-[10px] text-gray-400" x-show="item.nb_toles && item.metrage_par_tole">= <span x-text="item.quantity"></span> MTL</span>
                             </td>
                             <td class="px-3 py-2">
                                 <input type="number" :name="'items[' + index + '][unit_price]'"

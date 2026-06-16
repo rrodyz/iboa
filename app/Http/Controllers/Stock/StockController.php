@@ -100,7 +100,7 @@ class StockController extends Controller
         $company = currentCompany();
         $filters = $request->only(['search', 'product_id', 'warehouse_id', 'type', 'date_from', 'date_to']);
 
-        $movements = StockMovement::with(['product', 'warehouse', 'createdBy'])
+        $movements = StockMovement::with(['product.family', 'warehouse', 'createdBy'])
             ->when(!empty($filters['product_id']),   fn($q) => $q->where('product_id', $filters['product_id']))
             ->when(!empty($filters['warehouse_id']), fn($q) => $q->where('warehouse_id', $filters['warehouse_id']))
             ->when(!empty($filters['type']),         fn($q) => $q->where('type', $filters['type']))

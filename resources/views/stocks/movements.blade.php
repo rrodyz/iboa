@@ -146,6 +146,7 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $typeBadge['class'] }}">
                                     {{ $typeBadge['label'] }}
                                 </span>
+                                <p class="text-[10px] text-gray-400 mt-0.5">{{ $movement->reasonLabel() }}</p>
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums {{ $qtyClass }}">
                                 {{ $qtySign }}{{ number_format((float) $movement->quantity, 2, ',', ' ') }}

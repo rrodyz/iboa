@@ -243,9 +243,21 @@ class OrderService
                 continue;
             }
 
-            $qty   = (float) ($item['quantity'] ?? 1);
+            // [§5 TÔLE BAC] Quantité en mètres linéaires = nombre de tôles × métrage.
+            $nbToles = isset($item['nb_toles']) ? (float) $item['nb_toles'] : null;
+            $metrage = isset($item['metrage_par_tole']) ? (float) $item['metrage_par_tole'] : null;
+            if ($nbToles && $metrage) {
+                $qty = round($nbToles * $metrage, 2);
+            } else {
+                $qty = (float) ($item['quantity'] ?? 1);
+            }
+
             $price = (float) ($item['unit_price'] ?? 0);
             $disc  = (float) ($item['discount_percent'] ?? 0);
+
+            // [§5 PRIX PLANCHER] Vente sous le prix plancher interdite, sauf rôle autorisé.
+            $this->assertFloorPrice($item['product_id'] ?? null, $price, $disc);
+
             $tax   = (float) ($item['tax_rate_value'] ?? 0);
             $ht    = (int) round($qty * $price * (1 - $disc / 100));
             $lineTax = (int) round($ht * ($tax / 100));
@@ -256,6 +268,8 @@ class OrderService
                 'description'      => $item['description'] ?? '',
                 'unit_id'          => $item['unit_id'] ?? null,
                 'quantity'         => $qty,
+                'nb_toles'         => $nbToles,
+                'metrage_par_tole' => $metrage,
                 'unit_price'       => (int) $price,
                 'discount_percent' => $disc,
                 'tax_rate_id'      => $item['tax_rate_id'] ?? null,
@@ -266,6 +280,34 @@ class OrderService
                 'sort_order'       => $i,
             ]);
         }
+    }
+
+    /**
+     * [§5] Refuse un prix de vente (net de remise) inférieur au prix plancher
+     * de l'article. Les rôles direction/commercial peuvent déroger.
+     */
+    private function assertFloorPrice(?int $productId, float $price, float $discount): void
+    {
+        if (! $productId) {
+            return;
+        }
+        $product = \App\Models\Product::find($productId);
+        $floor = (int) ($product?->min_sale_price ?? 0);
+        if ($floor <= 0) {
+            return;
+        }
+        $net = $price * (1 - $discount / 100);
+        if ($net + 0.5 >= $floor) {
+            return;
+        }
+        $user = Auth::user();
+        if ($user && $user->hasAnyRole(['super_admin', 'directeur', 'directeur_commercial'])) {
+            return; // autorisation spéciale
+        }
+        throw new \RuntimeException(sprintf(
+            'Prix de vente (%s) inférieur au prix plancher (%s) pour « %s ». Autorisation spéciale requise.',
+            number_format($net, 0, ',', ' '), number_format($floor, 0, ',', ' '), $product->name
+        ));
     }
 
     /** [TVA-EXEMPT] Met tous les taux TVA à 0 sur un tableau d'items. */
