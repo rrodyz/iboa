@@ -20,6 +20,26 @@
         @endcan
     </div>
 
+    {{-- KPI portefeuille --}}
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">À recevoir (en cours)</p>
+            <p class="text-lg font-bold text-emerald-600 tabular-nums mt-1">{{ number_format($stats['a_recevoir'], 0, ',', ' ') }} <span class="text-xs font-normal text-gray-400">F</span></p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">À payer (en cours)</p>
+            <p class="text-lg font-bold text-red-600 tabular-nums mt-1">{{ number_format($stats['a_payer'], 0, ',', ' ') }} <span class="text-xs font-normal text-gray-400">F</span></p>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">En attente</p>
+            <p class="text-lg font-bold text-amber-600 mt-1">{{ $stats['en_attente'] }}</p>
+        </div>
+        <div class="rounded-2xl border shadow-sm p-4 {{ $stats['echus'] > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100' }}">
+            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Échus non dénoués</p>
+            <p class="text-lg font-bold {{ $stats['echus'] > 0 ? 'text-red-700' : 'text-gray-400' }} mt-1">{{ $stats['echus'] }}</p>
+        </div>
+    </div>
+
     {{-- Alerts: due soon --}}
     @if($upcomingDue->isNotEmpty())
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4">
@@ -35,7 +55,7 @@
     </div>
     @endif
 
-    <form method="GET" data-autosubmit class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" data-autosubmit class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div class="flex flex-wrap gap-3 items-end">
             <select name="type" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
                 <option value="">Tous types</option>
@@ -71,9 +91,9 @@
         </div>
     </form>
 
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N°</th>

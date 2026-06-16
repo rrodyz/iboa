@@ -57,7 +57,7 @@
     </form>
 
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">N°</th>

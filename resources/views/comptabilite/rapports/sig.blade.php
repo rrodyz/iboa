@@ -92,7 +92,7 @@
         <div class="px-5 py-3 border-b border-gray-100">
             <h2 class="text-sm font-semibold text-gray-700">Cascade des soldes — {{ $fiscalYear->label }}</h2>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <tbody class="divide-y divide-gray-50">
                 @php
                     $rows = [

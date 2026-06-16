@@ -79,6 +79,30 @@
                 · Entrepôt : <strong>{{ $warehouses->find($reception->warehouse_id)?->name ?? '—' }}</strong>
             </div>
         </div>
+
+        {{-- Production : générer les bobines matière depuis cette réception --}}
+        @can('production.create')
+        @php $coilsGenerated = \App\Modules\Production\Models\Coil::where('reception_id', $reception->id)->exists(); @endphp
+        <div class="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <div class="text-sm text-orange-800">
+                <strong>Production</strong> — créer les bobines (matières premières) en stock à partir des articles reçus.
+            </div>
+            @can('production.update')
+                <a href="{{ route('qualite.inspections.create', ['type' => 'reception', 'reception_id' => $reception->id]) }}" class="text-xs text-indigo-600 hover:underline font-medium mr-3">+ Contrôle qualité</a>
+            @endcan
+            @if($coilsGenerated)
+                <span class="text-xs text-emerald-700 font-medium">✓ Bobines déjà générées</span>
+            @else
+                <form method="POST" action="{{ route('production.receptions.coils', $reception) }}">
+                    @csrf
+                    <button class="inline-flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        Générer les bobines
+                    </button>
+                </form>
+            @endif
+        </div>
+        @endcan
     @endif
 
     {{-- Items table --}}
@@ -87,7 +111,7 @@
             <h2 class="font-semibold text-gray-800">Articles reçus</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit</th>
@@ -189,7 +213,7 @@
 
                     {{-- Items table --}}
                     <div class="border border-gray-200 rounded-lg overflow-hidden">
-                        <table class="min-w-full text-sm">
+                        <table class="w-full text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Produit</th>
@@ -299,7 +323,7 @@
                 </div>
             @else
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-100 text-sm">
+                <table class="w-full divide-y divide-gray-100 text-sm">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Article</th>

@@ -89,7 +89,7 @@
             <div class="py-12 text-center text-gray-400 text-sm">Aucune donnée pour cette période.</div>
             @else
             <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="w-full text-sm">
                     <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                         <tr>
                             <th class="px-4 py-3 text-left">Période</th>

@@ -54,7 +54,7 @@
 </div>
 @else
 <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-100">
+    <table class="w-full divide-y divide-gray-100">
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Règle</th>
@@ -145,7 +145,7 @@
                         Voir les compteurs de séquence
                     </button>
                     <div x-show="open" x-cloak class="pb-3">
-                        <table class="min-w-full text-xs text-gray-600 bg-gray-50 rounded-lg overflow-hidden">
+                        <table class="w-full text-xs text-gray-600 bg-gray-50 rounded-lg overflow-hidden">
                             <thead>
                                 <tr class="bg-gray-100">
                                     <th class="px-4 py-2 text-left font-semibold">Période</th>

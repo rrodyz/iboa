@@ -156,7 +156,7 @@
 
         @if($cLines->count() || $cSoldeOuv != 0)
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-sm">
+            <table class="w-full divide-y divide-gray-100 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-2 text-left text-xs font-semibold text-gray-400 uppercase">Date</th>
@@ -259,7 +259,7 @@
     {{-- Table transactions --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>

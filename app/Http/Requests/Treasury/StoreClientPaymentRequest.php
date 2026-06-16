@@ -22,6 +22,7 @@ class StoreClientPaymentRequest extends FormRequest
             'reference'                          => 'nullable|string|max:100',
             'phone_number'                       => 'nullable|string|max:20',
             'notes'                              => 'nullable|string',
+            'is_acompte'                         => 'nullable|boolean',
             'force_duplicate'                    => 'nullable|boolean',
             'allocations'                        => 'nullable|array',
             'allocations.*.invoice_id'           => 'required_with:allocations.*|exists:invoices,id',

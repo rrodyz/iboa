@@ -79,7 +79,7 @@
             <span class="text-base font-bold text-emerald-700 tabular-nums">{{ number_format($whTotal, 0, ',', ' ') }} FCFA</span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-sm">
+            <table class="w-full divide-y divide-gray-100 text-sm">
                 <thead class="bg-gray-50/50">
                     <tr>
                         <th class="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Référence</th>

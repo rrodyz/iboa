@@ -120,19 +120,75 @@ class CompanyService
         return $company->fresh();
     }
 
-    public function upsertBankAccount(Company $company, array $data, ?int $accountId = null): CompanyBankAccount
+    public function upsertBankAccount(Company $company, array $data, ?int $accountId = null, bool $syncTreasury = false): CompanyBankAccount
     {
-        return DB::transaction(function () use ($company, $data, $accountId) {
+        return DB::transaction(function () use ($company, $data, $accountId, $syncTreasury) {
             if (isset($data['is_default']) && $data['is_default']) {
                 $company->bankAccounts()->update(['is_default' => false]);
             }
+
+            unset($data['sync_treasury']); // flag UI, pas une colonne
+
             if ($accountId) {
                 $account = $company->bankAccounts()->findOrFail($accountId);
                 $account->update($data);
-                return $account->fresh();
+                $account = $account->fresh();
+            } else {
+                $account = $company->bankAccounts()->create($data);
             }
-            return $company->bankAccounts()->create($data);
+
+            // [PONT BANCAIRE] Crée/synchronise le compte de trésorerie opérationnel.
+            if ($syncTreasury) {
+                $this->syncCashAccount($company, $account);
+            }
+
+            return $account->fresh();
         });
+    }
+
+    /**
+     * [PONT BANCAIRE] Crée (ou met à jour) le compte de trésorerie (type=banque)
+     * lié à un RIB société, en recopiant les coordonnées bancaires. Évite la
+     * double saisie : le RIB devient un compte opérationnel (rapprochement, soldes).
+     */
+    public function syncCashAccount(Company $company, CompanyBankAccount $bank): \App\Models\CashAccount
+    {
+        $payload = [
+            'bank_name'      => $bank->bank_name,
+            'bank_branch'    => $bank->branch,
+            'account_number' => $bank->account_number,
+            'iban'           => $bank->iban,
+            'swift_bic'      => $bank->swift_bic,
+            'is_active'      => (bool) $bank->is_active,
+        ];
+
+        if ($bank->cash_account_id && ($cash = \App\Models\CashAccount::find($bank->cash_account_id))) {
+            $cash->update($payload + ['name' => $bank->bank_name]);
+            return $cash->fresh();
+        }
+
+        // Génère un code unique pour le compte trésorerie.
+        $base = 'BQ-' . strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $bank->account_number ?: $bank->bank_name), -6));
+        $code = $base;
+        $i = 1;
+        while (\App\Models\CashAccount::where('code', $code)->exists()) {
+            $code = $base . $i++;
+        }
+
+        $cash = \App\Models\CashAccount::create($payload + [
+            'company_id'      => $company->id,
+            'name'            => $bank->bank_name,
+            'code'            => $code,
+            'type'            => 'banque',
+            'currency_code'   => 'XOF',
+            'opening_balance' => 0,
+            'current_balance' => 0,
+            'is_default'      => false,
+        ]);
+
+        $bank->update(['cash_account_id' => $cash->id]);
+
+        return $cash;
     }
 
     public function deleteBankAccount(Company $company, int $accountId): bool

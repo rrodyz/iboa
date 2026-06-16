@@ -26,23 +26,59 @@ class ClientPaymentScheduleController extends Controller
             $window = 30;
         }
 
-        $today = now()->startOfDay();
+        $today   = now()->startOfDay();
+        $horizon = $today->copy()->addDays($window);
 
-        $overdue = ClientPaymentSchedule::with(['invoice.client'])
+        $rows = collect();
+
+        // Source 1 : échéances planifiées (plans par tranches)
+        $schedules = ClientPaymentSchedule::with(['invoice.client'])
             ->whereIn('status', ['en_attente', 'partiel'])
-            ->whereDate('due_date', '<', $today)
-            ->orderBy('due_date')
             ->get();
 
-        $upcoming = ClientPaymentSchedule::with(['invoice.client'])
-            ->whereIn('status', ['en_attente', 'partiel'])
-            ->whereDate('due_date', '>=', $today)
-            ->whereDate('due_date', '<=', $today->copy()->addDays($window))
-            ->orderBy('due_date')
-            ->get();
+        $scheduledInvoiceIds = $schedules->pluck('invoice_id')->unique()->values();
 
-        $totalOverdue  = $overdue->sum(fn ($s) => $s->remainingAmount());
-        $totalUpcoming = $upcoming->sum(fn ($s) => $s->remainingAmount());
+        foreach ($schedules as $s) {
+            if (! $s->invoice) {
+                continue;
+            }
+            $rows->push([
+                'invoice_id' => $s->invoice_id,
+                'number'     => $s->invoice->number,
+                'client'     => $s->invoice->client?->name ?? '—',
+                'client_id'  => $s->invoice->client_id,
+                'due_date'   => \Illuminate\Support\Carbon::parse($s->due_date),
+                'amount'     => (int) $s->amount,
+                'remaining'  => (int) $s->remainingAmount(),
+                'label'      => $s->label,
+            ]);
+        }
+
+        // Source 2 : factures impayées AVEC échéance mais SANS plan (échéance unique)
+        Invoice::with('client')
+            ->whereNotIn('status', ['brouillon', 'payee', 'annulee'])
+            ->where('remaining_amount', '>', 0)
+            ->whereNotNull('due_at')
+            ->when($scheduledInvoiceIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $scheduledInvoiceIds))
+            ->get()
+            ->each(function ($inv) use ($rows) {
+                $rows->push([
+                    'invoice_id' => $inv->id,
+                    'number'     => $inv->number,
+                    'client'     => $inv->client?->name ?? '—',
+                    'client_id'  => $inv->client_id,
+                    'due_date'   => \Illuminate\Support\Carbon::parse($inv->due_at),
+                    'amount'     => (int) $inv->total_ttc,
+                    'remaining'  => (int) $inv->remaining_amount,
+                    'label'      => null,
+                ]);
+            });
+
+        $overdue  = $rows->filter(fn ($r) => $r['due_date']->lt($today))->sortBy('due_date')->values();
+        $upcoming = $rows->filter(fn ($r) => $r['due_date']->gte($today) && $r['due_date']->lte($horizon))->sortBy('due_date')->values();
+
+        $totalOverdue  = (int) $overdue->sum('remaining');
+        $totalUpcoming = (int) $upcoming->sum('remaining');
 
         return view('tresorerie.echeancier-client.upcoming', compact(
             'overdue', 'upcoming', 'totalOverdue', 'totalUpcoming', 'window'

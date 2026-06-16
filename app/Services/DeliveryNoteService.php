@@ -82,6 +82,9 @@ class DeliveryNoteService
             throw new \RuntimeException('Seuls les bons de livraison en brouillon peuvent être validés.');
         }
 
+        // [VENTE↔PRODUCTION] Blocages livraison pour commandes fabriquées (QC + qté produite).
+        app(\App\Modules\Production\Services\ProductionDeliveryGuard::class)->assertDeliverable($dn);
+
         return DB::transaction(function () use ($dn) {
             $dn->update([
                 'status'       => 'valide',

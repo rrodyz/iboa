@@ -187,13 +187,16 @@
                 </form>
                 @endif
 
-                {{-- Encaisser : actif uniquement pour factures encaissables, grisé sinon --}}
+                {{-- Encaisser : visible uniquement après validation de la facture.
+                     Avant validation (brouillon / en_attente_validation) le bouton est masqué.
+                     Facture verrouillée (payée / annulée) : bouton grisé + tooltip. --}}
                 @php
-                    $canEncaisser = !in_array($invoice->status, ['brouillon', 'payee', 'annulee']);
+                    $encaissableStatuses = ['emise', 'validee', 'envoyee', 'partiellement_payee', 'en_retard'];
+                    $preValidation = in_array($invoice->status, ['brouillon', 'en_attente_validation']);
+                    $canEncaisser = in_array($invoice->status, $encaissableStatuses);
                     $disabledReason = match (true) {
-                        $invoice->status === 'brouillon' => 'Validez d\'abord la facture avant de pouvoir encaisser',
-                        $invoice->status === 'payee'     => 'Facture entièrement payée — verrouillée, aucun nouvel encaissement possible',
-                        $invoice->status === 'annulee'   => 'Facture annulée — aucun encaissement possible',
+                        $invoice->status === 'payee'   => 'Facture entièrement payée — verrouillée, aucun nouvel encaissement possible',
+                        $invoice->status === 'annulee' => 'Facture annulée — aucun encaissement possible',
                         default => null,
                     };
                 @endphp
@@ -205,8 +208,9 @@
                     </svg>
                     Encaisser
                 </a>
-                @else
-                {{-- [INVOICE-LOCKED-GUARD] Bouton grisé non cliquable + tooltip explicatif --}}
+                @elseif(!$preValidation)
+                {{-- [INVOICE-LOCKED-GUARD] Facture verrouillée : bouton grisé + tooltip.
+                     (Avant validation le bouton est totalement masqué.) --}}
                 <button type="button" disabled
                         title="{{ $disabledReason }}"
                         aria-disabled="true"
@@ -440,7 +444,7 @@
             <h2 class="text-base font-semibold text-gray-900">Lignes de facture</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
@@ -493,7 +497,7 @@
             </span>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N° encaissement</th>
@@ -563,7 +567,7 @@
                 + Nouvel avoir
             </a>
         </div>
-        <table class="min-w-full divide-y divide-gray-200 text-sm">
+        <table class="w-full divide-y divide-gray-200 text-sm">
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Numéro</th>

@@ -253,4 +253,34 @@ class Invoice extends Model
             ->where('status', '!=', 'en_retard')
             ->update(['status' => 'en_retard']);
     }
+
+    /**
+     * [PRODUCTION] Dimensions (longueur/épaisseur) par produit, issues des
+     * ordres de fabrication liés à la commande de cette facture.
+     * Utilisé par le PDF quand les colonnes Longueur/Épaisseur sont activées.
+     *
+     * @return array<int, array{length: float|null, thickness: float|null}>
+     */
+    public function productionDimensions(): array
+    {
+        $map = [];
+        $this->loadMissing('order.productionOrders.outputs');
+
+        foreach ($this->order?->productionOrders ?? [] as $of) {
+            foreach ($of->outputs as $o) {
+                if ($o->product_id) {
+                    $map[$o->product_id] = [
+                        'length'    => $o->length !== null ? (float) $o->length : null,
+                        'thickness' => $o->thickness !== null ? (float) $o->thickness : (float) $of->thickness,
+                    ];
+                }
+            }
+            // Repli : produit fini de l'OF sans sortie détaillée
+            if ($of->product_id && ! isset($map[$of->product_id])) {
+                $map[$of->product_id] = ['length' => null, 'thickness' => (float) $of->thickness];
+            }
+        }
+
+        return $map;
+    }
 }

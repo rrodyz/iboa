@@ -38,7 +38,7 @@
         @if($matching['qty_count'] === 0)
             <div class="p-8 text-center text-emerald-700 text-sm">✓ Aucun écart quantitatif détecté.</div>
         @else
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">PO</th>
@@ -89,7 +89,7 @@
         @if($matching['amount_count'] === 0)
             <div class="p-8 text-center text-emerald-700 text-sm">✓ Aucun écart de montant détecté.</div>
         @else
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Facture FF</th>

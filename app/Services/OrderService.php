@@ -160,6 +160,8 @@ class OrderService
             if (in_array($order->status, ['confirme', 'en_preparation', 'partiellement_livre'])) {
                 $this->releaseStockReservations($order);
             }
+            // [V4] Libère les réservations de produit fini (stock_reservations) liées à la production.
+            app(\App\Modules\Production\Services\ReservationService::class)->releaseForOrder($order);
             $order->update(['status' => 'annule']);
             return $order->fresh();
         });
@@ -211,8 +213,10 @@ class OrderService
      */
     public function createInvoice(Order $order): Invoice
     {
-        if (!in_array($order->status, ['confirme', 'en_preparation', 'partiellement_livre', 'livre'])) {
-            throw new \RuntimeException('La commande doit être confirmée avant de générer une facture.');
+        // Facturation interdite avant livraison : un bon de livraison doit exister
+        // (statut ≥ en_preparation). Une commande seulement « confirmé » n'est pas facturable.
+        if (!in_array($order->status, ['en_preparation', 'partiellement_livre', 'livre'])) {
+            throw new \RuntimeException('La commande doit être livrée (bon de livraison créé) avant de générer une facture.');
         }
         return app(InvoiceService::class)->createFromOrder($order);
     }

@@ -19,4 +19,10 @@ trait HasCreator
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    /** Alias — plusieurs vues/contrôleurs trésorerie référencent `createdBy`. */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
 }

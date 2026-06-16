@@ -6,6 +6,7 @@ use App\Jobs\SendRelanceEmailJob;
 use App\Models\Client;
 use App\Models\ClientInteraction;
 use App\Models\Invoice;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -102,6 +103,54 @@ class ClientRelanceController extends Controller
         $clients = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
 
         return view('relances.index', compact('byClient', 'stats', 'urgency', 'clients', 'clientId'));
+    }
+
+    /**
+     * Génère un courrier de relance PDF pour un client + factures sélectionnées.
+     */
+    public function letter(Request $request)
+    {
+        $request->validate([
+            'client_id'     => 'required|exists:clients,id',
+            'invoice_ids'   => 'required|array|min:1',
+            'invoice_ids.*' => 'exists:invoices,id',
+            'type'          => 'required|in:amiable,formelle,mise_en_demeure',
+            'message'       => 'nullable|string|max:1000',
+        ]);
+
+        $client   = Client::findOrFail($request->client_id);
+        $invoices = Invoice::whereIn('id', $request->invoice_ids)
+            ->where('client_id', $client->id)
+            ->where('remaining_amount', '>', 0)
+            ->orderByRaw('due_at IS NULL, due_at ASC')
+            ->get();
+
+        if ($invoices->isEmpty()) {
+            return back()->with('error', 'Aucune facture valide sélectionnée pour le courrier.');
+        }
+
+        $today = Carbon::today();
+        $invoices->each(function (Invoice $i) use ($today) {
+            $i->days_overdue = $i->due_at ? (int) $i->due_at->diffInDays($today, false) : null;
+        });
+
+        $typeLabels = [
+            'amiable'         => '1ère relance (amiable)',
+            'formelle'        => '2ème relance (formelle)',
+            'mise_en_demeure' => 'Mise en demeure',
+        ];
+
+        $company  = \App\Models\currentCompany();
+        $totalDu  = (float) $invoices->sum('remaining_amount');
+        $typeLabel = $typeLabels[$request->type];
+        $message   = $request->message;
+
+        $pdf = Pdf::loadView('relances.pdf.letter', compact(
+            'client', 'invoices', 'company', 'totalDu', 'typeLabel', 'message', 'today'
+        ))->setPaper('a4');
+
+        $filename = 'relance_' . $client->id . '_' . now()->format('Ymd') . '.pdf';
+        return $pdf->stream($filename);
     }
 
     /**

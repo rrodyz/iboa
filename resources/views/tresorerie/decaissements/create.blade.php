@@ -27,7 +27,7 @@
         <div class="space-y-5">
 
             {{-- Section 1 : Informations du paiement --}}
-            <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <h2 class="text-base font-semibold text-gray-800 mb-4">Informations du paiement</h2>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -140,7 +140,7 @@
             </div>
 
             {{-- Section 2 : Imputation sur factures fournisseur --}}
-            <div x-show="supplierId" x-transition class="bg-white rounded-xl border border-gray-200 p-5">
+            <div x-show="supplierId" x-transition class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-base font-semibold text-gray-800">Imputation sur factures fournisseur</h2>
@@ -165,7 +165,7 @@
                 </div>
 
                 <div x-show="!loading && invoices.length > 0" class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
+                    <table class="w-full text-sm">
                         <thead>
                             <tr class="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                                 <th class="pb-2 text-left">Facture</th>

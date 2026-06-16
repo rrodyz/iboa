@@ -6,7 +6,7 @@
 @endsection
 
 @section('content')
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-5">
     <div>
         <h1 class="text-2xl font-bold text-gray-900">États de paie</h1>
         <p class="text-sm text-gray-500 mt-1">Téléchargez tous les documents de paie par bulletin</p>
@@ -15,6 +15,25 @@
        class="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
         Bulletins de paie
     </a>
+</div>
+
+{{-- KPI --}}
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Bulletins ({{ $stats['year'] }})</p>
+        <p class="text-lg font-bold text-indigo-600 mt-1">{{ $stats['runs_year'] }}</p>
+        <p class="text-xs text-gray-400">{{ $stats['runs_total'] }} au total</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Effectif</p>
+        <p class="text-lg font-bold text-gray-900 mt-1">{{ $stats['employes'] }}</p>
+        <p class="text-xs text-gray-400">dernier run</p>
+    </div>
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 col-span-2">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Net versé {{ $stats['year'] }}</p>
+        <p class="text-lg font-bold text-emerald-600 tabular-nums mt-1">{{ number_format($stats['net_year'], 0, ',', ' ') }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
+        <p class="text-xs text-gray-400">bulletins validés/payés</p>
+    </div>
 </div>
 
 @if($runs->isEmpty())
@@ -54,7 +73,7 @@
             default     => ucfirst($run->status),
         };
     @endphp
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
         <div class="flex flex-wrap items-center gap-4 px-5 py-4">
             {{-- Période + statut --}}
             <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -169,7 +188,7 @@
 @endif
 
 {{-- Livre de paie annuel --}}
-<div class="mt-6 bg-indigo-50 border border-indigo-200 rounded-xl px-5 py-4">
+<div class="mt-6 bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-100 rounded-2xl shadow-sm px-5 py-4">
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
             <div class="font-semibold text-indigo-900">Livre de paie annuel</div>

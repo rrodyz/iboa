@@ -41,7 +41,7 @@
 
     {{-- KPIs --}}
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <div class="bg-white rounded-xl border border-gray-200 p-4 text-center">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
             <p class="text-xs text-gray-500">Solde ouverture</p>
             <p class="text-lg font-bold tabular-nums text-gray-800">{{ number_format($prevision->opening_balance, 0, ',', ' ') }}</p>
         </div>
@@ -78,7 +78,7 @@
             <div class="px-5 py-4 bg-green-50 border-b border-green-100">
                 <h3 class="font-semibold text-green-800">Encaissements</h3>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50"><tr>
                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
                     <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Prévu</th>
@@ -116,7 +116,7 @@
             <div class="px-5 py-4 bg-red-50 border-b border-red-100">
                 <h3 class="font-semibold text-red-800">Décaissements</h3>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50"><tr>
                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
                     <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Prévu</th>

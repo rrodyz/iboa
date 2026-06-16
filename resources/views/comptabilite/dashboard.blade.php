@@ -45,7 +45,7 @@
     {{-- KPIs principaux --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {{-- Résultat --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Résultat de l'exercice</p>
             <p class="mt-2 text-3xl font-bold tabular-nums {{ $kpis['resultat'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
                 {{ $kpis['resultat'] >= 0 ? '+' : '' }}{{ $fmt($kpis['resultat']) }}
@@ -56,7 +56,7 @@
         </div>
 
         {{-- Trésorerie --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Trésorerie nette</p>
             <p class="mt-2 text-3xl font-bold tabular-nums {{ $kpis['tresorerie'] >= 0 ? 'text-blue-600' : 'text-red-600' }}">
                 {{ $fmt($kpis['tresorerie']) }}
@@ -65,7 +65,7 @@
         </div>
 
         {{-- Activité du mois --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Activité — {{ now()->translatedFormat('F Y') }}</p>
             <p class="mt-2 text-3xl font-bold tabular-nums text-gray-900">{{ $monthly['validees_mois'] }}</p>
             <p class="text-xs text-gray-500 mt-2">
@@ -77,21 +77,21 @@
         </div>
 
         {{-- Créances --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Créances clients</p>
             <p class="mt-2 text-2xl font-bold tabular-nums text-amber-600">{{ $fmt($kpis['creances']) }}</p>
             <p class="text-xs text-gray-500 mt-2">Compte 41 — ce que les clients vous doivent</p>
         </div>
 
         {{-- Dettes --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Dettes fournisseurs</p>
             <p class="mt-2 text-2xl font-bold tabular-nums text-orange-600">{{ $fmt($kpis['dettes']) }}</p>
             <p class="text-xs text-gray-500 mt-2">Compte 40 — ce que vous devez aux fournisseurs</p>
         </div>
 
         {{-- Solde commercial --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Position commerciale nette</p>
             <p class="mt-2 text-2xl font-bold tabular-nums text-gray-900">{{ $fmt($kpis['creances'] - $kpis['dettes']) }}</p>
             <p class="text-xs text-gray-500 mt-2">Créances − Dettes</p>
@@ -101,12 +101,12 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {{-- Top comptes du mois --}}
-        <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-gray-700">Top comptes mouvementés ce mois</h2>
                 <a href="{{ route('comptabilite.grand-livre') }}" class="text-xs text-violet-600 hover:underline">Grand livre →</a>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Compte</th>
@@ -134,7 +134,7 @@
         </div>
 
         {{-- Brouillons à traiter --}}
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-gray-700">Brouillons à valider</h2>
                 <a href="{{ route('comptabilite.journaux.index', ['status' => 'brouillon']) }}" class="text-xs text-violet-600 hover:underline">Tous →</a>
@@ -167,7 +167,7 @@
     </div>
 
     {{-- Accès rapides --}}
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 class="text-sm font-semibold text-gray-700 mb-3">Accès rapides</h2>
         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-sm">
             <a href="{{ route('comptabilite.journaux.index') }}" class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 text-center">📒 Journaux</a>

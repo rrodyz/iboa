@@ -258,15 +258,17 @@ class DashboardController extends Controller
      */
     public function kpisJson(): \Illuminate\Http\JsonResponse
     {
-        $now   = now();
-        $month = $now->month;
-        $year  = $now->year;
+        $now       = now();
+        $month     = $now->month;
+        $year      = $now->year;
+        $companyId = currentCompany()->id; // [SEC] Isolation multi-tenant (DB::table bypass le HasCompanyScope)
 
-        $data = Cache::remember("dashboard.kpis.live.{$year}.{$month}", 60, function () use ($now, $year, $month) {
+        $data = Cache::remember("dashboard.kpis.live.{$companyId}.{$year}.{$month}", 60, function () use ($now, $year, $month, $companyId) {
             $invoiceStatuses = ['emise', 'envoyee', 'partiellement_payee', 'payee', 'en_retard'];
             $prevMonth       = $now->copy()->subMonth();
 
             $ivKpi = DB::table('invoices')
+                ->where('company_id', $companyId)
                 ->whereIn('status', $invoiceStatuses)
                 ->selectRaw("
                     SUM(CASE WHEN DATE(issued_at) = ? THEN total_ttc ELSE 0 END)                                   AS rev_jour,
@@ -281,12 +283,14 @@ class DashboardController extends Controller
                 ])->first();
 
             $overdueKpi = DB::table('invoices')
+                ->where('company_id', $companyId)
                 ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
                 ->where('due_at', '<', now())
                 ->selectRaw('COUNT(*) as cnt, COALESCE(SUM(remaining_amount), 0) as montant')
                 ->first();
 
             $encKpi = DB::table('client_payments')
+                ->where('company_id', $companyId)
                 ->where('status', 'confirme')
                 ->whereYear('payment_date', $year)
                 ->whereMonth('payment_date', $month)
@@ -295,10 +299,11 @@ class DashboardController extends Controller
 
             $miscKpi = DB::selectOne("
                 SELECT
-                    (SELECT COUNT(*) FROM product_stocks WHERE quantity <= 0)                                    AS rupture_stock,
-                    (SELECT COALESCE(SUM(current_balance),0) FROM cash_accounts WHERE is_active=1)              AS solde_tresorerie,
-                    (SELECT COUNT(*) FROM orders WHERE status IN ('confirme','en_preparation','partiellement_livre') AND deleted_at IS NULL) AS nb_commandes
-            ");
+                    (SELECT COUNT(*) FROM product_stocks ps JOIN warehouses w ON w.id = ps.warehouse_id
+                        WHERE w.company_id = ? AND ps.quantity <= 0)                                            AS rupture_stock,
+                    (SELECT COALESCE(SUM(current_balance),0) FROM cash_accounts WHERE company_id = ? AND is_active=1) AS solde_tresorerie,
+                    (SELECT COUNT(*) FROM orders WHERE company_id = ? AND status IN ('confirme','en_preparation','partiellement_livre') AND deleted_at IS NULL) AS nb_commandes
+            ", [$companyId, $companyId, $companyId]);
 
             $revJour     = (int) $ivKpi->rev_jour;
             $prevJour    = (int) $ivKpi->rev_prev_jour;

@@ -12,7 +12,52 @@ use Illuminate\Support\Facades\DB;
 
 class BankReconciliationService
 {
-    public function __construct(private DocumentSequenceService $sequenceService) {}
+    public function __construct(
+        private DocumentSequenceService $sequenceService,
+        private AccountingService $accountingService,
+    ) {}
+
+    /**
+     * [TRESO] Comptabilise une ligne de relevé non rapprochée comme frais bancaire.
+     * Génère DR 6312 / CR 521, puis apparie la ligne relevé à l'écriture créée.
+     * @throws \RuntimeException
+     */
+    public function postAsFee(BankStatementLine $bankLine, ?string $label = null): void
+    {
+        if ($bankLine->is_matched) {
+            throw new \RuntimeException('Cette ligne est déjà rapprochée.');
+        }
+        $amount = (int) $bankLine->debit;
+        if ($amount <= 0) {
+            throw new \RuntimeException('Seule une ligne au débit (sortie) peut être comptabilisée en frais bancaires.');
+        }
+
+        DB::transaction(function () use ($bankLine, $amount, $label) {
+            $rec     = $bankLine->reconciliation;
+            $account = $rec->cashAccount;
+
+            $entry = $this->accountingService->postBankFee(
+                $account,
+                $amount,
+                $label ?: ($bankLine->label ?: 'Frais bancaires'),
+                optional($bankLine->value_date)->toDateString() ?? $rec->statement_date
+            );
+
+            // Apparier la ligne relevé à la ligne banque (521) de l'écriture créée.
+            if ($entry) {
+                $bankJournalLine = $entry->lines->firstWhere('credit', '>', 0);
+                if ($bankJournalLine) {
+                    $bankLine->update([
+                        'journal_entry_line_id' => $bankJournalLine->id,
+                        'is_matched'            => true,
+                    ]);
+                    $bankJournalLine->update(['reconciliation_ref' => 'RAPPR-' . $rec->id]);
+                }
+            }
+
+            $this->recalculate($rec);
+        });
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Create
@@ -125,31 +170,76 @@ class BankReconciliationService
      * Les montants sont en entiers FCFA. La 1re ligne (header) est ignorée
      * si elle contient "date" ou "libelle" (case-insensitive).
      */
+    /**
+     * Import d'un relevé bancaire. Détecte le format (CSV/TXT ou XLSX/XLS)
+     * selon l'extension, normalise en lignes [date, libellé, référence, débit, crédit]
+     * puis délègue au processeur commun.
+     */
+    public function importStatement(BankReconciliation $rec, \Illuminate\Http\UploadedFile $file): array
+    {
+        $ext = strtolower($file->getClientOriginalExtension());
+
+        $rows = in_array($ext, ['xlsx', 'xls'], true)
+            ? $this->readExcelRows($file)
+            : $this->readCsvRows($file);
+
+        return $this->processRows($rec, $rows);
+    }
+
+    /** Conservé pour rétro-compatibilité — délègue à importStatement. */
     public function importCsv(BankReconciliation $rec, \Illuminate\Http\UploadedFile $file): array
     {
-        $imported = 0;
-        $skipped  = 0;
-        $errors   = [];
+        return $this->importStatement($rec, $file);
+    }
 
+    /** Lit un CSV/TXT en tableau de lignes (séparateur auto-détecté). */
+    private function readCsvRows(\Illuminate\Http\UploadedFile $file): array
+    {
         $handle = fopen($file->getRealPath(), 'r');
         if (!$handle) {
             throw new \RuntimeException('Impossible d\'ouvrir le fichier CSV.');
         }
 
-        // Détection séparateur
         $firstLine = fgets($handle);
         $separator = (substr_count($firstLine, ';') > substr_count($firstLine, ',')) ? ';' : ',';
         rewind($handle);
 
-        $row = 0;
-        DB::transaction(function () use ($handle, $separator, $rec, &$imported, &$skipped, &$errors, &$row) {
-            while (($data = fgetcsv($handle, 0, $separator)) !== false) {
+        $rows = [];
+        while (($data = fgetcsv($handle, 0, $separator)) !== false) {
+            $rows[] = $data;
+        }
+        fclose($handle);
+
+        return $rows;
+    }
+
+    /** Lit un XLSX/XLS (1re feuille) en tableau de lignes via PhpSpreadsheet. */
+    private function readExcelRows(\Illuminate\Http\UploadedFile $file): array
+    {
+        $sheets = \Maatwebsite\Excel\Facades\Excel::toArray([], $file);
+        return $sheets[0] ?? [];
+    }
+
+    /**
+     * Processeur commun : valide chaque ligne et crée les BankStatementLine.
+     * Colonnes attendues : [0]=date, [1]=libellé, [2]=référence, [3]=débit, [4]=crédit.
+     */
+    private function processRows(BankReconciliation $rec, array $rows): array
+    {
+        $imported = 0;
+        $skipped  = 0;
+        $errors   = [];
+        $row      = 0;
+
+        DB::transaction(function () use ($rows, $rec, &$imported, &$skipped, &$errors, &$row) {
+            foreach ($rows as $data) {
                 $row++;
+                $data = array_values($data);
                 if (count($data) < 4) { $skipped++; continue; }
 
                 // Skip header (1re ligne contenant "date" ou "libelle")
                 if ($row === 1 && (
-                    stripos($data[0], 'date') !== false ||
+                    stripos((string) $data[0], 'date') !== false ||
                     stripos((string) ($data[1] ?? ''), 'libelle') !== false ||
                     stripos((string) ($data[1] ?? ''), 'libellé') !== false
                 )) {
@@ -157,7 +247,7 @@ class BankReconciliationService
                     continue;
                 }
 
-                $dateStr = trim($data[0]);
+                $dateStr = trim((string) $data[0]);
                 try {
                     $date = str_contains($dateStr, '/')
                         ? \Carbon\Carbon::createFromFormat('d/m/Y', $dateStr)
@@ -190,8 +280,6 @@ class BankReconciliationService
                 $imported++;
             }
         });
-
-        fclose($handle);
 
         return compact('imported', 'skipped', 'errors');
     }

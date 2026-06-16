@@ -456,7 +456,7 @@
 
     {{-- Liste des variables --}}
     <div x-show="variables.length > 0">
-        <table class="min-w-full text-xs bg-white rounded-lg overflow-hidden">
+        <table class="w-full text-xs bg-white rounded-lg overflow-hidden">
             <thead class="bg-gray-100 text-gray-500 uppercase">
                 <tr>
                     <th class="px-3 py-2 text-left">Employé</th>
@@ -505,7 +505,7 @@
         <span class="text-xs text-gray-400">Coût total employeur : <strong class="text-gray-700">{{ number_format($run->total_brut + $run->total_cnss_employer, 0, ',', ' ') }} F</strong></span>
         @endif
     </div>
-    <table class="min-w-full divide-y divide-gray-200 text-xs">
+    <table class="w-full divide-y divide-gray-200 text-xs">
         <thead class="bg-gray-50 text-gray-500 uppercase">
             <tr>
                 <th class="px-3 py-3 text-left">Mat.</th>

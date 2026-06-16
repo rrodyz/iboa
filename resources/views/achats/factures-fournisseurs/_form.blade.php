@@ -74,7 +74,7 @@ window._supplierInvoiceFormData = {
             <h2 class="text-base font-semibold text-gray-900">Lignes de facture</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase w-8">#</th>

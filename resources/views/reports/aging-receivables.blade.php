@@ -90,7 +90,7 @@
             <h2 class="text-sm font-semibold text-gray-800">Détail par client</h2>
         </div>
         <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <tr>
                         <th class="px-4 py-3 text-left">Client</th>

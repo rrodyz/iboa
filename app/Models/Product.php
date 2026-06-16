@@ -34,6 +34,7 @@ class Product extends Model
         'delivery_delay_days',
         'type',
         'is_stockable',
+        'is_semi_finished',
         'is_purchasable',
         'is_sellable',
         'purchase_price',

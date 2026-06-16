@@ -18,6 +18,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'products.view', 'products.create', 'products.edit', 'products.delete',
             // Clients
             'clients.view', 'clients.create', 'clients.edit', 'clients.delete',
+            // CRM (prospection : contacts/leads, opportunités, activités)
+            'crm.view', 'crm.manage',
             // Fournisseurs
             'suppliers.view', 'suppliers.create', 'suppliers.edit', 'suppliers.delete',
             // Ventes
@@ -44,6 +46,10 @@ class RolesAndPermissionsSeeder extends Seeder
             // Stocks
             'stocks.view', 'stocks.adjust', 'stocks.transfer',
             'inventory.view', 'inventory.create', 'inventory.validate',
+            // Production / Fabrication tôles bac
+            'production.view', 'production.create', 'production.update', 'production.delete',
+            'production.launch', 'production.validate', 'production.cancel',
+            'production.cost.view', 'production.report.view',
             // Trésorerie
             'payments.view', 'payments.create', 'payments.edit',
             'cash_accounts.view', 'cash_accounts.manage',
@@ -74,6 +80,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $commercial = Role::firstOrCreate(['name' => 'commercial', 'guard_name' => 'web']);
         $commercial->syncPermissions([
             'products.view', 'clients.view', 'clients.create', 'clients.edit',
+            'crm.view', 'crm.manage',   // prospection CRM
             'quotes.view', 'quotes.create', 'quotes.edit',
             'orders.view', 'orders.create', 'orders.edit', 'orders.validate',
             'invoices.view', 'invoices.create', 'invoices.send',
@@ -114,6 +121,18 @@ class RolesAndPermissionsSeeder extends Seeder
             'purchase_orders.view', 'deliveries.view',
             'orders.view',    // voir les commandes à préparer
             'invoices.view',  // vérifier si facturé avant expédition
+            'production.view', // suivi production / stock produits finis
+        ]);
+
+        // Chef de production — fabrication tôles bac (OF, bobines, production, coûts)
+        $chefProduction = Role::firstOrCreate(['name' => 'chef_production', 'guard_name' => 'web']);
+        $chefProduction->syncPermissions([
+            'products.view', 'clients.view', 'suppliers.view',
+            'stocks.view', 'stocks.adjust',
+            'production.view', 'production.create', 'production.update', 'production.delete',
+            'production.launch', 'production.validate', 'production.cancel',
+            'production.cost.view', 'production.report.view',
+            'orders.view',
         ]);
 
         $this->command->info('Roles & Permissions créés avec succès.');

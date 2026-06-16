@@ -83,20 +83,8 @@
 
     @php
         $company = \App\Models\Company::first();
-        $logoBase64 = null;
-        if ($settings?->show_logo !== false && $company?->logo) {
-            $lp = storage_path('app/public/' . $company->logo);
-            if (file_exists($lp)) {
-                $ext = strtolower(pathinfo($lp, PATHINFO_EXTENSION));
-                $mime = $ext === 'png' ? 'image/png' : ($ext === 'svg' ? 'image/svg+xml' : 'image/jpeg');
-                $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($lp));
-            }
-        }
-        $stampBase64 = null;
-        if ($settings?->stamp_image) {
-            $sp = storage_path('app/public/' . $settings->stamp_image);
-            if (file_exists($sp)) $stampBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($sp));
-        }
+        $logoBase64 = $settings?->show_logo !== false ? pdf_image_data($company?->logo) : null;
+        $stampBase64 = pdf_image_data($settings?->stamp_image);
 
         /* ── QR code de vérification (URL signée HMAC) ── */
         $qrDataUri = null;
@@ -104,11 +92,8 @@
             $verifyUrl = \Illuminate\Support\Facades\URL::signedRoute(
                 'delivery-note.verify', ['number' => $deliveryNote->number]
             );
-            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
-                ->size(110)
-                ->errorCorrection('M')
-                ->generate($verifyUrl);
-            $qrDataUri = 'data:image/svg+xml;base64,' . base64_encode($qrSvg);
+            // PNG (GD) plutôt que SVG : DomPDF rend mal le SVG.
+            $qrDataUri = app(\App\Services\QrPngService::class)->dataUri($verifyUrl);
         } catch (\Throwable) {}
     @endphp
 

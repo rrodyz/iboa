@@ -20,10 +20,16 @@ class CashAccount extends Model
         'name',
         'code',
         'type',
+        'bank_name',
+        'bank_branch',
+        'account_number',
+        'iban',
+        'swift_bic',
         'payment_method_id',
         'currency_code',
         'opening_balance',
         'current_balance',
+        'min_balance',
         'is_default',
         'is_active',
         'notes',
@@ -32,9 +38,16 @@ class CashAccount extends Model
     protected $casts = [
         'opening_balance' => 'integer',
         'current_balance' => 'integer',
+        'min_balance'     => 'integer',
         'is_default'      => 'boolean',
         'is_active'       => 'boolean',
     ];
+
+    /** [TRESO] Solde sous le seuil d'alerte ? */
+    public function isLowBalance(): bool
+    {
+        return (int) $this->min_balance > 0 && (int) $this->current_balance < (int) $this->min_balance;
+    }
 
     // -------------------------------------------------------------------------
     // Relationships

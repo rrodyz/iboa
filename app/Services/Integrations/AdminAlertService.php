@@ -44,7 +44,7 @@ class AdminAlertService
             ]);
 
             // 2. Email if ADMIN_EMAIL configured
-            $adminEmail = config('app.admin_email') ?? env('ADMIN_EMAIL');
+            $adminEmail = config('app.admin_email');
             if ($adminEmail && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
                 Mail::raw($body, function ($msg) use ($adminEmail, $subject) {
                     $msg->to($adminEmail)
@@ -70,7 +70,7 @@ class AdminAlertService
                 'provider'       => $integration->provider,
             ]);
 
-            $adminEmail = config('app.admin_email') ?? env('ADMIN_EMAIL');
+            $adminEmail = config('app.admin_email');
             if ($adminEmail && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
                 Mail::raw(
                     "L'intégration « {$integration->name} » ({$integration->provider}) est à nouveau opérationnelle.",

@@ -238,7 +238,7 @@
        Tables — pro ERP avec zébrage hover et headers stables
     ───────────────────────────────────────────── */
     .tbl {
-        @apply min-w-full divide-y;
+        @apply w-full divide-y;
         border-collapse: separate;
         border-spacing: 0;
         color: var(--text-primary);

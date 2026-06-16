@@ -274,6 +274,8 @@
                     $colLabels   = [
                         'reference'   => 'Référence',
                         'description' => 'Description',
+                        'longueur'    => 'Longueur',
+                        'epaisseur'   => 'Épaisseur',
                         'quantity'    => 'Quantité',
                         'unit_price'  => 'Prix unitaire',
                         'discount'    => 'Remise %',
@@ -418,6 +420,16 @@
                            class="w-4 h-4 text-blue-600 rounded">
                     <label for="is_default" class="text-sm font-medium text-gray-700">Compte principal</label>
                 </div>
+                {{-- [PONT BANCAIRE] Crée le compte de trésorerie opérationnel associé --}}
+                <div class="md:col-span-2 flex items-start gap-3 bg-indigo-50 border border-indigo-100 rounded-lg p-3">
+                    <input type="hidden" name="sync_treasury" value="0">
+                    <input type="checkbox" id="sync_treasury" name="sync_treasury" value="1" :checked="editData.cash_account_id"
+                           class="w-4 h-4 mt-0.5 text-indigo-600 rounded">
+                    <label for="sync_treasury" class="text-sm text-gray-700">
+                        <span class="font-medium text-indigo-700">Créer le compte de trésorerie associé</span><br>
+                        <span class="text-xs text-gray-500">Rend ce compte opérationnel (rapprochement bancaire, soldes, transactions) — évite la double saisie.</span>
+                    </label>
+                </div>
                 <div class="md:col-span-2 flex gap-3 justify-end">
                     <button type="button" @click="showForm = false"
                             class="border border-gray-300 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-gray-50">
@@ -448,6 +460,9 @@
                         @unless($account->is_active)
                         <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">Inactif</span>
                         @endunless
+                        @if($account->cash_account_id)
+                        <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-medium" title="Compte de trésorerie opérationnel lié">⇄ Trésorerie</span>
+                        @endif
                     </div>
                     <p class="text-sm text-gray-600">{{ $account->account_holder }} — {{ $account->account_number }}</p>
                     @if($account->branch)<p class="text-xs text-gray-400">{{ $account->branch }}</p>@endif

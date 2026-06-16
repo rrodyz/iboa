@@ -60,7 +60,7 @@
                 <h2 class="text-base font-semibold text-gray-800">Articles à transférer</h2>
                 <button type="button" @click="addItem()" class="text-sm text-blue-600 hover:text-blue-700 font-medium">+ Ajouter</button>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead><tr class="border-b border-gray-200">
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Article</th>
                     <th class="pb-2 text-right text-xs font-semibold text-gray-500 uppercase">Quantité</th>

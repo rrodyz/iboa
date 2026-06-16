@@ -30,7 +30,13 @@ class BankDepositController extends Controller
         $bankAccounts = CashAccount::where('type', 'banque')->where('is_active', true)
             ->orderBy('name')->get(['id', 'name', 'code']);
 
-        return view('tresorerie.remises.index', compact('deposits', 'filters', 'bankAccounts'));
+        $stats = [
+            'brouillons'   => BankDeposit::where('status', 'brouillon')->count(),
+            'valide_count' => BankDeposit::where('status', 'valide')->count(),
+            'valide_total' => (int) BankDeposit::where('status', 'valide')->sum('total_amount'),
+        ];
+
+        return view('tresorerie.remises.index', compact('deposits', 'filters', 'bankAccounts', 'stats'));
     }
 
     public function create(): View

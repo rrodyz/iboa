@@ -18,6 +18,7 @@ class StoreBankAccountRequest extends FormRequest
             'branch'         => 'nullable|string|max:100',
             'is_default'     => 'boolean',
             'is_active'      => 'boolean',
+            'sync_treasury'  => 'boolean',
         ];
     }
 }

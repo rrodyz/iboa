@@ -35,15 +35,41 @@ class SupplierPayment extends Model
         'unallocated_amount',
         'created_by',
         'journal_entry_id',   // [AUDIT-ERP-A]
+        // [TRESO] Workflow validation décaissement
+        'validation_status',
+        'required_role',
+        'pending_allocations',
+        'submitted_by',
+        'submitted_at',
+        'validated_by',
+        'validated_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected $casts = [
-        'payment_date'       => 'date',
-        'amount'             => 'integer',
-        'allocated_amount'   => 'integer',
-        'unallocated_amount' => 'integer',
-        'exchange_rate'      => 'decimal:6',
+        'payment_date'        => 'date',
+        'amount'              => 'integer',
+        'allocated_amount'    => 'integer',
+        'unallocated_amount'  => 'integer',
+        'exchange_rate'       => 'decimal:6',
+        'pending_allocations' => 'array',
+        'submitted_at'        => 'datetime',
+        'validated_at'        => 'datetime',
+        'rejected_at'         => 'datetime',
     ];
+
+    // [TRESO] Helpers workflow
+    public function isPendingValidation(): bool
+    {
+        return $this->validation_status === 'en_attente_validation';
+    }
+
+    public function isValidated(): bool
+    {
+        return $this->validation_status === 'valide';
+    }
 
     // -------------------------------------------------------------------------
     // Relationships

@@ -110,7 +110,7 @@
     <form id="receive-form" action="{{ route('stocks.transfers.receive', $transfer) }}" method="POST" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-5">
         @csrf
         <p class="text-sm text-emerald-800 font-medium mb-3">Saisir les quantités effectivement reçues. Laisser vide = quantité expédiée par défaut.</p>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead><tr><th class="px-2 py-1 text-left">Article</th><th class="px-2 py-1 text-right">Expédiée</th><th class="px-2 py-1 text-right">Reçue</th></tr></thead>
             <tbody>
                 @foreach($transfer->items as $item)
@@ -138,7 +138,7 @@
     {{-- Lignes --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="px-5 py-3 border-b border-gray-100"><h2 class="text-sm font-semibold text-gray-700">Articles ({{ $transfer->items->count() }})</h2></div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Article</th>

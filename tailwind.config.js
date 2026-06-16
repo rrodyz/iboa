@@ -73,6 +73,9 @@ export default {
         // CRM kanban stages : sky, blue, violet, amber, emerald, red
         { pattern: /^(bg|text|border|ring)-(sky|blue|violet|amber|emerald|red|indigo|gray|orange|teal|cyan)-(50|100|200|400|500|600|700|800)$/ },
 
+        // [TRESO] Dégradés des chips KPI (tableau de bord trésorerie) — from/to dynamiques
+        { pattern: /^(from|to)-(sky|blue|violet|amber|emerald|red|indigo)-(400|500|600)$/ },
+
         // Badges statuts dynamiques
         'bg-blue-100',   'text-blue-700',
         'bg-green-100',  'text-green-700',

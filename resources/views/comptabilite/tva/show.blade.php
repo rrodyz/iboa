@@ -96,7 +96,7 @@
             <div class="px-5 py-4 border-b border-gray-100 bg-red-50">
                 <h3 class="font-semibold text-red-800">TVA Collectée — Détail par compte</h3>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50"><tr>
                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Compte</th>
                     <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Montant</th>
@@ -121,7 +121,7 @@
             <div class="px-5 py-4 border-b border-gray-100 bg-blue-50">
                 <h3 class="font-semibold text-blue-800">TVA Déductible — Détail par compte</h3>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-50"><tr>
                     <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Compte</th>
                     <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Montant</th>

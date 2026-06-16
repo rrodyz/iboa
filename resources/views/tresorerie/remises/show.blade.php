@@ -35,7 +35,7 @@
         </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">Informations</h2>
         <dl class="grid grid-cols-2 sm:grid-cols-3 gap-y-3 gap-x-8 text-sm">
             <div><dt class="text-xs text-gray-500">N°</dt><dd class="font-mono font-semibold text-indigo-600">{{ $remise->number }}</dd></div>
@@ -52,12 +52,12 @@
     </div>
 
     {{-- Items --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-100 flex justify-between">
             <h2 class="font-semibold text-gray-800">Valeurs remises</h2>
             <span class="text-xs text-gray-500">{{ $remise->items->count() }} élément(s)</span>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50"><tr>
                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Type</th>
                 <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Référence</th>

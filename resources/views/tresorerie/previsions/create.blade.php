@@ -28,7 +28,7 @@
         @csrf
 
         {{-- Header --}}
-        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
             <h2 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Informations</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
@@ -70,7 +70,7 @@
                 <button type="button" @click="addLine('encaissements_clients', true)"
                         class="text-xs bg-green-50 hover:bg-green-100 text-green-700 font-medium px-3 py-1.5 rounded-lg">+ Ligne</button>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead><tr class="border-b border-gray-200">
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Catégorie</th>
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
@@ -119,7 +119,7 @@
                 <button type="button" @click="addLine('achats_fournisseurs', false)"
                         class="text-xs bg-red-50 hover:bg-red-100 text-red-700 font-medium px-3 py-1.5 rounded-lg">+ Ligne</button>
             </div>
-            <table class="min-w-full text-sm">
+            <table class="w-full text-sm">
                 <thead><tr class="border-b border-gray-200">
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Catégorie</th>
                     <th class="pb-2 text-left text-xs font-semibold text-gray-500 uppercase">Libellé</th>
@@ -174,7 +174,7 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
             <textarea name="notes" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 resize-none">{{ old('notes') }}</textarea>
         </div>

@@ -15,15 +15,15 @@
 
     {{-- KPI summary bar --}}
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
             <p class="text-xs text-gray-500">Total décaissé (filtré)</p>
             <p class="text-lg font-bold text-red-600 tabular-nums">{{ $fmt($summary['total_amount']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
         </div>
-        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
             <p class="text-xs text-gray-500">Ce mois-ci</p>
             <p class="text-lg font-bold text-orange-600 tabular-nums">{{ $fmt($summary['this_month']) }} <span class="text-xs font-normal text-gray-400">FCFA</span></p>
         </div>
-        <div class="bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
             <p class="text-xs text-gray-500">Nombre de paiements</p>
             <p class="text-lg font-bold text-gray-900 tabular-nums">{{ $summary['count'] }}</p>
         </div>
@@ -45,7 +45,7 @@
     </div>
 
     {{-- Filters --}}
-    <form method="GET" data-autosubmit class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" data-autosubmit class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
             <input type="text" name="search" value="{{ $filters['search'] ?? '' }}"
                    placeholder="Réf, fournisseur..."
@@ -89,9 +89,9 @@
     </form>
 
     {{-- Table --}}
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Numéro</th>

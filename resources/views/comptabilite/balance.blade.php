@@ -151,7 +151,7 @@
     {{-- Balance table --}}
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead>
                     <tr class="bg-violet-700 text-white">
                         <th class="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider w-24" rowspan="2">Code</th>

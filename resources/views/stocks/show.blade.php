@@ -131,7 +131,7 @@
         <p class="px-5 py-10 text-center text-sm text-gray-400">Aucun stock enregistré pour ce produit.</p>
         @else
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-sm">
+            <table class="w-full divide-y divide-gray-100 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Entrepôt</th>
@@ -225,7 +225,7 @@
         <p class="px-5 py-10 text-center text-sm text-gray-400">Aucun mouvement enregistré pour ce produit.</p>
         @else
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 text-sm">
+            <table class="w-full divide-y divide-gray-100 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>

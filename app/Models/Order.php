@@ -126,6 +126,11 @@ class Order extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function productionOrders(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Production\Models\ProductionOrder::class);
+    }
+
     // ── Accessors workflow ────────────────────────────────────────────────────
 
     public function getStatusLabelAttribute(): string

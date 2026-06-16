@@ -11,16 +11,23 @@
 <div class="space-y-5">
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-bold text-gray-900">Prévisions de trésorerie</h1>
-        @can('treasury.write')
-        <a href="{{ route('tresorerie.previsions.create') }}"
-           class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Nouvelle prévision
-        </a>
-        @endcan
+        <div class="flex items-center gap-2">
+            <a href="{{ route('tresorerie.simulations.index') }}"
+               class="inline-flex items-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-sm font-medium px-4 py-2 rounded-lg">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                Simulation what-if
+            </a>
+            @can('treasury.write')
+            <a href="{{ route('tresorerie.previsions.create') }}"
+               class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Nouvelle prévision
+            </a>
+            @endcan
+        </div>
     </div>
 
-    <form method="GET" class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div class="flex flex-wrap gap-3 items-end">
             <select name="period_type" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
                 <option value="">Toutes périodes</option>
@@ -46,9 +53,9 @@
         </div>
     </form>
 
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <table class="w-full divide-y divide-gray-200 text-sm">
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">N°</th>

@@ -50,7 +50,7 @@
         <div class="px-5 py-3 border-b border-red-200 bg-red-50">
             <h2 class="text-sm font-semibold text-red-800">🛑 Échéances en retard ({{ count($overdue) }})</h2>
         </div>
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Facture FF</th>
@@ -90,7 +90,7 @@
         @if($upcoming->isEmpty())
             <div class="p-8 text-center text-emerald-700 text-sm">✓ Aucune échéance dans la fenêtre.</div>
         @else
-        <table class="min-w-full text-sm">
+        <table class="w-full text-sm">
             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                     <th class="px-4 py-2 text-left">Facture FF</th>

@@ -40,14 +40,20 @@ class CashAccountController extends Controller
             'name'              => ['required', 'string', 'max:100'],
             'code'              => ['required', 'string', 'max:30', 'unique:cash_accounts,code'],
             'type'              => ['required', 'in:caisse,banque,mobile_money'],
+            'bank_name'         => ['nullable', 'string', 'max:150'],
+            'bank_branch'       => ['nullable', 'string', 'max:150'],
+            'account_number'    => ['nullable', 'string', 'max:50'],
+            'iban'              => ['nullable', 'string', 'max:34'],
+            'swift_bic'         => ['nullable', 'string', 'max:11'],
             'payment_method_id' => ['nullable', 'integer', 'exists:payment_methods,id'],
             'currency_code'     => ['required', 'string', 'size:3'],
             'opening_balance'   => ['required', 'integer'],
+            'min_balance'       => ['nullable', 'integer', 'min:0'],
             'is_default'        => ['boolean'],
             'notes'             => ['nullable', 'string', 'max:500'],
         ]);
 
-        $company = \App\Models\currentCompany();
+        $company = currentCompany();
         $data['company_id']      = $company->id;
         $data['current_balance'] = (int) $data['opening_balance'];
         $data['is_default']      = $request->boolean('is_default');
@@ -80,8 +86,14 @@ class CashAccountController extends Controller
             'name'              => ['required', 'string', 'max:100'],
             'code'              => ['required', 'string', 'max:30', 'unique:cash_accounts,code,' . $caisse->id],
             'type'              => ['required', 'in:caisse,banque,mobile_money'],
+            'bank_name'         => ['nullable', 'string', 'max:150'],
+            'bank_branch'       => ['nullable', 'string', 'max:150'],
+            'account_number'    => ['nullable', 'string', 'max:50'],
+            'iban'              => ['nullable', 'string', 'max:34'],
+            'swift_bic'         => ['nullable', 'string', 'max:11'],
             'payment_method_id' => ['nullable', 'integer', 'exists:payment_methods,id'],
             'currency_code'     => ['required', 'string', 'size:3'],
+            'min_balance'       => ['nullable', 'integer', 'min:0'],
             'is_default'        => ['boolean'],
             'is_active'         => ['boolean'],
             'notes'             => ['nullable', 'string', 'max:500'],

@@ -7,15 +7,7 @@
     @php
         $company = \App\Models\Company::first();
 
-        $logoBase64 = null;
-        if ($company?->logo) {
-            $path = storage_path('app/public/' . $company->logo);
-            if (file_exists($path)) {
-                $ext  = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-                $mime = match($ext) { 'png' => 'image/png', 'svg' => 'image/svg+xml', default => 'image/jpeg' };
-                $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
-            }
-        }
+        $logoBase64 = pdf_image_data($company?->logo);
     @endphp
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }

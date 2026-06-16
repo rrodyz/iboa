@@ -55,7 +55,7 @@
             <h2 class="text-sm font-semibold text-gray-700">Mois de l'exercice {{ $fiscalYear->label }}</h2>
         </div>
         <div class="tbl-scroll">
-        <table class="tbl tbl-sticky">
+        <table class="tbl tbl-sticky w-full">
             <thead>
                 <tr>
                     <th class="text-left">Mois</th>

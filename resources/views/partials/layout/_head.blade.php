@@ -19,6 +19,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
+{{-- Garde précoce : avale les rejets fetch « NetworkError » bénins (prefetch/navigation
+     annulée, CDN police, extension). Inline pour être actif AVANT tout autre script. --}}
+<script>
+    window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason, m = (r && (r.message || r.name)) || String(r || '');
+        if (/NetworkError|Failed to fetch|Load failed|aborted|AbortError/i.test(m)) {
+            e.preventDefault();
+        }
+    });
+</script>
 {{-- Désactive le prefetch automatique de Turbo 8 sur hover (source de NetworkError
      quand le serveur répond lentement). Turbo vérifie cette meta à chaque tentative. --}}
 <meta name="turbo-prefetch" content="false">
