@@ -1312,8 +1312,10 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::post('sales/{commande}/reserve-stock', [\App\Modules\Production\Controllers\ProductionReservationController::class, 'reserveStock'])->name('sales.reserve-stock');
 
     // Ordres de fabrication — workflow
+    Route::post('orders/{order}/allocate', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'allocateMaterial'])->name('orders.allocate');
     Route::post('orders/{order}/launch', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'launch'])->name('orders.launch');
     Route::post('orders/{order}/start',  [\App\Modules\Production\Controllers\ProductionOrderController::class, 'start'])->name('orders.start');
+    Route::post('orders/{order}/partial', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'partial'])->name('orders.partial');
     Route::post('orders/{order}/finish', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'finish'])->name('orders.finish');
     Route::post('orders/{order}/cancel', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'cancel'])->name('orders.cancel');
 

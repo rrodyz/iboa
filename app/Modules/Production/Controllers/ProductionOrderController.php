@@ -157,11 +157,25 @@ class ProductionOrderController extends Controller
         return $resp;
     }
 
+    public function allocateMaterial(ProductionOrder $order): RedirectResponse
+    {
+        $this->service->allocateMaterial($order);
+
+        return back()->with('success', 'Matière allouée — OF prêt à lancer.');
+    }
+
     public function start(ProductionOrder $order): RedirectResponse
     {
         $this->service->start($order);
 
         return back()->with('success', 'Production démarrée.');
+    }
+
+    public function partial(ProductionOrder $order): RedirectResponse
+    {
+        $this->service->markPartiallyDone($order);
+
+        return back()->with('success', 'OF marqué terminé partiellement.');
     }
 
     public function finish(ProductionOrder $order): RedirectResponse

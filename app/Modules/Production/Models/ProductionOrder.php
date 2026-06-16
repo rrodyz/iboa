@@ -48,10 +48,11 @@ class ProductionOrder extends Model
     public function operations(): HasMany { return $this->hasMany(ProductionOrderOperation::class)->orderBy('sequence'); }
     public function batches(): HasMany { return $this->hasMany(ProductionBatch::class); }
 
-    public function isEditable(): bool { return in_array($this->status, ['brouillon','lance'], true); }
-    public function isInProgress(): bool { return $this->status === 'en_cours'; }
+    public function isEditable(): bool { return in_array($this->status, ['brouillon','matiere_allouee','lance'], true); }
+    public function isInProgress(): bool { return in_array($this->status, ['en_cours','termine_partiellement'], true); }
     public function totalMeters(): float { return (float) $this->lines->sum('total_meters'); }
-    public function statusLabel(): string { return match($this->status){'brouillon'=>'Brouillon','lance'=>'Lancé','en_cours'=>'En cours','termine'=>'Terminé','annule'=>'Annulé',default=>$this->status}; }
+    public function statusLabel(): string { return match($this->status){'brouillon'=>'Brouillon','matiere_allouee'=>'Matière allouée','lance'=>'Lancé','en_cours'=>'En cours','termine_partiellement'=>'Terminé partiellement','termine'=>'Terminé','annule'=>'Annulé',default=>$this->status}; }
+    public function statusColor(): string { return match($this->status){'brouillon'=>'gray','matiere_allouee'=>'amber','lance'=>'blue','en_cours'=>'sky','termine_partiellement'=>'teal','termine'=>'green','annule'=>'red',default=>'gray'}; }
 
     protected static function newFactory()
     {

@@ -30,6 +30,15 @@
 
             @if($order->status === 'brouillon')
                 @can('production.launch')
+                <form method="POST" action="{{ route('production.orders.allocate', $order) }}">@csrf
+                    <button class="bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium px-4 py-2 rounded-lg">Allouer la matière</button>
+                </form>
+                <form method="POST" action="{{ route('production.orders.launch', $order) }}">@csrf
+                    <button class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Lancer l'OF</button>
+                </form>
+                @endcan
+            @elseif($order->status === 'matiere_allouee')
+                @can('production.launch')
                 <form method="POST" action="{{ route('production.orders.launch', $order) }}">@csrf
                     <button class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Lancer l'OF</button>
                 </form>
@@ -40,8 +49,13 @@
                     <button class="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Démarrer production</button>
                 </form>
                 @endcan
-            @elseif($order->status === 'en_cours')
+            @elseif(in_array($order->status, ['en_cours','termine_partiellement']))
                 @can('production.validate')
+                @if($order->status === 'en_cours')
+                <form method="POST" action="{{ route('production.orders.partial', $order) }}">@csrf
+                    <button class="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Terminer partiellement</button>
+                </form>
+                @endif
                 <form method="POST" action="{{ route('production.orders.finish', $order) }}">@csrf
                     <button class="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Terminer l'OF</button>
                 </form>

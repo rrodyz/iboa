@@ -59,10 +59,17 @@ class ProductionService
         });
     }
 
-    /** brouillon → lance */
-    public function launch(ProductionOrder $order): void
+    /** brouillon → matière allouée (allocation matière effectuée). */
+    public function allocateMaterial(ProductionOrder $order): void
     {
         $this->assertStatus($order, 'brouillon');
+        $order->update(['status' => 'matiere_allouee']);
+    }
+
+    /** brouillon | matière allouée → lance */
+    public function launch(ProductionOrder $order): void
+    {
+        $this->assertStatus($order, ['brouillon', 'matiere_allouee']);
         $order->update(['status' => 'lance', 'launched_at' => now()]);
 
         // [§3] Chargement automatique des opérations depuis la gamme opératoire
@@ -122,10 +129,17 @@ class ProductionService
         $order->update(['status' => 'en_cours']);
     }
 
-    /** en_cours → termine */
+    /** en_cours → terminé partiellement (production partielle, reste à produire). */
+    public function markPartiallyDone(ProductionOrder $order): void
+    {
+        $this->assertStatus($order, ['en_cours', 'termine_partiellement']);
+        $order->update(['status' => 'termine_partiellement']);
+    }
+
+    /** en_cours | terminé partiellement → termine */
     public function finish(ProductionOrder $order): void
     {
-        $this->assertStatus($order, 'en_cours');
+        $this->assertStatus($order, ['en_cours', 'termine_partiellement']);
         $order->update(['status' => 'termine', 'finished_at' => now()]);
 
         // Pont comptable SYSCOHADA (no-op si désactivé — OFF par défaut)
@@ -151,11 +165,12 @@ class ProductionService
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    private function assertStatus(ProductionOrder $order, string $expected): void
+    private function assertStatus(ProductionOrder $order, array|string $expected): void
     {
-        if ($order->status !== $expected) {
+        $allowed = (array) $expected;
+        if (! in_array($order->status, $allowed, true)) {
             throw ValidationException::withMessages([
-                'status' => "Transition invalide : l'OF doit être au statut « {$expected} ».",
+                'status' => "Transition invalide : l'OF doit être au statut « " . implode(' / ', $allowed) . " ».",
             ]);
         }
     }
