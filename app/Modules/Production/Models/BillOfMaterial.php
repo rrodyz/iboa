@@ -18,7 +18,7 @@ class BillOfMaterial extends Model
 
     protected $table = 'bills_of_materials';
     protected $fillable = [
-        'company_id','product_id','name','sheet_type','thickness','coil_width','usable_width',
+        'company_id','product_id','scrap_product_id','defect_product_id','name','sheet_type','thickness','coil_width','usable_width',
         'standard_waste_rate','consumption_per_meter','machine_time_per_unit','labor_per_unit',
         'std_material_cost','std_labor_cost','std_machine_cost','std_overhead_cost',
         'is_active','notes','created_by',
@@ -30,6 +30,8 @@ class BillOfMaterial extends Model
 
     public function company(): BelongsTo { return $this->belongsTo(Company::class); }
     public function product(): BelongsTo { return $this->belongsTo(Product::class); }
+    public function scrapProduct(): BelongsTo { return $this->belongsTo(Product::class, 'scrap_product_id'); }
+    public function defectProduct(): BelongsTo { return $this->belongsTo(Product::class, 'defect_product_id'); }
     public function lines(): HasMany { return $this->hasMany(BomLine::class); }
     public function routing(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(Routing::class)->where('is_active', true); }
 

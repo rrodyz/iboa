@@ -101,12 +101,31 @@
                 <option value="0" {{ request('is_active') === '0' ? 'selected' : '' }}>Inactifs</option>
             </select>
         </div>
+
+        {{-- [PHASE E] Filtres avancés : code article, statut, familles 3 niveaux --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mt-3">
+            <input type="text" name="code_article" value="{{ request('code_article') }}" placeholder="Code article…"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-indigo-500">
+            <select name="statut" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="">Actif / sommeil</option>
+                <option value="actif"   {{ request('statut') === 'actif'   ? 'selected' : '' }}>Actif</option>
+                <option value="sommeil" {{ request('statut') === 'sommeil' ? 'selected' : '' }}>En sommeil</option>
+            </select>
+            @foreach(['famille1_id' => 'Famille 1', 'famille2_id' => 'Famille 2', 'famille3_id' => 'Famille 3'] as $fname => $flabel)
+            <select name="{{ $fname }}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="">{{ $flabel }}</option>
+                @foreach(($familiesFlat ?? collect()) as $f)
+                    <option value="{{ $f->id }}" {{ request($fname) == $f->id ? 'selected' : '' }}>{{ $f->code }} — {{ $f->name }}</option>
+                @endforeach
+            </select>
+            @endforeach
+        </div>
         <div class="flex items-center gap-2 mt-3">
             <button type="submit"
                     class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
                 Filtrer
             </button>
-            @if(request()->hasAny(['search', 'family_id', 'brand_id', 'type', 'is_active']))
+            @if(request()->hasAny(['search', 'family_id', 'brand_id', 'type', 'is_active', 'code_article', 'statut', 'famille1_id', 'famille2_id', 'famille3_id']))
             <a href="{{ route('products.index') }}"
                class="border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,7 +250,7 @@
                                 </svg>
                                 <div>
                                     <p class="text-sm font-medium text-gray-600">Aucun article trouvé</p>
-                                    @if(request()->hasAny(['search', 'family_id', 'brand_id', 'type', 'is_active']))
+                                    @if(request()->hasAny(['search', 'family_id', 'brand_id', 'type', 'is_active', 'code_article', 'statut', 'famille1_id', 'famille2_id', 'famille3_id']))
                                         <a href="{{ route('products.index') }}" class="text-sm text-blue-600 hover:text-blue-700 mt-1 inline-block">Effacer les filtres</a>
                                     @else
                                         <a href="{{ route('products.create') }}" class="text-sm text-blue-600 hover:text-blue-700 mt-1 inline-block">Créer le premier article</a>

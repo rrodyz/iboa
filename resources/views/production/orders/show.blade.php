@@ -339,6 +339,44 @@
             <button class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">Enregistrer</button>
         </form>
         @endif
+
+        {{-- [§4] Entrée des sous-produits (chute au poids / avarié à la quantité) en stock --}}
+        @php $bomBp = $order->billOfMaterial; @endphp
+        @if($live && $bomBp && ($bomBp->scrap_product_id || $bomBp->defect_product_id))
+        <form method="POST" action="{{ route('production.orders.byproduct', $order) }}" class="px-6 py-4 bg-indigo-50/40 border-b border-gray-100 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+            @csrf
+            <div class="col-span-2 md:col-span-5 text-xs font-semibold text-indigo-700 uppercase tracking-wider">Entrée sous-produits en stock</div>
+            @if($bomBp->scrap_product_id)
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Chute — poids (kg)</label>
+                <input type="number" name="scrap_weight" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right font-mono">
+                <p class="text-[10px] text-gray-500 mt-0.5 truncate">{{ $bomBp->scrapProduct?->name }}</p>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Dépôt chute</label>
+                <select name="scrap_warehouse_id" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="">défaut</option>
+                    @foreach($warehouses as $w)<option value="{{ $w->id }}">{{ $w->name }}</option>@endforeach
+                </select>
+            </div>
+            @endif
+            @if($bomBp->defect_product_id)
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Avarié — quantité</label>
+                <input type="number" name="defect_quantity" step="0.01" min="0" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-right font-mono">
+                <p class="text-[10px] text-gray-500 mt-0.5 truncate">{{ $bomBp->defectProduct?->name }}</p>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Dépôt avarié</label>
+                <select name="defect_warehouse_id" class="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <option value="">défaut</option>
+                    @foreach($warehouses as $w)<option value="{{ $w->id }}">{{ $w->name }}</option>@endforeach
+                </select>
+            </div>
+            @endif
+            <button class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">Entrer en stock</button>
+        </form>
+        @endif
         <div class="tbl-scroll">
             <table class="tbl tbl-sticky w-full">
                 <thead><tr><th class="text-left">Type</th><th class="text-right">Poids</th><th class="text-right">Valeur</th><th class="text-left">Machine</th><th class="text-left">Motif</th><th></th></tr></thead>

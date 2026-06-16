@@ -92,6 +92,42 @@ class ProductionExecutionController extends Controller
         return back()->with('success', 'Chute enregistrée.');
     }
 
+    /**
+     * [PHASE B/§4] Entrée en stock des sous-produits réels du suivi :
+     * chute (au poids, kg) et avarié (à la quantité), via les articles liés
+     * à la nomenclature (scrap_product_id / defect_product_id).
+     */
+    public function byproduct(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        $data = $request->validate([
+            'scrap_weight'        => ['nullable', 'numeric', 'min:0'],
+            'scrap_warehouse_id'  => ['nullable', 'integer', 'exists:warehouses,id'],
+            'defect_quantity'     => ['nullable', 'numeric', 'min:0'],
+            'defect_warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+        ]);
+
+        $bom = $order->billOfMaterial;
+        if (! $bom) {
+            return back()->with('error', 'Aucune nomenclature liée à cet OF.');
+        }
+
+        $done = [];
+        if (($data['scrap_weight'] ?? 0) > 0 && $bom->scrap_product_id) {
+            $this->stock->enterByproduct($order, (int) $bom->scrap_product_id, (float) $data['scrap_weight'], $data['scrap_warehouse_id'] ?? null);
+            $done[] = 'chute';
+        }
+        if (($data['defect_quantity'] ?? 0) > 0 && $bom->defect_product_id) {
+            $this->stock->enterByproduct($order, (int) $bom->defect_product_id, (float) $data['defect_quantity'], $data['defect_warehouse_id'] ?? null);
+            $done[] = 'avarié';
+        }
+
+        if (! $done) {
+            return back()->with('error', 'Rien enregistré — vérifiez les articles chute/avarié de la nomenclature et les quantités.');
+        }
+
+        return back()->with('success', 'Entrée en stock : ' . implode(' + ', $done) . '.');
+    }
+
     public function destroyWaste(ProductionWaste $waste): RedirectResponse
     {
         $this->stock->reverseWaste($waste);

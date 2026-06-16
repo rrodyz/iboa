@@ -32,6 +32,24 @@ class UpdateProductRequest extends FormRequest
             'delivery_delay_days'   => 'nullable|integer|min:0|max:365',
             'type'                  => 'required|in:simple,service,compose',
 
+            // [PHASE E] Référentiel enrichi
+            'code_article'          => "nullable|string|max:10|unique:products,code_article,{$id}",
+            'statut'                => 'nullable|in:actif,sommeil',
+            'production_mode'       => 'nullable|in:mts,mto',
+            'famille1_id'           => 'nullable|exists:product_families,id',
+            'famille2_id'           => 'nullable|exists:product_families,id',
+            'famille3_id'           => 'nullable|exists:product_families,id',
+            'purchase_unit_id'      => 'nullable|exists:units,id',
+            'sale_unit_id'          => 'nullable|exists:units,id',
+            'weight_unit_id'        => 'nullable|exists:units,id',
+            'ua_to_us_coef'         => 'nullable|numeric|min:0',
+            'uv_to_us_coef'         => 'nullable|numeric|min:0',
+            'gross_weight_per_us'   => 'nullable|numeric|min:0',
+            'net_weight_per_us'     => 'nullable|numeric|min:0',
+            'allow_negative_stock'  => 'boolean',
+            'stock_securite'        => 'nullable|numeric|min:0',
+            'main_warehouse_id'     => 'nullable|exists:warehouses,id',
+
             // Comportement
             'is_stockable'      => 'boolean',
             'is_purchasable'    => 'boolean',

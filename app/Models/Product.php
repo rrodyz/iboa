@@ -18,13 +18,28 @@ class Product extends Model
 
     protected $fillable = [
         'reference',
+        'code_article',
+        'statut',
         'barcode',
         'name',
         'description',
         'image',
         'family_id',
+        'famille1_id',
+        'famille2_id',
+        'famille3_id',
         'brand_id',
         'unit_id',
+        'purchase_unit_id',
+        'sale_unit_id',
+        'weight_unit_id',
+        'ua_to_us_coef',
+        'uv_to_us_coef',
+        'gross_weight_per_us',
+        'net_weight_per_us',
+        'allow_negative_stock',
+        'stock_securite',
+        'main_warehouse_id',
         'tax_rate_id',
         'sale_account_id',
         'purchase_account_id',
@@ -35,6 +50,7 @@ class Product extends Model
         'type',
         'is_stockable',
         'is_semi_finished',
+        'production_mode',
         'is_purchasable',
         'is_sellable',
         'purchase_price',
@@ -56,14 +72,31 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'is_stockable'      => 'boolean',
-        'is_purchasable'    => 'boolean',
-        'is_sellable'       => 'boolean',
-        'has_serial_number' => 'boolean',
-        'has_lot_number'    => 'boolean',
-        'has_expiry_date'   => 'boolean',
-        'is_active'         => 'boolean',
+        'is_stockable'         => 'boolean',
+        'is_purchasable'       => 'boolean',
+        'is_sellable'          => 'boolean',
+        'has_serial_number'    => 'boolean',
+        'has_lot_number'       => 'boolean',
+        'has_expiry_date'      => 'boolean',
+        'is_active'            => 'boolean',
+        'allow_negative_stock' => 'boolean',
+        'ua_to_us_coef'        => 'decimal:4',
+        'uv_to_us_coef'        => 'decimal:4',
+        'gross_weight_per_us'  => 'decimal:4',
+        'net_weight_per_us'    => 'decimal:4',
+        'stock_securite'       => 'decimal:3',
     ];
+
+    /** Statut actif (cahier des charges : actif / en sommeil). */
+    public function scopeActif($query)
+    {
+        return $query->where('statut', 'actif');
+    }
+
+    public function isActif(): bool
+    {
+        return $this->statut === 'actif';
+    }
 
     // -------------------------------------------------------------------------
     // Relationships
@@ -74,6 +107,10 @@ class Product extends Model
         return $this->belongsTo(ProductFamily::class, 'family_id');
     }
 
+    public function famille1(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille1_id'); }
+    public function famille2(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille2_id'); }
+    public function famille3(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille3_id'); }
+
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
@@ -83,6 +120,11 @@ class Product extends Model
     {
         return $this->belongsTo(Unit::class);
     }
+
+    public function purchaseUnit(): BelongsTo { return $this->belongsTo(Unit::class, 'purchase_unit_id'); }
+    public function saleUnit(): BelongsTo { return $this->belongsTo(Unit::class, 'sale_unit_id'); }
+    public function weightUnit(): BelongsTo { return $this->belongsTo(Unit::class, 'weight_unit_id'); }
+    public function mainWarehouse(): BelongsTo { return $this->belongsTo(Warehouse::class, 'main_warehouse_id'); }
 
     public function taxRate(): BelongsTo
     {

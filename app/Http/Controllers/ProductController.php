@@ -39,6 +39,7 @@ class ProductController extends Controller
 
         $products  = $this->repository->search($request->all(), 20);
         $families  = ProductFamily::whereNull('parent_id')->with('children')->orderBy('name')->get();
+        $familiesFlat = ProductFamily::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
         $brands    = Brand::where('is_active', true)->orderBy('name')->get();
 
         $summary = [
@@ -48,7 +49,7 @@ class ProductController extends Controller
             'purchasable'=> Product::where('is_active', true)->where('is_purchasable', true)->count(),
         ];
 
-        return view('products.index', compact('products', 'families', 'brands', 'summary'));
+        return view('products.index', compact('products', 'families', 'familiesFlat', 'brands', 'summary'));
     }
 
     public function create(): View
@@ -56,8 +57,11 @@ class ProductController extends Controller
         $this->authorize('create', Product::class);
         [$families, $brands, $units, $taxRates, $suppliers, $accounts, $componentProducts] =
             $this->loadFormReferenceData();
+        $warehouses   = \App\Models\Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
+        $familiesFlat = ProductFamily::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
         return view('products.create', compact(
-            'families', 'brands', 'units', 'taxRates', 'suppliers', 'accounts', 'componentProducts'
+            'families', 'brands', 'units', 'taxRates', 'suppliers', 'accounts', 'componentProducts',
+            'warehouses', 'familiesFlat'
         ));
     }
 
@@ -95,8 +99,11 @@ class ProductController extends Controller
         $product = $this->repository->findWithDetails($product->id);
         [$families, $brands, $units, $taxRates, $suppliers, $accounts, $componentProducts] =
             $this->loadFormReferenceData($product->id);
+        $warehouses   = \App\Models\Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
+        $familiesFlat = ProductFamily::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
         return view('products.edit', compact(
-            'product', 'families', 'brands', 'units', 'taxRates', 'suppliers', 'accounts', 'componentProducts'
+            'product', 'families', 'brands', 'units', 'taxRates', 'suppliers', 'accounts', 'componentProducts',
+            'warehouses', 'familiesFlat'
         ));
     }
 

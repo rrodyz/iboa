@@ -1323,6 +1323,7 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::post('orders/{order}/output', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'output'])->name('orders.output');
     Route::delete('outputs/{output}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyOutput'])->name('outputs.destroy');
     Route::post('orders/{order}/waste', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'waste'])->name('orders.waste');
+    Route::post('orders/{order}/byproduct', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'byproduct'])->name('orders.byproduct');
     Route::delete('wastes/{waste}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyWaste'])->name('wastes.destroy');
 
     // Coût de revient + contrôle qualité

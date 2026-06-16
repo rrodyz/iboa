@@ -73,6 +73,22 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Code article</label>
+                        <input type="text" name="code_article" value="{{ old('code_article', $p->code_article ?? '') }}"
+                               maxlength="10" placeholder="10 car. max — auto si vide"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Statut</label>
+                        <select name="statut" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                            <option value="actif" @selected(old('statut', $p->statut ?? 'actif') === 'actif')>Actif</option>
+                            <option value="sommeil" @selected(old('statut', $p->statut ?? '') === 'sommeil')>En sommeil</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">Code-barres (EAN/UPC)</label>
                         <input type="text" name="barcode" value="{{ old('barcode', $p->barcode ?? '') }}"
                                maxlength="50"
@@ -93,6 +109,94 @@
                     <label class="block text-xs font-medium text-gray-600 mb-1">Description / notes</label>
                     <textarea name="description" rows="2"
                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none">{{ old('description', $p->description ?? '') }}</textarea>
+                </div>
+            </div>
+
+            {{-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                 RÉFÉRENTIEL AVANCÉ (Phase E) — familles, unités, poids, stock
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ --}}
+            <div class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+                <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span class="w-1.5 h-5 bg-indigo-500 rounded-full"></span>
+                    Référentiel avancé
+                </h3>
+
+                {{-- Familles 3 niveaux --}}
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    @foreach(['famille1_id' => 'Famille 1', 'famille2_id' => 'Famille 2', 'famille3_id' => 'Famille 3'] as $fname => $flabel)
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">{{ $flabel }}</label>
+                        <select name="{{ $fname }}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">—</option>
+                            @foreach($familiesFlat as $f)
+                                <option value="{{ $f->id }}" @selected(old($fname, $p->$fname ?? '') == $f->id)>{{ $f->code }} — {{ $f->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endforeach
+                </div>
+
+                {{-- Unités multiples + coefficients --}}
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+                    @foreach(['purchase_unit_id' => 'Unité d\'achat (UA)', 'sale_unit_id' => 'Unité de vente (UV)', 'weight_unit_id' => 'Unité de poids (UP)'] as $uname => $ulabel)
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">{{ $ulabel }}</label>
+                        <select name="{{ $uname }}" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">—</option>
+                            @foreach($units as $u)
+                                <option value="{{ $u->id }}" @selected(old($uname, $p->$uname ?? '') == $u->id)>{{ $u->abbreviation }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endforeach
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Coef. UA → US</label>
+                        <input type="number" step="0.0001" min="0" name="ua_to_us_coef" value="{{ old('ua_to_us_coef', $p->ua_to_us_coef ?? 1) }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Coef. UV → US</label>
+                        <input type="number" step="0.0001" min="0" name="uv_to_us_coef" value="{{ old('uv_to_us_coef', $p->uv_to_us_coef ?? 1) }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Poids brut / US</label>
+                        <input type="number" step="0.0001" min="0" name="gross_weight_per_us" value="{{ old('gross_weight_per_us', $p->gross_weight_per_us ?? '') }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Poids net / US</label>
+                        <input type="number" step="0.0001" min="0" name="net_weight_per_us" value="{{ old('net_weight_per_us', $p->net_weight_per_us ?? '') }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                {{-- Stock avancé --}}
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Stock de sécurité</label>
+                        <input type="number" step="0.001" min="0" name="stock_securite" value="{{ old('stock_securite', $p->stock_securite ?? 0) }}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-right font-mono focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Dépôt principal</label>
+                        <select name="main_warehouse_id" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">—</option>
+                            @foreach($warehouses as $w)
+                                <option value="{{ $w->id }}" @selected(old('main_warehouse_id', $p->main_warehouse_id ?? '') == $w->id)>{{ $w->code }} — {{ $w->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                            <input type="hidden" name="allow_negative_stock" value="0">
+                            <input type="checkbox" name="allow_negative_stock" value="1" @checked(old('allow_negative_stock', $p->allow_negative_stock ?? false))
+                                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            Stock négatif autorisé
+                        </label>
+                    </div>
                 </div>
             </div>
 

@@ -20,12 +20,22 @@ class Warehouse extends Model
         'company_id',
         'name',
         'code',
+        'type',
         'address',
         'city',
         'manager_name',
         'phone',
         'is_default',
         'is_active',
+    ];
+
+    /** Types de dépôt (Phase D). */
+    public const TYPES = [
+        'achat'             => 'Dépôt d\'achat',
+        'matiere_premiere'  => 'Matières premières',
+        'production'        => 'Production',
+        'produit_fini'      => 'Produits finis',
+        'vente'             => 'Site de vente',
     ];
 
     protected $casts = [

@@ -134,6 +134,33 @@ class ProductionStockService
         ]);
     }
 
+    /**
+     * [PHASE B] Entrée en stock d'un sous-produit (chute ou avarié) issu de la
+     * fabrication, lié à la nomenclature (scrap_product_id / defect_product_id).
+     * Renseigné au suivi : la chute entre au poids (kg), l'avarié à la quantité.
+     */
+    public function enterByproduct(ProductionOrder $order, int $productId, float $qty, ?int $warehouseId = null, float $unitCost = 0): ?\App\Models\StockMovement
+    {
+        if ($qty <= 0) {
+            return null;
+        }
+        $warehouseId = $warehouseId ?? $this->defaultWarehouseId($order);
+        if (! $warehouseId) {
+            throw ValidationException::withMessages(['warehouse_id' => 'Dépôt d\'entrée requis pour le sous-produit.']);
+        }
+
+        return $this->stock->recordMovement([
+            'product_id'     => $productId,
+            'warehouse_id'   => $warehouseId,
+            'type'           => 'entree',
+            'quantity'       => $qty,
+            'unit_cost'      => $unitCost,
+            'reference_type' => ProductionOrder::class,
+            'reference_id'   => $order->id,
+            'notes'          => 'Sous-produit fabrication OF ' . $order->number,
+        ]);
+    }
+
     public function reverseWaste(ProductionWaste $waste): void
     {
         $order = $waste->productionOrder;

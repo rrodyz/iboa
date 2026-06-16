@@ -705,6 +705,10 @@ class DemoDataSeeder extends Seeder
                 ['client_payment_id' => $payment1->id, 'invoice_id' => $invoice1->id],
                 ['amount' => 675000, 'allocated_at' => now()->subDays(5)]
             );
+            // Comptabilisation GL (DR trésorerie / CR clients) — idempotent.
+            if (! $payment1->journal_entry_id) {
+                app(\App\Services\AccountingService::class)->postClientPayment($payment1->fresh(['client', 'company']));
+            }
         }
 
         // ── Commande COM-2026-002 (ONATEL) — facture réglée ───────────────────
@@ -850,6 +854,10 @@ class DemoDataSeeder extends Seeder
                 ['client_payment_id' => $payment2->id, 'invoice_id' => $invoice2->id],
                 ['amount' => 1062000, 'allocated_at' => now()->subDays(3)]
             );
+            // Comptabilisation GL (DR trésorerie / CR clients) — idempotent.
+            if (! $payment2->journal_entry_id) {
+                app(\App\Services\AccountingService::class)->postClientPayment($payment2->fresh(['client', 'company']));
+            }
         }
 
         // ── Transactions de trésorerie demo ───────────────────────────────────
