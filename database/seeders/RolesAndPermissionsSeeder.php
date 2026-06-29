@@ -269,6 +269,61 @@ class RolesAndPermissionsSeeder extends Seeder
             'stocks.view',        // consulter niveaux stock pour approvisionnement poste
         ]);
 
-        $this->command->info('Roles & Permissions créés avec succès (12 rôles, conformes §15 CDC).');
+        // ── Rôles complémentaires ─────────────────────────────────────────────
+
+        // Responsable commercial — périmètre commercial élargi + validation
+        $responsableCommercial = Role::firstOrCreate(['name' => 'responsable_commercial', 'guard_name' => 'web']);
+        $responsableCommercial->syncPermissions([
+            'products.view', 'clients.view', 'clients.create', 'clients.edit', 'clients.delete',
+            'crm.view', 'crm.manage',
+            'quotes.view', 'quotes.create', 'quotes.edit', 'quotes.delete',
+            'orders.view', 'orders.create', 'orders.edit', 'orders.delete', 'orders.validate',
+            'invoices.view', 'invoices.create', 'invoices.send',
+            'deliveries.view', 'deliveries.create',
+            'credit_notes.view', 'credit_notes.create',
+            'payments.view', 'reports.view',
+            'stocks.view',
+            'sales.create', 'sales.submit', 'sales.transform', 'sales.validate', 'sales.view_all',
+        ]);
+
+        // Responsable stock — gestion stock + inventaire + réceptions
+        $responsableStock = Role::firstOrCreate(['name' => 'responsable_stock', 'guard_name' => 'web']);
+        $responsableStock->syncPermissions([
+            'products.view', 'products.create', 'products.edit',
+            'stocks.view', 'stocks.adjust', 'stocks.transfer', 'stocks.lot.trace',
+            'inventory.view', 'inventory.create', 'inventory.validate',
+            'receptions.view', 'receptions.create', 'receptions.validate',
+            'supplier_returns.view', 'supplier_returns.create', 'supplier_returns.validate',
+            'purchase_orders.view', 'deliveries.view', 'orders.view', 'invoices.view',
+            'production.view', 'reports.view',
+        ]);
+
+        // Caissier — paiements clients + trésorerie courante
+        $caissier = Role::firstOrCreate(['name' => 'caissier', 'guard_name' => 'web']);
+        $caissier->syncPermissions([
+            'clients.view',
+            'invoices.view',
+            'payments.view', 'payments.create', 'payments.edit',
+            'cash_accounts.view', 'cash_accounts.manage',
+            'treasury.write',
+            'reports.view',
+        ]);
+
+        // Lecture seule — auditeurs, consultants, direction en lecture
+        $lectureSeule = Role::firstOrCreate(['name' => 'lecture_seule', 'guard_name' => 'web']);
+        $lectureSeule->syncPermissions([
+            'products.view', 'clients.view', 'suppliers.view',
+            'quotes.view', 'orders.view', 'invoices.view',
+            'deliveries.view', 'credit_notes.view',
+            'purchase_orders.view', 'receptions.view', 'supplier_invoices.view',
+            'stocks.view', 'inventory.view',
+            'payments.view', 'cash_accounts.view',
+            'accounting.view',
+            'reports.view',
+            'production.view', 'quality.view', 'maintenance.view',
+            'analytic.view',
+        ]);
+
+        $this->command->info('Roles & Permissions créés avec succès (16 rôles complets).');
     }
 }
