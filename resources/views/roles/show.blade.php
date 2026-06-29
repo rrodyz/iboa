@@ -15,9 +15,16 @@
     {{-- Header --}}
     @php
         $roleLabels = [
-            'super_admin'=>'Super Administrateur','directeur'=>'Directeur','commercial'=>'Commercial',
-            'responsable_commercial'=>'Resp. Commercial','comptable'=>'Comptable','magasinier'=>'Magasinier',
-            'responsable_stock'=>'Resp. Stock','caissier'=>'Caissier','lecture_seule'=>'Lecture seule',
+            'super_admin'=>'Super Administrateur','directeur'=>'Directeur Général (DG)',
+            'daf'=>'DAF — Dir. Administratif & Financier',
+            'commercial'=>'Commercial','responsable_commercial'=>'Resp. Commercial',
+            'comptable'=>'Comptable','acheteur'=>'Acheteur / Approvisionneur',
+            'magasinier'=>'Magasinier','responsable_stock'=>'Resp. Stock','caissier'=>'Caissier',
+            'chef_production'=>'Chef de Production','directeur_usine'=>"Directeur d'Usine",
+            'operateur_production'=>'Opérateur de Production',
+            'responsable_qualite'=>'Responsable Qualité',
+            'technicien_maintenance'=>'Technicien Maintenance',
+            'lecture_seule'=>'Lecture seule',
             'drh'=>'Directeur RH','rh_manager'=>'Gestionnaire RH','rh_agent'=>'Agent RH','employe'=>'Employé',
         ];
         $isRhRole = in_array($role->name, ['drh','rh_manager','rh_agent','employe']);
