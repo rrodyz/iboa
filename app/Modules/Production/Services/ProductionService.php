@@ -66,10 +66,82 @@ class ProductionService
         $order->update(['status' => 'matiere_allouee']);
     }
 
+    /**
+     * [§13.2 CDC] Vérifie la condition financière avant lancement.
+     * Comptant : 100% encaissé. Acompte : ≥70%. Crédit : validation DAF/DG explicite.
+     * Sans commande liée ou si déjà autorisé → passe.
+     *
+     * @throws ValidationException si condition non remplie
+     */
+    public function checkFinancialGate(ProductionOrder $order): void
+    {
+        // Déjà autorisé ou bypassé
+        if (in_array($order->financial_authorization, ['approved', 'bypassed'], true)) {
+            return;
+        }
+
+        // Pas de commande de vente liée → pas de gate financière
+        if (! $order->order_id) {
+            return;
+        }
+
+        $order->loadMissing('order.client');
+        $salesOrder = $order->order;
+        if (! $salesOrder) {
+            return;
+        }
+
+        $client   = $salesOrder->client;
+        $totalTtc = (float) $salesOrder->total_ttc;
+        if ($totalTtc <= 0) {
+            return;
+        }
+
+        // Encaissements déjà reçus (statut confirme) pour cette commande
+        $paid = (float) \App\Models\ClientPayment::where('order_id', $salesOrder->id)
+            ->where('status', 'confirme')
+            ->sum('amount');
+        $rate = $totalTtc > 0 ? round(($paid / $totalTtc) * 100, 1) : 0;
+
+        // Déterminer le mode de paiement du client
+        $paymentMode = $client?->payment_mode ?? 'credit'; // défaut = crédit si non défini
+
+        $order->update(['payment_mode' => $paymentMode, 'payment_rate' => $rate]);
+
+        if ($paymentMode === 'comptant' && $rate < 100) {
+            throw ValidationException::withMessages([
+                'financial' => "Client comptant : paiement intégral requis avant fabrication ({$rate}% encaissé sur {$totalTtc} FCFA). Demandez l'autorisation financière.",
+            ]);
+        }
+
+        if ($paymentMode === 'acompte' && $rate < 70) {
+            throw ValidationException::withMessages([
+                'financial' => "Client acompte : acompte ≥ 70% requis ({$rate}% encaissé). Demandez l'autorisation DAF.",
+            ]);
+        }
+
+        if ($paymentMode === 'credit') {
+            throw ValidationException::withMessages([
+                'financial' => 'Client crédit : validation DAF/DG obligatoire avant lancement OF. Demandez l\'autorisation financière.',
+            ]);
+        }
+
+        // Condition remplie — on enregistre l'autorisation automatique
+        $order->update([
+            'financial_authorization'  => 'approved',
+            'financial_authorized_at'  => now(),
+            'financial_notes'          => "Autorisé automatiquement : {$paymentMode} / {$rate}%",
+        ]);
+    }
+
     /** brouillon | matière allouée → lance */
     public function launch(ProductionOrder $order): void
     {
         $this->assertStatus($order, ['brouillon', 'matiere_allouee']);
+
+        // §13.2 CDC — Gate financière obligatoire
+        $this->checkFinancialGate($order);
+
         $order->update(['status' => 'lance', 'launched_at' => now()]);
 
         // [§3] Chargement automatique des opérations depuis la gamme opératoire

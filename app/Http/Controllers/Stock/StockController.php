@@ -214,6 +214,59 @@ class StockController extends Controller
     }
 
     /**
+     * [§8 CDC] Traçabilité inverse : lot → OF de production → factures → clients impactés.
+     * Permet de retrouver tous les clients livrés avec un lot de matière donné.
+     */
+    public function lotTraceability(\App\Models\StockLot $lot): \Illuminate\View\View
+    {
+        $lot->load(['product', 'warehouse']);
+
+        // 1. Mouvements de stock liés à ce lot
+        $movements = \App\Models\StockMovement::where('lot_number', $lot->lot_number)
+            ->where('product_id', $lot->product_id)
+            ->with(['warehouse', 'createdBy:id,name'])
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        // 2. OF ayant consommé des bobines avec ce lot (si c'est une matière première bobine)
+        $productionOrders = collect();
+        $coilLotNumbers   = collect();
+        if (class_exists(\App\Modules\Production\Models\Coil::class)) {
+            $coilsFromLot = \App\Modules\Production\Models\Coil::where('lot_number', $lot->lot_number)
+                ->orWhere('reference', 'like', '%' . $lot->lot_number . '%')
+                ->get();
+            if ($coilsFromLot->isNotEmpty()) {
+                $coilIds = $coilsFromLot->pluck('id');
+                $coilLotNumbers = $coilsFromLot->pluck('lot_number', 'id');
+                $productionOrders = \App\Modules\Production\Models\ProductionOrder::whereHas(
+                    'consumptions', fn ($q) => $q->whereIn('coil_id', $coilIds)
+                )->with(['client', 'order', 'product'])->get();
+            }
+        }
+
+        // 3. Clients impactés via les OF trouvés
+        $impactedClients = collect();
+        $impactedInvoices = collect();
+        if ($productionOrders->isNotEmpty()) {
+            $orderIds = $productionOrders->pluck('order_id')->filter()->unique();
+            if ($orderIds->isNotEmpty()) {
+                $impactedInvoices = \App\Models\Invoice::whereIn('order_id', $orderIds)
+                    ->with('client:id,name,code')
+                    ->get();
+                $impactedClients = $impactedInvoices->pluck('client')->filter()->unique('id');
+            }
+        }
+
+        // 4. Clients livrés directement via mouvements de stock (sorties sur BL)
+        $deliveryMovements = $movements->where('type', 'sortie');
+
+        return view('stocks.lot-traceability', compact(
+            'lot', 'movements', 'productionOrders',
+            'impactedClients', 'impactedInvoices', 'deliveryMovements', 'coilLotNumbers'
+        ));
+    }
+
+    /**
      * Display detailed stock view for a single product (all warehouses + movement history).
      */
     public function show(Product $product): View

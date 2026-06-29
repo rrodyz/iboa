@@ -390,7 +390,7 @@ request()->routeIs('achats.*')                                                  
                      x-transition:enter="transition-all duration-200 ease-out" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
                      x-transition:leave="transition-all duration-150 ease-in"  x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1">
                     <div class="ml-4 pl-3 border-l border-white/10 space-y-0.5 py-1">
-                        @foreach([
+                        @foreach(array_filter([
                             [route('reports.index'),              'Rapports & BI',          'reports.index'],
                             [route('reports.ca'),                 'Chiffre d\'affaires',    'reports.ca'],
                             [route('reports.journal-ventes'),     'Journal des ventes',     'reports.journal-ventes'],
@@ -402,7 +402,10 @@ request()->routeIs('achats.*')                                                  
                             [route('reports.etat-stocks'),        'État des stocks',        'reports.etat-stocks'],
                             [route('reports.margins'),            'Marges produits',        'reports.margins'],
                             [route('reports.sales-performance'),  'Performance commerciale','reports.sales-performance'],
-                        ] as [$href, $label, $match])
+                            // §12 CDC — Comptabilité analytique
+                            auth()->user()->can('analytic.view') ? [route('analytique.centres-couts.index'), 'Centres de coûts', 'analytique.*'] : null,
+                            auth()->user()->can('analytic.view') ? [route('analytique.rapport'), 'Rentabilité analytique', 'analytique.rapport'] : null,
+                        ]) as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
                            class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100

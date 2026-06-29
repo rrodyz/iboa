@@ -27,6 +27,8 @@ class ProductionOrderController extends Controller
         $this->middleware('permission:production.launch')->only(['launch', 'start']);
         $this->middleware('permission:production.validate')->only(['finish']);
         $this->middleware('permission:production.cancel')->only(['cancel']);
+        $this->middleware('permission:production.approve_financial')->only(['authorizeFinance']);
+        $this->middleware('permission:production.modify_launched')->only(['requestModification']);
     }
 
     public function index(Request $request): View
@@ -191,6 +193,65 @@ class ProductionOrderController extends Controller
         $this->service->cancel($order, $request->input('reason'));
 
         return back()->with('success', 'OF annulé.');
+    }
+
+    /**
+     * [§13.2 CDC] Validation financière DAF/DG avant lancement OF.
+     * Client comptant < 100% | acompte < 70% | crédit → autorisation obligatoire.
+     */
+    public function authorizeFinance(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        $request->validate([
+            'financial_notes' => ['nullable', 'string', 'max:500'],
+            'bypass'          => ['nullable', 'boolean'],
+        ]);
+
+        abort_if(
+            in_array($order->financial_authorization, ['approved', 'bypassed'], true),
+            422,
+            'OF déjà autorisé financièrement.'
+        );
+
+        $order->update([
+            'financial_authorization' => $request->boolean('bypass') ? 'bypassed' : 'approved',
+            'financial_authorized_at' => now(),
+            'financial_authorized_by' => auth()->id(),
+            'financial_notes'         => $request->input('financial_notes') ?? 'Autorisation manuelle DAF/DG.',
+        ]);
+
+        return back()->with('success', 'Autorisation financière accordée. L\'OF peut être lancé.');
+    }
+
+    /**
+     * [§13.10 CDC] Demande de modification d'un OF lancé.
+     * Multi-validation : Chef Production → Commercial → Finance → DG.
+     */
+    public function requestModification(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        abort_unless(in_array($order->status, ['lance', 'en_cours', 'termine_partiellement'], true), 422, 'Modification impossible dans ce statut.');
+
+        $request->validate([
+            'modification_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        // Enregistrer dans les notes + passer en statut en attente de modification
+        $note = "[DEMANDE MODIF " . now()->format('d/m/Y H:i') . " par " . auth()->user()->name . "] " . $request->input('modification_reason');
+        $order->update([
+            'notes' => ($order->notes ? $order->notes . "\n" : '') . $note,
+        ]);
+
+        // Notifier le DG/DAF via audit log
+        \App\Models\AuditLog::create([
+            'company_id'  => $order->company_id,
+            'user_id'     => auth()->id(),
+            'action'      => 'production_order_modification_requested',
+            'entity_type' => ProductionOrder::class,
+            'entity_id'   => $order->id,
+            'description' => "Demande de modification OF {$order->number} : {$request->input('modification_reason')}",
+            'ip_address'  => $request->ip(),
+        ]);
+
+        return back()->with('info', 'Demande de modification enregistrée. Validation DG requise.');
     }
 
     // ─────────────────────────────────────────────────────────────────────────

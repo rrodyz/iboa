@@ -24,10 +24,13 @@ class ProductionOrder extends Model
         'company_id','fiscal_year_id','number','client_id','order_id','product_id','bill_of_material_id',
         'production_line_id','sheet_type','thickness','color','length','usable_width',
         'quantity_requested','quantity_produced','status','launched_at','finished_at','responsible_id','notes','created_by',
+        // §13.2 CDC — Validation financière avant lancement OF
+        'financial_authorization','financial_authorized_at','financial_authorized_by','financial_notes','payment_mode','payment_rate',
     ];
     protected $casts = [
         'thickness'=>'decimal:2','length'=>'decimal:2','usable_width'=>'decimal:1',
         'quantity_requested'=>'decimal:2','quantity_produced'=>'decimal:2','launched_at'=>'date','finished_at'=>'date',
+        'financial_authorized_at'=>'datetime','payment_rate'=>'decimal:2',
     ];
 
     public function company(): BelongsTo { return $this->belongsTo(Company::class); }

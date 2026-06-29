@@ -39,17 +39,33 @@ class RolesAndPermissionsSeeder extends Seeder
             'sales.bypass_self_validation', // valider son propre document (bypass double validation)
             // Achats
             'purchase_requests.view', 'purchase_requests.create', 'purchase_requests.submit', 'purchase_requests.approve',
+            'purchase_requests.validate_l1', // validation chef service (<500k FCFA)
+            'purchase_requests.validate_l2', // validation direction (<5M FCFA)
             'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.edit', 'purchase_orders.validate',
             'receptions.view', 'receptions.create', 'receptions.validate',
             'supplier_invoices.view', 'supplier_invoices.create', 'supplier_invoices.edit',
             'supplier_returns.view', 'supplier_returns.create', 'supplier_returns.validate',
             // Stocks
             'stocks.view', 'stocks.adjust', 'stocks.transfer',
+            'stocks.lot.trace',  // traçabilité lot → clients (§8 CDC)
             'inventory.view', 'inventory.create', 'inventory.validate',
-            // Production / Fabrication tôles bac
+            // Production / Fabrication tôles bac + métaux (§9 CDC)
             'production.view', 'production.create', 'production.update', 'production.delete',
             'production.launch', 'production.validate', 'production.cancel',
+            'production.declare',           // déclaration production/rebuts (opérateurs §15 CDC)
+            'production.approve_financial', // validation financière avant lancement OF (§13.2 CDC)
+            'production.modify_launched',   // demande modification OF lancé (§13.10 CDC)
             'production.cost.view', 'production.report.view',
+            // Qualité — module autonome (§10 CDC)
+            'quality.view',   // consulter inspections et non-conformités
+            'quality.manage', // créer/valider/clôturer inspections et NC
+            'quality.nc.manage', // gestion spécifique non-conformités et actions correctives
+            // Maintenance (§13.8 CDC)
+            'maintenance.view',   // consulter les ordres de travail et interventions
+            'maintenance.manage', // créer/valider/clôturer ordres de travail
+            // Comptabilité analytique (§12 CDC)
+            'analytic.view',   // consulter centres de coûts et lignes analytiques
+            'analytic.manage', // créer/modifier centres de coûts et ventilations
             // Trésorerie
             'payments.view', 'payments.create', 'payments.edit',
             'cash_accounts.view', 'cash_accounts.manage',
@@ -131,10 +147,128 @@ class RolesAndPermissionsSeeder extends Seeder
             'stocks.view', 'stocks.adjust',
             'production.view', 'production.create', 'production.update', 'production.delete',
             'production.launch', 'production.validate', 'production.cancel',
+            'production.modify_launched',
             'production.cost.view', 'production.report.view',
+            'quality.view',        // suivi qualité production
+            'maintenance.view',    // suivi maintenance équipements
+            'analytic.view',       // coûts de revient
             'orders.view',
         ]);
 
-        $this->command->info('Roles & Permissions créés avec succès.');
+        // ── Nouveaux rôles conformes §15 CDC ────────────────────────────────────
+
+        // DAF — Directeur Administratif et Financier
+        // Valide financièrement les OF, supervise trésorerie + comptabilité, analyse crédit clients
+        $daf = Role::firstOrCreate(['name' => 'daf', 'guard_name' => 'web']);
+        $daf->syncPermissions([
+            // Comptabilité complète
+            'accounting.view', 'accounting.write', 'accounting.validate', 'accounting.manage',
+            // Intégrations fiscales
+            'integrations.view', 'integrations.declare',
+            // Trésorerie
+            'payments.view', 'payments.create', 'payments.edit',
+            'cash_accounts.view', 'cash_accounts.manage',
+            'treasury.write', 'treasury.validate',
+            // Factures/avoirs
+            'invoices.view', 'invoices.validate', 'invoices.create', 'invoices.edit',
+            'supplier_invoices.view', 'supplier_invoices.create', 'supplier_invoices.edit',
+            'credit_notes.view', 'credit_notes.create',
+            // Achats — validation direction (<5M)
+            'purchase_requests.view', 'purchase_requests.validate_l1', 'purchase_requests.validate_l2',
+            'purchase_orders.view', 'purchase_orders.validate',
+            'receptions.view', 'supplier_returns.view',
+            // Workflow ventes
+            'sales.validate', 'sales.reject', 'sales.cancel', 'sales.view_all',
+            // Validation financière OF (§13.2 CDC) — DAF débloque fabrication
+            'production.view', 'production.approve_financial',
+            // Analytique
+            'analytic.view', 'analytic.manage',
+            // Référentiels lecture
+            'products.view', 'clients.view', 'suppliers.view',
+            'stocks.view', 'reports.view', 'reports.export',
+        ]);
+
+        // Directeur Usine — pilotage opérationnel usine (entre DG et chef_production)
+        $directeurUsine = Role::firstOrCreate(['name' => 'directeur_usine', 'guard_name' => 'web']);
+        $directeurUsine->syncPermissions([
+            // Production complète
+            'production.view', 'production.create', 'production.update', 'production.delete',
+            'production.launch', 'production.validate', 'production.cancel',
+            'production.modify_launched',
+            'production.cost.view', 'production.report.view',
+            // Qualité + maintenance
+            'quality.view', 'quality.manage', 'quality.nc.manage',
+            'maintenance.view', 'maintenance.manage',
+            // Stocks
+            'stocks.view', 'stocks.adjust', 'stocks.transfer', 'stocks.lot.trace',
+            'inventory.view', 'inventory.create', 'inventory.validate',
+            'receptions.view', 'receptions.create', 'receptions.validate',
+            // Achats — validation chef service (<500k)
+            'purchase_requests.view', 'purchase_requests.validate_l1',
+            'purchase_orders.view',
+            // Analytique
+            'analytic.view', 'analytic.manage',
+            // Référentiels
+            'products.view', 'suppliers.view', 'clients.view',
+            'orders.view', 'deliveries.view',
+            'reports.view', 'reports.export',
+        ]);
+
+        // Acheteur — approvisionnements complets (§15 CDC)
+        $acheteur = Role::firstOrCreate(['name' => 'acheteur', 'guard_name' => 'web']);
+        $acheteur->syncPermissions([
+            'products.view', 'suppliers.view', 'suppliers.create', 'suppliers.edit',
+            // Achats complets
+            'purchase_requests.view', 'purchase_requests.create', 'purchase_requests.submit',
+            'purchase_requests.validate_l1',
+            'purchase_orders.view', 'purchase_orders.create', 'purchase_orders.edit', 'purchase_orders.validate',
+            'receptions.view', 'receptions.create', 'receptions.validate',
+            'supplier_invoices.view', 'supplier_invoices.create', 'supplier_invoices.edit',
+            'supplier_returns.view', 'supplier_returns.create', 'supplier_returns.validate',
+            // Stocks lecture
+            'stocks.view', 'inventory.view',
+            // Qualité réception
+            'quality.view',
+            // RFQ (consultations fournisseurs)
+            'reports.view',
+        ]);
+
+        // Responsable Qualité — contrôles, non-conformités, certifications (§10 CDC)
+        $responsableQualite = Role::firstOrCreate(['name' => 'responsable_qualite', 'guard_name' => 'web']);
+        $responsableQualite->syncPermissions([
+            // Qualité complète
+            'quality.view', 'quality.manage', 'quality.nc.manage',
+            // Production lecture (contrôles en cours de production)
+            'production.view', 'production.report.view',
+            // Stocks lecture (contrôle réception matière + PF)
+            'stocks.view', 'stocks.lot.trace',
+            'inventory.view',
+            'receptions.view',
+            // Rebuts — validation qualité (§13.9 CDC)
+            'production.declare',  // déclarer rebut + valider NC
+            // Référentiels
+            'products.view', 'suppliers.view',
+            'reports.view', 'reports.export',
+        ]);
+
+        // Technicien Maintenance — ordres de travail, interventions (§13.8 CDC)
+        $technicienMaintenance = Role::firstOrCreate(['name' => 'technicien_maintenance', 'guard_name' => 'web']);
+        $technicienMaintenance->syncPermissions([
+            'maintenance.view', 'maintenance.manage',
+            'production.view',  // voir machines et OF pour planifier interventions
+            'stocks.view',      // pièces de rechange
+            'products.view',
+            'reports.view',
+        ]);
+
+        // Opérateur de production — déclaration production, temps, rebuts (§15 CDC)
+        $operateurProduction = Role::firstOrCreate(['name' => 'operateur_production', 'guard_name' => 'web']);
+        $operateurProduction->syncPermissions([
+            'production.view',    // consulter les OF assignés
+            'production.declare', // déclarer production, temps, consommation, rebuts
+            'stocks.view',        // consulter niveaux stock pour approvisionnement poste
+        ]);
+
+        $this->command->info('Roles & Permissions créés avec succès (12 rôles, conformes §15 CDC).');
     }
 }

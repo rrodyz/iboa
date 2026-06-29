@@ -518,6 +518,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('mouvements', [\App\Http\Controllers\Stock\StockController::class, 'movements'])->name('movements');
             Route::get('mouvements-pdf', [\App\Http\Controllers\Stock\StockController::class, 'movementsPdf'])->name('movements-pdf');
             Route::get('lots', [\App\Http\Controllers\Stock\StockController::class, 'lots'])->name('lots');
+            // §8 CDC — Traçabilité inverse : lot → OF → clients impactés
+            Route::get('lots/{lot}/traceabilite', [\App\Http\Controllers\Stock\StockController::class, 'lotTraceability'])->name('lots.traceability');
             Route::get('valorisation', [\App\Http\Controllers\Stock\StockController::class, 'valuation'])->name('valuation');
             Route::get('produit/{product}', [\App\Http\Controllers\Stock\StockController::class, 'show'])->name('show');
         });
@@ -1318,6 +1320,10 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::post('orders/{order}/partial', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'partial'])->name('orders.partial');
     Route::post('orders/{order}/finish', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'finish'])->name('orders.finish');
     Route::post('orders/{order}/cancel', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'cancel'])->name('orders.cancel');
+    // §13.2 CDC — Validation financière DAF/DG avant lancement OF
+    Route::post('orders/{order}/authorize-finance', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'authorizeFinance'])->name('orders.authorize-finance');
+    // §13.10 CDC — Demande de modification OF lancé (multi-validation)
+    Route::post('orders/{order}/request-modification', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'requestModification'])->name('orders.request-modification');
 
     // Exécution : consommation matière, sorties PF, chutes
     Route::post('orders/{order}/consume', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'consume'])->name('orders.consume');
@@ -1354,9 +1360,17 @@ Route::middleware(['auth', 'verified', 'permission:reports.view'])
     ->get('direction', [\App\Http\Controllers\DirectionDashboardController::class, 'index'])->name('direction.dashboard');
 
 // ═══ Qualité — contrôles & non-conformités (CAPA) ═══
-Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('qualite')->name('qualite.')->group(function () {
+Route::middleware(['auth', 'verified', 'permission:quality.view'])->prefix('qualite')->name('qualite.')->group(function () {
     Route::resource('inspections', \App\Modules\Quality\Controllers\QualityInspectionController::class)->except('show');
     Route::resource('non-conformities', \App\Modules\Quality\Controllers\NonConformityController::class)->except('show')->parameters(['non-conformities' => 'nonConformity']);
+});
+
+// ═══ Comptabilité analytique — Centres de coûts/profit (§12 CDC) ═══
+Route::middleware(['auth', 'verified', 'permission:analytic.view'])->prefix('analytique')->name('analytique.')->group(function () {
+    Route::resource('centres-couts', \App\Http\Controllers\Accounting\CostCenterController::class)->except('show')->parameters(['centres-couts' => 'costCenter']);
+    Route::get('rapport', [\App\Http\Controllers\Accounting\CostCenterController::class, 'report'])->name('rapport');
+    Route::get('centres-couts/{costCenter}', [\App\Http\Controllers\Accounting\CostCenterController::class, 'show'])->name('centres-couts.show');
+    Route::post('lignes', [\App\Http\Controllers\Accounting\CostCenterController::class, 'storeLine'])->name('lignes.store');
 });
 
 require __DIR__.'/auth.php';
