@@ -83,6 +83,86 @@
         </div>
     </div>
 
+    {{-- TRS — Taux de Rendement Synthétique (§16 CDC) --}}
+    @php
+        $trsColor = ($trs['trs'] ?? 0) >= 85 ? 'green' : (($trs['trs'] ?? 0) >= 65 ? 'amber' : 'red');
+        $dispColor = ($trs['disponibilite'] ?? 0) >= 90 ? 'green' : (($trs['disponibilite'] ?? 0) >= 75 ? 'amber' : 'red');
+        $perfColor = ($trs['performance'] ?? 0) >= 90 ? 'green' : (($trs['performance'] ?? 0) >= 75 ? 'amber' : 'red');
+        $qualColor = ($trs['qualite'] ?? 0) >= 98 ? 'green' : (($trs['qualite'] ?? 0) >= 95 ? 'amber' : 'red');
+    @endphp
+    <div class="bg-white border border-gray-100 shadow-sm rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h2 class="font-semibold text-gray-900">TRS — Taux de Rendement Synthétique</h2>
+                <p class="text-xs text-gray-400 mt-0.5">Disponibilité × Performance × Qualité (référence industrie : ≥ 85 %)</p>
+            </div>
+            <div class="text-center">
+                <div class="text-4xl font-black text-{{ $trsColor }}-600">{{ $trs['trs'] ?? '—' }}<span class="text-lg font-normal ml-0.5">%</span></div>
+                <div class="text-xs font-medium text-{{ $trsColor }}-500 mt-0.5">
+                    @if(($trs['trs'] ?? 0) >= 85) Excellent @elseif(($trs['trs'] ?? 0) >= 65) À améliorer @else Critique @endif
+                </div>
+            </div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+            @foreach([
+                ['Disponibilité', $trs['disponibilite'] ?? 0, $dispColor, 'Arrêts : '.$trs['downtime_h'].' h / '.$trs['theoretical_h'].' h théoriques'],
+                ['Performance',   $trs['performance'] ?? 0,   $perfColor,  'Mètres réels vs planifiés'],
+                ['Qualité',       $trs['qualite'] ?? 0,       $qualColor,  'Produits bons / produits totaux'],
+            ] as [$label, $val, $color, $hint])
+            <div class="bg-{{ $color }}-50 rounded-xl p-4 text-center border border-{{ $color }}-100">
+                <div class="text-xs text-{{ $color }}-600 font-medium uppercase tracking-wider mb-1">{{ $label }}</div>
+                <div class="text-2xl font-bold text-{{ $color }}-700">{{ number_format($val, 1) }} %</div>
+                {{-- progress bar --}}
+                <div class="mt-2 h-1.5 bg-{{ $color }}-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-{{ $color }}-500 rounded-full" style="width:{{ min(100, $val) }}%"></div>
+                </div>
+                <div class="text-xs text-gray-400 mt-1.5">{{ $hint }}</div>
+            </div>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- Coût standard vs réel (§11 CDC) --}}
+    @if($coutComparaison->isNotEmpty())
+    <div class="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+                <h2 class="font-semibold text-gray-900">Coût standard vs Coût réel</h2>
+                <p class="text-xs text-gray-400 mt-0.5">§11 CDC — coût de revient par mètre linéaire</p>
+            </div>
+        </div>
+        <div class="tbl-scroll">
+            <table class="tbl w-full">
+                <thead>
+                    <tr>
+                        <th class="text-left">Produit</th>
+                        <th class="text-right">Coût réel / m</th>
+                        <th class="text-right">Coût std / m</th>
+                        <th class="text-right">Écart</th>
+                        <th class="text-right">Écart %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($coutComparaison as $row)
+                    @php $ecartColor = ($row['ecart'] ?? 0) > 0 ? 'red' : 'green'; @endphp
+                    <tr>
+                        <td class="font-medium text-gray-900 max-w-[200px] truncate">{{ $row['product'] }}</td>
+                        <td class="text-right tabular-nums text-gray-700">{{ number_format($row['cout_reel'], 0, ',', ' ') }}</td>
+                        <td class="text-right tabular-nums text-gray-500">{{ $row['cout_std'] > 0 ? number_format($row['cout_std'], 0, ',', ' ') : '—' }}</td>
+                        <td class="text-right tabular-nums font-medium text-{{ $ecartColor }}-600">
+                            {{ ($row['ecart'] > 0 ? '+' : '') . number_format($row['ecart'], 0, ',', ' ') }}
+                        </td>
+                        <td class="text-right tabular-nums text-{{ $ecartColor }}-600 text-xs">
+                            {{ $row['ecart_pct'] !== null ? ($row['ecart_pct'] > 0 ? '+' : '') . number_format($row['ecart_pct'], 1) . ' %' : '—' }}
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
+
     {{-- [§10] Stock disponible par dépôt --}}
     <div class="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-100"><h2 class="font-semibold text-gray-900">Stock disponible par dépôt</h2></div>

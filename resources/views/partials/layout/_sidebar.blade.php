@@ -348,6 +348,7 @@ request()->routeIs('achats.*')                                                  
                             [route('production.cutting'),        'Optimisation découpe', 'production.cutting'],
                             [route('qualite.inspections.index'), 'Contrôles qualité', 'qualite.inspections*'],
                             [route('qualite.non-conformities.index'), 'Non-conformités', 'qualite.non-conformities*'],
+                            auth()->user()->can('quality.view') ? [route('qualite.certificats.index'), 'Certificats qualité', 'qualite.certificats*'] : null,
                             [route('production.mrp'),            'Réappro (MRP)',     'production.mrp'],
                             auth()->user()->can('production.cost.view') ? [route('production.treasury'), 'Prévision trésorerie', 'production.treasury'] : null,
                             auth()->user()->can('production.report.view') ? [route('production.reports'), 'Rapports', 'production.reports'] : null,

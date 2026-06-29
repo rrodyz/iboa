@@ -431,6 +431,7 @@ class DocumentSequenceService
             'contentieux'         => ['prefix' => 'CTX-', 'padding' => 4],
             'demande_paiement'    => ['prefix' => 'DP-',  'padding' => 3],
             'ordre_fabrication'   => ['prefix' => 'OF-',  'padding' => 4],
+            'certificat_qualite'  => ['prefix' => 'CQ-',  'padding' => 4],
         ];
 
         $specific = $configs[$type] ?? ['prefix' => strtoupper(substr($type, 0, 3)) . '-', 'padding' => 3];

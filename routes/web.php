@@ -1359,10 +1359,14 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
 Route::middleware(['auth', 'verified', 'permission:reports.view'])
     ->get('direction', [\App\Http\Controllers\DirectionDashboardController::class, 'index'])->name('direction.dashboard');
 
-// ═══ Qualité — contrôles & non-conformités (CAPA) ═══
+// ═══ Qualité — contrôles, non-conformités & certificats (§10 CDC) ═══
 Route::middleware(['auth', 'verified', 'permission:quality.view'])->prefix('qualite')->name('qualite.')->group(function () {
     Route::resource('inspections', \App\Modules\Quality\Controllers\QualityInspectionController::class)->except('show');
     Route::resource('non-conformities', \App\Modules\Quality\Controllers\NonConformityController::class)->except('show')->parameters(['non-conformities' => 'nonConformity']);
+    // Certificats qualité (§8 Traçabilité + §10 Qualité)
+    Route::resource('certificats', \App\Http\Controllers\Quality\QualityCertificateController::class)->parameters(['certificats' => 'certificat']);
+    Route::post('certificats/{certificat}/approve', [\App\Http\Controllers\Quality\QualityCertificateController::class, 'approve'])->name('certificats.approve')->middleware('permission:quality.manage');
+    Route::get('certificats/{certificat}/pdf', [\App\Http\Controllers\Quality\QualityCertificateController::class, 'pdf'])->name('certificats.pdf');
 });
 
 // ═══ Comptabilité analytique — Centres de coûts/profit (§12 CDC) ═══
