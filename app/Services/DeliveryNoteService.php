@@ -59,16 +59,42 @@ class DeliveryNoteService
 
             $totalQty = 0;
             foreach ($order->items as $i => $item) {
+                // [FIX rapport MTO #4] Quantité proposée = reliquat non livré,
+                // plafonné au stock réellement disponible pour cette commande au
+                // dépôt du BL (dispo général + réservations propres de la commande).
+                // Évite de proposer 50 quand 40 seulement sont en stock (survente
+                // si l'utilisateur valide sans corriger). La ligne reste éditable.
+                $remaining = max(0, (float) $item->quantity - (float) $item->delivered_quantity);
+                $qty       = $remaining;
+
+                if ($item->product_id && $dn->warehouse_id) {
+                    $stock = ProductStock::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $dn->warehouse_id)->first();
+                    if ($stock) {
+                        $ownReserved = (float) StockReservation::where('order_id', $order->id)
+                            ->where('product_id', $item->product_id)
+                            ->where('warehouse_id', $dn->warehouse_id)
+                            ->where('status', 'reserved')->sum('quantity');
+                        $available = max(0, (float) $stock->quantity - (float) $stock->reserved_quantity) + $ownReserved;
+                        if ($available > 0 && $available < $remaining) {
+                            $qty = round($available, 4);
+                        }
+                    }
+                }
+
                 $dn->items()->create([
                     'order_item_id' => $item->id,
                     'product_id'    => $item->product_id,
                     'description'   => $item->description,
                     'unit_id'       => $item->unit_id,
-                    'quantity'      => $item->quantity,
+                    'quantity'      => $qty,
+                    // [§5 TÔLE BAC] nb tôles / longueur unitaire hérités de la commande
+                    'nb_toles'         => $item->nb_toles,
+                    'metrage_par_tole' => $item->metrage_par_tole,
                     'unit_price'    => $item->unit_price,
                     'sort_order'    => $i,
                 ]);
-                $totalQty += (float) $item->quantity;
+                $totalQty += $qty;
             }
 
             $dn->update(['total_quantity' => $totalQty]);
@@ -178,16 +204,41 @@ class DeliveryNoteService
                 ->where('warehouse_id', $warehouseId)
                 ->value('avg_cost') ?? 0;
 
+            // [DÉCISION 23/07 — BL par lot] Ligne rattachée à un lot formel :
+            // le lot est décrémenté avec la sortie (traçabilité lot → client).
+            if ($item->stock_lot_id) {
+                $lot = \App\Models\StockLot::lockForUpdate()->find($item->stock_lot_id);
+                if (! $lot || (int) $lot->product_id !== (int) $item->product_id) {
+                    throw new \RuntimeException(sprintf(
+                        'Ligne %s : le lot sélectionné n\'existe pas ou ne correspond pas à l\'article.',
+                        $item->product?->name ?? '#' . $item->product_id
+                    ));
+                }
+                if ((float) $lot->quantity < $deliveredQty) {
+                    throw new \RuntimeException(sprintf(
+                        'Lot %s : quantité insuffisante (%s disponible, %s à livrer).',
+                        $lot->lot_number, $lot->quantity, $deliveredQty
+                    ));
+                }
+                $lot->decrement('quantity', $deliveredQty);
+                // lot_number affiché sur le BL/PDF aligné sur le lot formel
+                if ($item->lot_number !== $lot->lot_number) {
+                    $item->updateQuietly(['lot_number' => $lot->lot_number]);
+                }
+            }
+
             $this->stockService->recordMovement([
-                'product_id'     => $item->product_id,
-                'warehouse_id'   => $warehouseId,
-                'type'           => 'sortie',
-                'quantity'       => $deliveredQty,
-                'unit_cost'      => (float) $avgCost,
-                'occurred_at'    => now(),
-                'reference_type' => 'delivery_note',
-                'reference_id'   => $dn->id,
-                'notes'          => 'BL ' . $dn->number,
+                'product_id'      => $item->product_id,
+                'warehouse_id'    => $warehouseId,
+                'type'            => 'sortie',
+                'quantity'        => $deliveredQty,
+                'unit_cost'       => (float) $avgCost,
+                'occurred_at'     => now(),
+                'reference_type'  => 'delivery_note',
+                'reference_id'    => $dn->id,
+                // [CDC sync stock] Rejouer la validation du BL ne double pas la sortie
+                'idempotency_key' => 'delivery-note:' . $dn->id . ':' . $item->id,
+                'notes'           => 'BL ' . $dn->number . ($item->stock_lot_id ? ' — lot ' . $item->lot_number : ''),
             ]);
 
             // Update delivered_quantity on the linked order item
@@ -230,6 +281,24 @@ class DeliveryNoteService
                 if ($remaining <= 0) {
                     break;
                 }
+
+                // [FIX désynchro dépôt] release() décrémente reserved_quantity AU dépôt
+                // stocké sur la réservation. Si ce dépôt diverge du dépôt réellement livré
+                // (ex. stock PF déplacé par une fusion/transfert de dépôts sans repointer
+                // la réservation), release() décrémenterait le mauvais dépôt et laisserait
+                // le réservé du dépôt livré intact → sa propre livraison se bloquerait sur
+                // « 0 disponible ». On réaligne la réservation sur le dépôt livré quand
+                // c'est bien lui qui détient le stock réservé.
+                if ((int) $r->warehouse_id !== $warehouseId) {
+                    $hasReservedHere = ProductStock::where('product_id', $productId)
+                        ->where('warehouse_id', $warehouseId)
+                        ->where('reserved_quantity', '>', 0)
+                        ->exists();
+                    if ($hasReservedHere) {
+                        $r->update(['warehouse_id' => $warehouseId]);
+                    }
+                }
+
                 $reservationService->release($r);   // ferme la ligne + décrémente reserved_quantity
                 $remaining -= (float) $r->quantity;
             }
@@ -343,16 +412,24 @@ class DeliveryNoteService
 
                 $reversedQty = abs((float) $item->quantity);
 
+                // [DÉCISION 23/07 — BL par lot] Le lot formellement livré est réintégré
+                if ($item->stock_lot_id) {
+                    \App\Models\StockLot::lockForUpdate()->find($item->stock_lot_id)
+                        ?->increment('quantity', $reversedQty);
+                }
+
                 $this->stockService->recordMovement([
-                    'product_id'     => $item->product_id,
-                    'warehouse_id'   => $warehouseId,
-                    'type'           => 'entree',
-                    'quantity'       => $reversedQty,
-                    'unit_cost'      => (float) $avgCost,
-                    'occurred_at'    => now(),
-                    'reference_type' => 'delivery_note',
-                    'reference_id'   => $dn->id,
-                    'notes'          => 'Annulation BL ' . $dn->number,
+                    'product_id'      => $item->product_id,
+                    'warehouse_id'    => $warehouseId,
+                    'type'            => 'entree',
+                    'quantity'        => $reversedQty,
+                    'unit_cost'       => (float) $avgCost,
+                    'occurred_at'     => now(),
+                    'reference_type'  => 'delivery_note',
+                    'reference_id'    => $dn->id,
+                    // [CDC sync stock] Une seule contre-passation par ligne annulée
+                    'idempotency_key' => 'delivery-note-reversal:' . $dn->id . ':' . $item->id,
+                    'notes'           => 'Annulation BL ' . $dn->number,
                 ]);
 
                 // [FIX-VENTES-07] Re-establish the reservation only when the parent order

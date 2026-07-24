@@ -76,6 +76,24 @@
             <div x-show="open" @click.away="open=false"
                  class="absolute right-0 mt-1 w-64 bg-white border border-gray-300 rounded-[4px] shadow-xl z-20 py-1">
 
+                {{-- [PAI-07] Virements — suivi ligne par ligne --}}
+                <a href="{{ route('rh.paie.virements.index', $run) }}"
+                   class="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-emerald-50 font-medium">
+                    <span class="text-emerald-600">💳</span> Virements &amp; paiements
+                </a>
+                {{-- [PAI-08] Déclarations — figeage CNSS/IUTS --}}
+                @can('rh.payroll.manage')
+                <form method="POST" action="{{ route('rh.paie.declarations.generate', $run) }}">@csrf
+                    <button type="submit" class="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-blue-50 font-medium text-left">
+                        <span class="text-blue-600">🗂️</span> Figer les déclarations CNSS/IUTS
+                    </button>
+                </form>
+                @endcan
+                <a href="{{ route('rh.paie.declarations.index') }}"
+                   class="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-blue-50">
+                    <span class="text-blue-500">📚</span> Archive des déclarations
+                </a>
+
                 {{-- Titre section Salaires --}}
                 <div class="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Salaires</div>
                 <a href="{{ route('rh.paie.recap-pdf', $run) }}" target="_blank"
@@ -530,7 +548,7 @@
             <td class="px-3 py-2">
                 <div class="font-medium text-gray-900">{{ $item->employee_name }}</div>
                 <div class="text-gray-400">{{ $item->department_name }} · {{ $item->job_title }}</div>
-                <div class="text-gray-300">{{ $item->worked_days }}/{{ $item->total_days }} j · {{ $item->nb_parts }} part(s)</div>
+                <div class="text-gray-300">{{ $item->worked_days }}/{{ $item->total_days }} j · {{ $item->family_charges !== null ? $item->family_charges . ' charge(s)' : $item->nb_parts . ' part(s)' }}</div>
             </td>
             <td class="px-3 py-2 text-right font-mono">{{ number_format($item->base_salary, 0, ',', ' ') }}</td>
             <td class="px-3 py-2 text-right font-mono text-blue-600">

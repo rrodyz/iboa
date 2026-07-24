@@ -141,6 +141,8 @@ class InvoiceService
                     'description'      => $item->description,
                     'unit_id'          => $item->unit_id,
                     'quantity'         => $item->quantity,
+                    'nb_toles'         => $item->nb_toles,
+                    'metrage_par_tole' => $item->metrage_par_tole,
                     'unit_price'       => $item->unit_price,
                     'discount_percent' => $item->discount_percent,
                     'tax_rate_id'      => $item->tax_rate_id,
@@ -245,6 +247,9 @@ class InvoiceService
                     'description'      => $item->description,
                     'unit_id'          => $item->unit_id,
                     'quantity'         => $qty,
+                    // [§5 TÔLE BAC] hérite nb tôles / longueur de la ligne commande source
+                    'nb_toles'         => $orderItem?->nb_toles ?? $item->nb_toles,
+                    'metrage_par_tole' => $orderItem?->metrage_par_tole ?? $item->metrage_par_tole,
                     'unit_price'       => (int) $price,
                     'discount_percent' => $disc,
                     'tax_rate_id'      => $orderItem?->tax_rate_id ?? null,
@@ -314,6 +319,11 @@ class InvoiceService
     public function update(Invoice $invoice, array $data): Invoice
     {
         return DB::transaction(function () use ($invoice, $data) {
+            // [FISCAL] Un document fiscalement transmis (accepté) est IMMUABLE.
+            if (\App\Models\FiscalTransmission::isDocumentLocked($invoice)) {
+                throw new \RuntimeException("La facture {$invoice->number} a été transmise à l'administration fiscale — toute modification est interdite. Émettez un avoir.");
+            }
+
             // [CONCURRENCE] Verrou optimiste : détecte les modifications concurrentes
             $this->assertVersion($invoice, $data['_lock_version'] ?? null);
             unset($data['_lock_version'], $data['_idempotency_key']);
@@ -390,6 +400,9 @@ class InvoiceService
             $fresh = $invoice->fresh(['client', 'company']);
             $this->applyValidationSideEffects($fresh);
 
+            // [SEC-PHASE2 §8] Journal (succès = après commit)
+            DB::afterCommit(fn () => app(AuditService::class)->log('facture.validation', $fresh, [], ['montant' => $fresh->total_ttc]));
+
             return $fresh;
         });
     }
@@ -458,7 +471,20 @@ class InvoiceService
             if (! $product) {
                 continue;
             }
-            $cost = (float) ($product->weighted_avg_cost ?: 0);
+            // [FIX VALORISATION] Le coût des ventes se fige au CMP RÉEL du stock
+            // (product_stocks.avg_cost, moyenne pondérée par les quantités) — la
+            // colonne products.weighted_avg_cost n'est maintenue nulle part (0)
+            // et le repli direct sur le prix d'achat CATALOGUE faussait la marge
+            // comptable dès que le catalogue divergeait du CMP (constaté :
+            // sortie valorisée 593 136 au lieu de 48 000 au CMP).
+            // Même cascade que StockInsightsService (valorisation des stocks).
+            $cost = (float) (\App\Models\ProductStock::where('product_id', $product->id)
+                ->where('quantity', '>', 0)
+                ->selectRaw('SUM(quantity * COALESCE(avg_cost, 0)) / NULLIF(SUM(quantity), 0) AS cmp')
+                ->value('cmp') ?? 0);
+            if ($cost <= 0) {
+                $cost = (float) ($product->weighted_avg_cost ?: 0);
+            }
             if ($cost <= 0) {
                 $cost = (float) ($product->purchase_price ?? 0);
             }
@@ -620,6 +646,9 @@ class InvoiceService
                 'notes'            => $newNotes,
             ]);
 
+            // [SEC-PHASE2] Journal d'audit : annulation de facture tracée
+            app(AuditService::class)->log('facture.annulation', $invoice, [], ['motif' => $reason, 'montant' => $invoice->total_ttc]);
+
             // [FIX-VENTES-03] Decrement invoiced_quantity on each linked order item so
             // the order can be re-invoiced after this cancellation.
             if ($invoice->order_id) {
@@ -660,8 +689,12 @@ class InvoiceService
 
     public function delete(Invoice $invoice): bool
     {
-        if (!in_array($invoice->status, ['brouillon', 'annulee'])) {
-            throw new \RuntimeException('Seules les factures en brouillon ou annulées peuvent être supprimées.');
+        // [POST-VALID-01] Une facture annulée a un numéro définitif et des écritures
+        // (origine + extourne) : sa suppression casserait la séquence de numérotation
+        // et laisserait des écritures référençant un document disparu. Elle reste
+        // consultable ; seul le brouillon (jamais numéroté ni comptabilisé) se supprime.
+        if ($invoice->status !== 'brouillon') {
+            throw new \RuntimeException('Seules les factures en brouillon peuvent être supprimées. Une facture émise s\'annule (elle reste consultable), elle ne se supprime pas.');
         }
 
         return DB::transaction(function () use ($invoice) {

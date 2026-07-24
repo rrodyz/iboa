@@ -41,6 +41,7 @@
         'production' => 'Production',
         'qualite'    => 'Qualité',
         'compta'     => 'Compta',
+        'sites'      => 'Sites',
         'documents'  => 'Documents',
     ];
 @endphp
@@ -62,7 +63,7 @@
         </div>
         <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-                <h1 class="text-[16px] font-bold text-gray-900 truncate">{{ $product->name }}</h1>
+                <h1 class="text-[22px] font-bold text-gray-900 leading-tight truncate">{{ $product->name }}</h1>
                 @if($product->is_active)
                     <span class="bg-green-50 text-green-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">Actif</span>
                 @else
@@ -229,6 +230,7 @@
             <div class="p-4 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
                 {!! $row('Prix de vente HT', $f($product->sale_price).' FCFA') !!}
                 {!! $row('Prix de vente mini', $product->min_sale_price ? $f($product->min_sale_price).' FCFA' : null) !!}
+                {!! $row('Prix de vente maxi (indicatif)', $product->max_sale_price ? $f($product->max_sale_price).' FCFA' : null) !!}
                 {!! $row('Taux de marge cible', $product->margin_rate_target ? $product->margin_rate_target.' %' : null) !!}
                 {!! $row('TVA', $product->taxRate ? $product->taxRate->rate.' %' : null) !!}
                 {!! $row('Vendable', $oui($product->is_sellable)) !!}
@@ -242,6 +244,7 @@
                     <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
                         <th class="px-4 py-1.5 text-left">Libellé</th>
                         <th class="px-4 py-1.5 text-left">Catégorie</th>
+                        <th class="px-4 py-1.5 text-left">Agence</th>
                         <th class="px-4 py-1.5 text-right">Qté min.</th>
                         <th class="px-4 py-1.5 text-right">Prix</th>
                         <th class="px-4 py-1.5 text-right">Remise</th>
@@ -251,6 +254,7 @@
                         <tr>
                             <td class="px-4 py-1.5 text-gray-900">{{ $tier->label ?: 'Tarif #'.$tier->id }}</td>
                             <td class="px-4 py-1.5 text-gray-500 capitalize">{{ $tier->client_category ?: '—' }}</td>
+                            <td class="px-4 py-1.5 text-gray-500">{{ $tier->site?->code ?? 'Tous' }}</td>
                             <td class="px-4 py-1.5 text-right tabular-nums">{{ $tier->min_quantity ?? 1 }}</td>
                             <td class="px-4 py-1.5 text-right font-semibold text-blue-700 tabular-nums">{{ number_format($tier->price, 0, ',', ' ') }} FCFA</td>
                             <td class="px-4 py-1.5 text-right text-green-600 tabular-nums">{{ $tier->discount_percent ? '-'.$tier->discount_percent.'%' : '—' }}</td>
@@ -284,6 +288,74 @@
             @else
                 <div class="px-4 py-4 text-center text-gray-400 text-[12.5px]">Aucune promotion</div>
             @endif
+        </div>
+
+        {{-- [X3 §10] Attributs dynamiques de la catégorie (affichés dans Général si présents) --}}
+        @php $attrVals = $product->attributeValues()->with('attribute')->get(); @endphp
+        @if($attrVals->isNotEmpty())
+        <div x-show="tab === 'general'" class="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 border-t border-gray-100 pt-3">
+            @foreach($attrVals as $av)
+            <div><dt class="text-[10.5px] font-bold text-gray-500 uppercase">{{ $av->attribute?->label }}</dt>
+                 <dd class="text-[13px] text-gray-900">{{ $av->value }}</dd></div>
+            @endforeach
+        </div>
+        @endif
+
+        {{-- ── [X3 §10] Article-sites : paramètres par site (priorité maximale) ── --}}
+        <div x-show="tab === 'sites'" x-cloak>
+            <div class="p-4">
+                <p class="text-[11.5px] text-gray-400 mb-3">Résolution : article-site &gt; catégorie-site &gt; catégorie globale &gt; article.</p>
+                <table class="min-w-full text-[12.5px] mb-4">
+                    <thead><tr class="text-left text-[10.5px] font-bold text-gray-500 uppercase">
+                        <th class="py-1 pr-3">Site</th><th class="py-1 pr-3">Dépôt MP</th><th class="py-1 pr-3">Dépôt PF</th>
+                        <th class="py-1 pr-3">Ligne</th><th class="py-1 pr-3">Délai (j)</th>
+                        <th class="py-1 pr-3">Min</th><th class="py-1 pr-3">Max</th><th class="py-1 pr-3">Sécurité</th><th class="py-1"></th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @forelse($product->productSites()->with(['site'])->get() as $ps)
+                        <tr>
+                            <td class="py-1 pr-3 font-semibold">{{ $ps->site?->code }}</td>
+                            <td class="py-1 pr-3">{{ \App\Models\Warehouse::find($ps->mp_warehouse_id)?->code ?? '—' }}</td>
+                            <td class="py-1 pr-3">{{ \App\Models\Warehouse::find($ps->pf_warehouse_id)?->code ?? '—' }}</td>
+                            <td class="py-1 pr-3">{{ \App\Modules\Production\Models\ProductionLine::find($ps->production_line_id)?->name ?? '—' }}</td>
+                            <td class="py-1 pr-3 tabular-nums">{{ $ps->lead_time_days ?? '—' }}</td>
+                            <td class="py-1 pr-3 tabular-nums">{{ $ps->stock_min ?? '—' }}</td>
+                            <td class="py-1 pr-3 tabular-nums">{{ $ps->stock_max ?? '—' }}</td>
+                            <td class="py-1 pr-3 tabular-nums">{{ $ps->stock_securite ?? '—' }}</td>
+                            <td class="py-1 text-right">
+                                @can('products.edit')
+                                <form method="POST" action="{{ route('products.sites.destroy', [$product, $ps]) }}" onsubmit="return confirm('Supprimer cette déclinaison site ?')">
+                                    @csrf @method('DELETE')
+                                    <button class="text-red-600 hover:underline text-[12px]">Retirer</button>
+                                </form>
+                                @endcan
+                            </td>
+                        </tr>
+                        @empty
+                        <tr><td colspan="9" class="py-3 text-gray-400">Aucune déclinaison — les valeurs catégorie/article s'appliquent.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+
+                @can('products.edit')
+                <form method="POST" action="{{ route('products.sites.store', $product) }}" class="grid grid-cols-2 md:grid-cols-5 gap-2 items-end border-t border-gray-100 pt-3">
+                    @csrf
+                    <div><label class="block text-[10.5px] font-bold text-gray-500 mb-0.5">Site *</label>
+                        <select name="site_id" required class="w-full h-8 py-0 border border-gray-300 rounded-[3px] px-2 text-[12.5px]">
+                            @foreach(\App\Models\Warehouse::where('is_active', true)->orderBy('code')->get() as $w)
+                            <option value="{{ $w->id }}">{{ $w->code }}</option>
+                            @endforeach
+                        </select></div>
+                    <div><label class="block text-[10.5px] font-bold text-gray-500 mb-0.5">Délai (j)</label>
+                        <input type="number" name="lead_time_days" min="0" class="w-full h-8 border border-gray-300 rounded-[3px] px-2 text-[12.5px]"></div>
+                    <div><label class="block text-[10.5px] font-bold text-gray-500 mb-0.5">Stock min</label>
+                        <input type="number" step="0.01" name="stock_min" class="w-full h-8 border border-gray-300 rounded-[3px] px-2 text-[12.5px]"></div>
+                    <div><label class="block text-[10.5px] font-bold text-gray-500 mb-0.5">Stock max</label>
+                        <input type="number" step="0.01" name="stock_max" class="w-full h-8 border border-gray-300 rounded-[3px] px-2 text-[12.5px]"></div>
+                    <button class="h-8 text-[12.5px] font-semibold text-white bg-emerald-700 hover:bg-emerald-800 px-3 rounded-[3px]">Ajouter / Mettre à jour</button>
+                </form>
+                @endcan
+            </div>
         </div>
 
         {{-- ── Production ── --}}
@@ -349,6 +421,16 @@
         <div x-show="tab === 'documents'" x-cloak class="p-6 text-center text-gray-400 text-[12.5px]">
             Aucun document attaché.
         </div>
+    </div>
+
+    {{-- ── Barre de contexte X3 ─────────────────────────────────────────────── --}}
+    <div class="bg-[#232a30] text-gray-300 rounded-[4px] px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px]">
+        <span>Société : <span class="text-white font-semibold">{{ currentCompany()?->name }}</span></span>
+        <span class="border-l border-white/10 pl-6">Site : <span class="text-white font-semibold">01</span></span>
+        <span class="border-l border-white/10 pl-6">Article : <span class="text-white font-semibold font-mono">{{ $product->code_article ?? $product->reference }}</span></span>
+        <span class="border-l border-white/10 pl-6">Statut : <span class="text-white font-semibold">{{ $product->is_active ? 'Actif' : 'Inactif' }}</span></span>
+        <span class="ml-auto">Utilisateur : <span class="text-white font-semibold">{{ auth()->user()->name }}</span></span>
+        <span class="border-l border-white/10 pl-6 tabular-nums">{{ now()->format('d/m/Y H:i') }}</span>
     </div>
 
 </div>

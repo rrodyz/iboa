@@ -157,13 +157,13 @@
                         <svg class="w-4 h-4 transition-transform" :class="sections.entete ? '' : '-rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="sections.entete" class="p-4 grid grid-cols-1 sm:grid-cols-12 gap-x-4 gap-y-3">
-                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Site planification</label><input type="text" name="site_planification" maxlength="20" value="{{ old('site_planification', $o->site_planification) }}" class="{{ $inp }} font-mono uppercase" placeholder="OUTLB"></div>
-                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Site production</label><input type="text" name="site_production" maxlength="20" value="{{ old('site_production', $o->site_production) }}" class="{{ $inp }} font-mono uppercase" placeholder="OUTLB"></div>
+                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Site planification</label><input type="text" name="site_planification" maxlength="20" value="{{ old('site_planification', $o->site_planification) }}" class="{{ $inp }} font-mono uppercase" placeholder="01"></div>
+                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Site production</label><input type="text" name="site_production" maxlength="20" value="{{ old('site_production', $o->site_production) }}" class="{{ $inp }} font-mono uppercase" placeholder="01"></div>
                         <div class="sm:col-span-3"><label class="{{ $lbl }}">Numéro O.F.</label><input type="text" value="{{ $o->number ?: 'Auto à la création' }}" class="{{ $inp }} font-mono bg-gray-50 text-gray-500" readonly></div>
                         <div class="sm:col-span-2"><label class="{{ $lbl }}">Numéro optimisation</label><input type="text" name="numero_optimisation" maxlength="30" value="{{ old('numero_optimisation', $o->numero_optimisation) }}" class="{{ $inp }} font-mono"></div>
                         <div class="sm:col-span-3"><label class="{{ $lbl }}">Préparation fabrication</label><input type="text" name="prepa_fabrication" maxlength="60" value="{{ old('prepa_fabrication', $o->prepa_fabrication) }}" class="{{ $inp }}"></div>
 
-                        <div class="sm:col-span-5"><label class="{{ $lbl }}">Désignation 1</label><input type="text" name="designation" maxlength="200" value="{{ old('designation', $o->designation) }}" class="{{ $inp }} font-medium" placeholder="TÔLE BAC ALU PUR DE 70/100 AL6"></div>
+                        <div class="sm:col-span-5"><label class="{{ $lbl }}">Désignation 1</label><input type="text" name="designation" maxlength="200" value="{{ old('designation', $o->designation) }}" class="{{ $inp }} font-medium" placeholder="Désignation de l'article fabriqué"></div>
                         <div class="sm:col-span-3"><label class="{{ $lbl }}">Référence OF</label><input type="text" name="reference_of" maxlength="60" value="{{ old('reference_of', $o->reference_of) }}" class="{{ $inp }} font-mono"></div>
                         <div class="sm:col-span-2">
                             <label class="{{ $lbl }}">Mode lancement</label>
@@ -193,7 +193,7 @@
                             <div class="relative"><select name="order_id" class="{{ $lk }} font-mono"><option value="">—</option>@foreach($salesOrders as $so)<option value="{{ $so->id }}" @selected(old('order_id',$o->order_id)==$so->id)>{{ $so->number }}</option>@endforeach</select>{!! $caret !!}</div>
                         </div>
                         <div class="sm:col-span-3">
-                            <label class="{{ $lbl }}">Article à lancer (produit fini)</label>
+                            <label class="{{ $lbl }}">Article à lancer (produit fini) <span class="text-red-500">*</span></label>
                             <div class="relative"><select name="product_id" x-model="pid" @change="bomId = ''" class="{{ $lk }}"><option value="">—</option>@foreach($products as $p)<option value="{{ $p->id }}" @selected(old('product_id',$o->product_id)==$p->id)>{{ $p->name }}</option>@endforeach</select>{!! $caret !!}</div>
                         </div>
                         <div class="sm:col-span-3">
@@ -219,7 +219,7 @@
                                 @endforeach
                             </select>{!! $caret !!}</div>
                         </div>
-                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Atelier</label><input type="text" name="atelier" maxlength="60" value="{{ old('atelier', $o->atelier) }}" class="{{ $inp }}" placeholder="Atelier profilage"></div>
+                        <div class="sm:col-span-2"><label class="{{ $lbl }}">Atelier</label><input type="text" name="atelier" maxlength="60" value="{{ old('atelier', $o->atelier) }}" class="{{ $inp }}" placeholder="Atelier de production"></div>
                         <div class="sm:col-span-3">
                             <label class="{{ $lbl }}">Responsable atelier</label>
                             <div class="relative"><select name="responsable_atelier_id" class="{{ $lk }}"><option value="">—</option>@foreach($users as $u)<option value="{{ $u->id }}" @selected(old('responsable_atelier_id',$o->responsable_atelier_id)==$u->id)>{{ $u->name }}</option>@endforeach</select>{!! $caret !!}</div>
@@ -289,7 +289,7 @@
 
                 {{-- ═══════════ [X3] 3. ALLOCATION MATIÈRE (composants nomenclature) ═══════════ --}}
                 <section class="border border-gray-200 rounded-[4px]" x-show="bomId && comps.length" x-cloak>
-                    <button type="button" @click="sections.allocation = !sections.allocation" class="{{ $secH }} w-full flex items-center justify-between"><span>3. Allocation matière</span><svg class="w-4 h-4 transition-transform" :class="sections.allocation ? '' : '-rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
+                    <button type="button" @click="sections.allocation = !sections.allocation" class="{{ $secH }} w-full flex items-center justify-between"><span x-text="(2 + (launched.length?1:0)) + '. Allocation matière'">3. Allocation matière</span><svg class="w-4 h-4 transition-transform" :class="sections.allocation ? '' : '-rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg></button>
                     <div x-show="sections.allocation" class="p-4">
                         <table class="w-full text-[12.5px] border border-gray-200">
                             <thead><tr class="bg-[#3b4248] text-white text-[11px] font-semibold uppercase whitespace-nowrap">
@@ -322,7 +322,7 @@
                 </section>
 
                 <section class="border border-gray-200 rounded-[4px]">
-                    <div class="{{ $secH }}">Caractéristiques tôle</div>
+                    <div class="{{ $secH }}" x-text="(2 + (launched.length?1:0) + ((bomId && comps.length)?1:0)) + '. Caractéristiques tôle'">4. Caractéristiques tôle</div>
                     <div class="p-4 grid grid-cols-2 sm:grid-cols-6 gap-4">
                         <div><label class="{{ $lbl }}">Type de tôle</label><input type="text" name="sheet_type" maxlength="60" value="{{ old('sheet_type', $o->sheet_type) }}" class="{{ $inp }}"></div>
                         <div>
@@ -355,7 +355,7 @@
                         <div><label class="{{ $lbl }}">Tolérance longueur (mm)</label><input type="number" step="0.01" min="0" name="tolerance_longueur" value="{{ old('tolerance_longueur', $o->tolerance_longueur) }}" class="{{ $inpR }}"></div>
                         <div><label class="{{ $lbl }}">Tolérance épaisseur (mm)</label><input type="number" step="0.001" min="0" name="tolerance_epaisseur" value="{{ old('tolerance_epaisseur', $o->tolerance_epaisseur) }}" class="{{ $inpR }}"></div>
 
-                        <div><label class="{{ $lbl }}">Qté demandée</label><input type="number" step="0.01" min="0" name="quantity_requested" x-model="qty" class="{{ $inpR }}"></div>
+                        <div><label class="{{ $lbl }}">Qté demandée <span class="text-red-500">*</span></label><input type="number" step="0.01" min="0" name="quantity_requested" x-model="qty" class="{{ $inpR }}"></div>
                         <div><label class="{{ $lbl }}">Poids par mètre (kg/m)</label><input type="number" step="0.001" min="0" name="poids_par_metre" x-model="ppm" class="{{ $inpR }}"></div>
                         <div>
                             <label class="{{ $lbl }}">Poids théorique (kg)</label>
@@ -373,7 +373,7 @@
 
                 <section class="border border-gray-200 rounded-[4px]">
                     <button type="button" @click="sections.params = !sections.params" class="{{ $secH }} w-full flex items-center justify-between">
-                        <span>4. Paramètres de production</span>
+                        <span x-text="(3 + (launched.length?1:0) + ((bomId && comps.length)?1:0)) + '. Paramètres de production'">5. Paramètres de production</span>
                         <svg class="w-4 h-4 transition-transform" :class="sections.params ? '' : '-rotate-90'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="sections.params" class="p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -444,7 +444,7 @@
                 {{-- Détail des coupes (éditable) --}}
                 <section class="border border-gray-200 rounded-[4px]">
                     <div class="{{ $secH }} flex items-center justify-between">
-                        <span>Détail des coupes</span>
+                        <span x-text="(4 + (launched.length?1:0) + ((bomId && comps.length)?1:0)) + '. Détail des coupes'">6. Détail des coupes</span>
                         <button type="button" @click="lines.push({length:'',quantity:'',unit_id:'',label:''})" class="text-[12px] font-semibold text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-[3px]">+ Ajouter</button>
                     </div>
                     <div class="p-4">
@@ -884,7 +884,7 @@
     {{-- ── Barre de contexte pied de page [X3] ─────────────────────────────── --}}
     <div class="mt-3 bg-[#232a30] text-gray-300 rounded-[4px] px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px]">
         <span>Société : <span class="text-white font-semibold">{{ currentCompany()?->name }}</span></span>
-        <span class="border-l border-white/10 pl-6">Site : <span class="text-white font-semibold">OUTLB</span></span>
+        <span class="border-l border-white/10 pl-6">Site : <span class="text-white font-semibold">{{ $o->site_production ?: '01' }}</span></span>
         <span class="border-l border-white/10 pl-6">Document : <span class="text-white font-semibold">{{ $isEdit ? $o->number : 'OF (brouillon)' }}</span></span>
         <span class="ml-auto">Utilisateur : <span class="text-white font-semibold">{{ auth()->user()->name }}</span></span>
         <span class="border-l border-white/10 pl-6 tabular-nums">{{ now()->format('d/m/Y H:i') }}</span>

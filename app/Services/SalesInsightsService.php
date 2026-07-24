@@ -270,4 +270,214 @@ class SalesInsightsService
         }
         return $result;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // [VENTES X3] Widgets tableau de bord Sage X3 : répartition, statuts, échéances,
+    // activités, alertes, marge. Toutes scopées société, défensives (0 si vide).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** CA HT par famille d'articles (12 mois), trié décroissant. */
+    public function caByFamily(int $months = 12): Collection
+    {
+        return DB::table('invoice_items as ii')
+            ->join('invoices as i', 'i.id', '=', 'ii.invoice_id')
+            ->leftJoin('products as p', 'p.id', '=', 'ii.product_id')
+            ->leftJoin('product_families as f', 'f.id', '=', 'p.family_id')
+            ->where('i.company_id', currentCompany()->id)
+            ->whereNotIn('i.status', ['brouillon', 'annulee'])
+            ->where('i.issued_at', '>=', Carbon::now()->subMonths($months)->startOfMonth())
+            ->selectRaw('COALESCE(f.name, "Autres") as famille, SUM(ii.line_total_ht) as ca')
+            ->groupBy('famille')->orderByDesc('ca')->get();
+    }
+
+    /** Commandes par statut (label + count) — pour le donut. */
+    public function ordersByStatus(): Collection
+    {
+        $labels = [
+            'brouillon' => 'Brouillon', 'soumis' => 'À confirmer', 'confirme' => 'Confirmées',
+            'en_preparation' => 'En préparation', 'partiellement_livre' => 'Partiellement livrées',
+            'livre' => 'Livrées', 'facture' => 'Facturées', 'annule' => 'Annulées',
+        ];
+        $rows = DB::table('orders')->where('company_id', currentCompany()->id)
+            ->selectRaw('status, COUNT(*) as c')->groupBy('status')->pluck('c', 'status');
+        $out = collect();
+        foreach ($labels as $k => $lab) {
+            if (($rows[$k] ?? 0) > 0) $out->push(['label' => $lab, 'count' => (int) $rows[$k]]);
+        }
+        return $out;
+    }
+
+    /** Commandes à livrer réparties par échéance. */
+    public function deliveriesByBucket(): array
+    {
+        $orders = DB::table('orders')->where('company_id', currentCompany()->id)
+            ->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre'])
+            ->pluck('delivery_date');
+        $b = ['en_retard' => 0, 'aujourd_hui' => 0, 'cette_semaine' => 0, 'semaine_prochaine' => 0, 'plus_tard' => 0];
+        $today = Carbon::today();
+        foreach ($orders as $dd) {
+            if (! $dd) { $b['plus_tard']++; continue; }
+            $d = Carbon::parse($dd);
+            if ($d->lt($today)) $b['en_retard']++;
+            elseif ($d->isSameDay($today)) $b['aujourd_hui']++;
+            elseif ($d->lte($today->copy()->endOfWeek())) $b['cette_semaine']++;
+            elseif ($d->lte($today->copy()->addWeek()->endOfWeek())) $b['semaine_prochaine']++;
+            else $b['plus_tard']++;
+        }
+        return $b;
+    }
+
+    /** Compteurs d'activités commerciales (CRM) sur N jours. */
+    public function salesActivities(int $days = 30): array
+    {
+        $co = currentCompany()->id;
+        $rows = DB::table('crm_activities')->where('company_id', $co)
+            ->where('created_at', '>=', Carbon::now()->subDays($days))
+            ->selectRaw('type, COUNT(*) c')->groupBy('type')->pluck('c', 'type');
+
+        return [
+            'visites' => (int) ($rows['visite'] ?? 0),
+            'appels'  => (int) ($rows['appel'] ?? 0),
+            'emails'  => (int) ($rows['email'] ?? 0),
+            'rdv'     => (int) ($rows['rendez_vous'] ?? $rows['reunion'] ?? 0),
+            'taches'  => (int) DB::table('crm_activities')->where('company_id', $co)->where('is_done', false)->count(),
+        ];
+    }
+
+    /** Alertes commerciales : commandes en retard, factures impayées, stock faible. */
+    public function salesAlerts(): array
+    {
+        $co = currentCompany()->id;
+        return [
+            'orders_late' => (int) DB::table('orders')->where('company_id', $co)
+                ->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre'])
+                ->whereNotNull('delivery_date')->whereDate('delivery_date', '<', Carbon::today())->count(),
+            'invoices_unpaid' => (int) DB::table('invoices')->where('company_id', $co)
+                ->whereNotIn('status', ['brouillon', 'annulee', 'payee'])->count(),
+            'low_stock' => (int) DB::table('product_stocks')
+                ->join('products', 'products.id', '=', 'product_stocks.product_id')
+                ->where('products.stock_min', '>', 0)
+                ->whereColumn('product_stocks.quantity', '<=', 'products.stock_min')->count(),
+        ];
+    }
+
+    /** Valeur des commandes de l'année (TTC), hors brouillon/annulé. */
+    public function ordersValueYear(): float
+    {
+        return (float) DB::table('orders')->where('company_id', currentCompany()->id)
+            ->whereNotIn('status', ['brouillon', 'annule'])
+            ->whereYear('created_at', now()->year)->sum('total_ttc');
+    }
+
+    /** Évolution CA HT sur N mois avec comparaison année précédente (barres). */
+    public function caMonthlyComparison(int $months = 12): array
+    {
+        $from     = now()->subMonths($months - 1)->startOfMonth();
+        $prevFrom = (clone $from)->subYear();
+        $q = fn ($start, $end = null) => DB::table('invoices')->whereNull('deleted_at')
+            ->whereNotIn('status', ['brouillon', 'annulee'])->where('type', '!=', 'avoir')
+            ->where('issued_at', '>=', $start)->when($end, fn ($x) => $x->where('issued_at', '<', $end))
+            ->selectRaw('DATE_FORMAT(issued_at, "%Y-%m") m, SUM(subtotal_ht) ht')->groupBy('m')->pluck('ht', 'm');
+        $cur  = $q($from);
+        $prev = $q($prevFrom, $from);
+
+        $labels = $current = $previous = [];
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $d = now()->startOfMonth()->subMonths($i);
+            $labels[]   = $d->translatedFormat('M');
+            $current[]  = (int) ($cur[$d->format('Y-m')] ?? 0);
+            $previous[] = (int) ($prev[$d->copy()->subYear()->format('Y-m')] ?? 0);
+        }
+        return ['labels' => $labels, 'current' => $current, 'previous' => $previous];
+    }
+
+    /** Marge brute annuelle (CA HT − coût de revient des lignes facturées). */
+    public function grossMargin(): array
+    {
+        $r = DB::table('invoice_items as ii')->join('invoices as i', 'i.id', '=', 'ii.invoice_id')
+            ->where('i.company_id', currentCompany()->id)->whereNotIn('i.status', ['brouillon', 'annulee'])
+            ->where('i.issued_at', '>=', Carbon::now()->startOfYear())
+            ->selectRaw('SUM(ii.line_total_ht) ca, SUM(ii.unit_cost * ii.quantity) cost')->first();
+        $ca = (float) ($r->ca ?? 0);
+        $marge = $ca - (float) ($r->cost ?? 0);
+        return ['ca' => $ca, 'marge' => $marge, 'taux' => $ca > 0 ? round($marge / $ca * 100, 2) : 0];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // [VEN Marge] Ventilation de la marge brute par commercial et par site/dépôt.
+    // CA HT − coût de revient (unit_cost × quantité) des lignes facturées.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Marge brute par commercial (sales_rep_id) sur N mois.
+     * Retour : lignes {rep_id, rep_name, invoices, ca, cost, marge, taux}, triées par marge décroissante.
+     */
+    public function marginBySalesRep(int $months = 12): Collection
+    {
+        $from = Carbon::now()->subMonths($months)->startOfMonth();
+
+        return DB::table('invoice_items as ii')
+            ->join('invoices as i', 'i.id', '=', 'ii.invoice_id')
+            ->leftJoin('users as u', 'u.id', '=', 'i.sales_rep_id')
+            ->where('i.company_id', currentCompany()->id)
+            ->whereNotIn('i.status', ['brouillon', 'annulee'])
+            ->where('i.type', '!=', 'avoir')
+            ->where('i.issued_at', '>=', $from)
+            ->selectRaw('
+                i.sales_rep_id                          as rep_id,
+                COALESCE(u.name, "— Non affecté")        as rep_name,
+                COUNT(DISTINCT i.id)                     as invoices,
+                SUM(ii.line_total_ht)                    as ca,
+                SUM(ii.unit_cost * ii.quantity)          as cost
+            ')
+            ->groupBy('i.sales_rep_id', 'u.name')
+            ->get()
+            ->map(fn ($r) => $this->decorateMarginRow($r))
+            ->sortByDesc('marge')
+            ->values();
+    }
+
+    /**
+     * Marge brute par site / dépôt (warehouse_id) sur N mois.
+     * Retour : lignes {site_id, site_name, invoices, ca, cost, marge, taux}, triées par marge décroissante.
+     */
+    public function marginBySite(int $months = 12): Collection
+    {
+        $from = Carbon::now()->subMonths($months)->startOfMonth();
+
+        return DB::table('invoice_items as ii')
+            ->join('invoices as i', 'i.id', '=', 'ii.invoice_id')
+            ->leftJoin('warehouses as w', 'w.id', '=', 'i.warehouse_id')
+            ->where('i.company_id', currentCompany()->id)
+            ->whereNotIn('i.status', ['brouillon', 'annulee'])
+            ->where('i.type', '!=', 'avoir')
+            ->where('i.issued_at', '>=', $from)
+            ->selectRaw('
+                i.warehouse_id                          as site_id,
+                COALESCE(w.name, "— Non affecté")        as site_name,
+                COUNT(DISTINCT i.id)                     as invoices,
+                SUM(ii.line_total_ht)                    as ca,
+                SUM(ii.unit_cost * ii.quantity)          as cost
+            ')
+            ->groupBy('i.warehouse_id', 'w.name')
+            ->get()
+            ->map(fn ($r) => $this->decorateMarginRow($r))
+            ->sortByDesc('marge')
+            ->values();
+    }
+
+    /** Ajoute marge + taux à une ligne d'agrégat CA/coût. */
+    private function decorateMarginRow(object $r): array
+    {
+        $ca   = (float) ($r->ca ?? 0);
+        $cost = (float) ($r->cost ?? 0);
+        $marge = $ca - $cost;
+
+        return array_merge((array) $r, [
+            'ca'    => $ca,
+            'cost'  => $cost,
+            'marge' => $marge,
+            'taux'  => $ca > 0 ? round($marge / $ca * 100, 1) : 0.0,
+        ]);
+    }
 }

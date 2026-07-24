@@ -17,6 +17,7 @@ class PayrollRun extends Model
         'total_brut', 'total_cnss_employee', 'total_cnss_employer',
         'total_iuts', 'total_net', 'employee_count',
         'notes', 'validated_by', 'validated_at', 'paid_at', 'created_by',
+        'calculation_parameters_snapshot',
     ];
 
     protected $casts = [
@@ -30,6 +31,7 @@ class PayrollRun extends Model
         'employee_count'     => 'integer',
         'validated_at'       => 'datetime',
         'paid_at'            => 'date',
+        'calculation_parameters_snapshot' => 'array',
     ];
 
     // ─── Relations ────────────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ class PayrollRun extends Model
     public function validatedBy(): BelongsTo { return $this->belongsTo(User::class, 'validated_by'); }
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function items(): HasMany       { return $this->hasMany(PayrollItem::class); }
+    public function payments(): HasMany     { return $this->hasMany(\App\Models\PayrollPayment::class); }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 

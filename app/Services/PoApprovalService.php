@@ -82,11 +82,22 @@ class PoApprovalService
                 throw new \RuntimeException("Ce PO n'est pas en attente d'approbation (statut : {$po->approval_status}).");
             }
 
+            // [SEC-PHASE2 §2] Maker-checker : l'auteur de la commande ne l'approuve pas lui-même
+            app(\App\Services\MakerCheckerService::class)->assert($po->created_by, 'purchase_order.approve', "la commande {$po->number}", $po);
+
             $rule = $this->findRequiredRule($po);
             if ($rule && !$rule->canBeApprovedBy($user)) {
                 throw new \RuntimeException(
                     "Vous n'avez pas le niveau d'approbation requis pour ce montant. "
                     . "Règle applicable : « {$rule->name} »."
+                );
+            }
+            // [SEC-PHASE2] Sans règle de seuil configurée, l'approbation n'est pas
+            // libre pour autant : la route n'exige que purchase_orders.view, donc
+            // un simple lecteur pourrait approuver. Droit d'approbation de base requis.
+            if (!$rule && !$user->hasRole('super_admin') && !$user->can('purchase_requests.approve')) {
+                throw new \RuntimeException(
+                    "Aucune règle de seuil n'est configurée : l'approbation exige le droit d'approbation achats (purchase_requests.approve)."
                 );
             }
 

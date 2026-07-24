@@ -22,6 +22,10 @@ class UpdateProductRequest extends FormRequest
 
             // Classification
             'family_id'             => 'nullable|exists:product_families,id',
+            'sub_family_id'         => 'nullable|exists:product_families,id',
+            'attributes'            => 'nullable|array',
+            'attributes.*'          => 'nullable|string|max:255',
+            'item_category_id'      => 'nullable|exists:item_categories,id',
             'brand_id'              => 'nullable|exists:brands,id',
             'unit_id'               => 'nullable|exists:units,id',
             'tax_rate_id'           => 'nullable|exists:tax_rates,id',
@@ -69,6 +73,8 @@ class UpdateProductRequest extends FormRequest
             'couleur'               => 'nullable|string|max:60',
             'largeur_utile'         => 'nullable|numeric|min:0',
             'longueur_standard'     => 'nullable|numeric|min:0',
+            'longueur_min'          => 'nullable|numeric|min:0',
+            'longueur_max'          => 'nullable|numeric|min:0|gte:longueur_min',
             'machine_defaut_id'     => 'nullable|exists:production_machines,id',
             'rendement_standard'    => 'nullable|numeric|min:0|max:9.9999',
             'taux_perte'            => 'nullable|numeric|min:0|max:9.9999',
@@ -102,6 +108,7 @@ class UpdateProductRequest extends FormRequest
             'purchase_price'        => 'nullable|integer|min:0',
             'sale_price'            => 'nullable|integer|min:0',
             'min_sale_price'        => 'nullable|integer|min:0',
+            'max_sale_price'        => 'nullable|integer|min:0|gte:min_sale_price',
             'cout_standard'         => 'nullable|numeric|min:0',
             'margin_rate_target'    => 'nullable|numeric|min:0|max:999.99',
             'valuation_method'      => 'nullable|in:cmp,fifo,lifo',

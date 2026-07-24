@@ -30,6 +30,45 @@ class ClientPaymentService
             $allocations = $data['allocations'] ?? [];
             unset($data['allocations']);
 
+            // [Imputation automatique FIFO] Aucune imputation saisie et paiement non-acompte :
+            // imputer d'office sur les factures OUVERTES du client, la plus ancienne d'abord
+            // (logique balance âgée), jusqu'à épuisement du montant. Les gardes de la boucle
+            // d'allocation (verrou, statuts, plafond au reste dû) s'appliquent inchangées.
+            // Un acompte (is_acompte) reste volontairement non imputé.
+            if (empty($allocations) && empty($data['is_acompte']) && ! empty($data['client_id'])) {
+                $restant = (int) $data['amount'];
+                $ouvertes = Invoice::where('client_id', $data['client_id'])
+                    ->whereNotIn('status', ['brouillon', 'en_attente_validation', 'annulee', 'payee'])
+                    ->where('remaining_amount', '>', 0)
+                    ->orderBy('issued_at')->orderBy('id')
+                    ->get(['id', 'remaining_amount']);
+                foreach ($ouvertes as $inv) {
+                    if ($restant <= 0) {
+                        break;
+                    }
+                    $part = min($restant, (int) $inv->remaining_amount);
+                    $allocations[] = ['invoice_id' => $inv->id, 'allocated_amount' => $part];
+                    $restant -= $part;
+                }
+            }
+
+            // [GARDE DEVISE] Les agrégats financiers (imputation, balance, éligibilité
+            // production) somment les montants bruts : un paiement dans une devise
+            // différente de la facture fausserait tout. ERP mono-devise XOF de fait —
+            // refus explicite de tout mélange.
+            if (! empty($allocations)) {
+                $payCur = strtoupper($data['currency_code'] ?? 'XOF');
+                $invCurs = Invoice::whereIn('id', collect($allocations)->pluck('invoice_id'))
+                    ->pluck('currency_code', 'id');
+                foreach ($invCurs as $invId => $cur) {
+                    if (strtoupper($cur ?? 'XOF') !== $payCur) {
+                        throw new \RuntimeException(
+                            "Devise du paiement ({$payCur}) différente de celle de la facture #{$invId} (" . strtoupper($cur ?? 'XOF') . ') — imputation refusée.'
+                        );
+                    }
+                }
+            }
+
             $data['created_by'] = Auth::id();
 
             // [DOUBLE-PAYMENT-GUARD] Protection anti-doublon AVANT toute écriture :
@@ -39,7 +78,11 @@ class ClientPaymentService
             $this->assertNoDuplicateRecent($data);
 
             // Generate payment number
-            $company = Auth::user()->company;
+            // [Chemins système] Webhooks/jobs n'ont pas d'utilisateur connecté :
+            // retomber sur la société passée en données, puis la société unique.
+            $company = Auth::user()?->company
+                ?? \App\Models\Company::find($data['company_id'] ?? null)
+                ?? \App\Models\Company::first();
             if ($company) {
                 $data['company_id'] = $company->id;
                 $data['number'] = $this->sequenceService->nextNumber($company, 'encaissement');
@@ -65,6 +108,17 @@ class ClientPaymentService
             }
 
             foreach ($allocations as $alloc) {
+                // [FIX-ALLOC-CLE] Alias 'amount' accepté (cohérent avec addAllocation) ;
+                // une clé de montant absente sur une allocation ciblant une facture est
+                // une ERREUR, pas un silence (même piège corrigé côté fournisseur).
+                if (! isset($alloc['allocated_amount']) && isset($alloc['amount'])) {
+                    $alloc['allocated_amount'] = $alloc['amount'];
+                }
+                if (! empty($alloc['invoice_id']) && ! isset($alloc['allocated_amount'])) {
+                    throw new \RuntimeException(
+                        'Allocation invalide : clé de montant absente (attendu « allocated_amount » ou « amount »).'
+                    );
+                }
                 if (empty($alloc['invoice_id']) || empty($alloc['allocated_amount'])) {
                     continue;
                 }
@@ -330,6 +384,14 @@ class ClientPaymentService
     public function addAllocation(ClientPayment $payment, int $invoiceId, int $amount): void
     {
         DB::transaction(function () use ($payment, $invoiceId, $amount) {
+            // [CONCURRENCE] Verrouiller le PAIEMENT : deux imputations simultanées
+            // liraient le même unallocated_amount et sur-alloueraient. Et un
+            // paiement annulé ne doit plus être imputable.
+            $payment = ClientPayment::lockForUpdate()->findOrFail($payment->id);
+            if ($payment->status === 'annule') {
+                throw new \RuntimeException('Cet encaissement est annulé — imputation impossible.');
+            }
+
             if ($amount <= 0) {
                 throw new \RuntimeException('Le montant à imputer doit être positif.');
             }
@@ -413,5 +475,146 @@ class ClientPaymentService
             $this->scheduleService->markPayment($schedule, $toApply);
             $remaining -= $toApply;
         }
+    }
+
+    /**
+     * [Annulation encaissement — miroir de SupplierPaymentService::cancel]
+     * Inverse TOUS les effets : restauration des factures allouées, suppression
+     * des allocations, contre-passation comptable, restitution de la caisse
+     * (mouvement inverse — refuse si le solde deviendrait négatif), statut
+     * « annule » avec motif tracé. Jamais de suppression physique.
+     *
+     * @throws \RuntimeException
+     */
+    public function cancel(ClientPayment $payment, ?string $reason = null): ClientPayment
+    {
+        $reason = trim((string) $reason);
+        if ($reason === '') {
+            throw new \RuntimeException('Motif d\'annulation obligatoire (traçabilité comptable).');
+        }
+
+        return DB::transaction(function () use ($payment, $reason) {
+            $payment = ClientPayment::lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->status === 'annule') {
+                throw new \RuntimeException('Cet encaissement est déjà annulé.');
+            }
+
+            $payment->load('allocations', 'cashAccount', 'client');
+
+            // [RÈGLE MÉTIER — production financée] Un encaissement qui rend un OF
+            // ACTIF financièrement éligible ne s'annule pas : la production
+            // reposerait sur de l'argent disparu. Détection conservatrice : pour
+            // chaque commande du client ayant un OF actif, si le retrait de ce
+            // montant fait passer sous le requis (et sans approbation gérant
+            // valide), l'annulation est refusée.
+            $activeOfOrders = \App\Models\Order::where('client_id', $payment->client_id)
+                ->whereHas('productionOrders', fn ($q) => $q->whereNotIn('status', ['annule', 'termine', 'brouillon']))
+                ->get();
+            foreach ($activeOfOrders as $o) {
+                $required = $o->requiredBeforeProduction();
+                if ($required === null || $o->hasValidProductionApproval()) {
+                    continue; // crédit ou approbation gérant : l'OF ne dépend pas de cet argent
+                }
+                if (($o->confirmedReceipts() - (int) $payment->amount) < $required) {
+                    throw new \RuntimeException(sprintf(
+                        'Cet encaissement finance la production EN COURS de la commande %s (OF actif). ' .
+                        'Terminez ou annulez l\'OF, ou obtenez une approbation gérant, avant d\'annuler cet encaissement.',
+                        $o->number
+                    ));
+                }
+            }
+
+            // 1. Restaurer chaque facture allouée
+            foreach ($payment->allocations as $alloc) {
+                $invoice = Invoice::lockForUpdate()->find($alloc->invoice_id);
+                if (! $invoice) {
+                    continue;
+                }
+
+                $newPaid      = max(0, (int) $invoice->paid_amount - (int) $alloc->amount);
+                $newRemaining = max(0, (int) $invoice->total_ttc - $newPaid);
+
+                $newStatus = $invoice->status;
+                if ($newRemaining === (int) $invoice->total_ttc) {
+                    $newStatus = 'emise';
+                } elseif ($newRemaining > 0 && $invoice->status === 'payee') {
+                    $newStatus = 'partiellement_payee';
+                }
+
+                $invoice->update([
+                    'paid_amount'      => $newPaid,
+                    'remaining_amount' => $newRemaining,
+                    'status'           => $newStatus,
+                ]);
+            }
+            $payment->allocations()->delete();
+
+            // 2. Contre-passation de l'écriture comptable
+            $entry = \App\Models\JournalEntry::where('reference', $payment->number)
+                ->where('company_id', $payment->company_id)
+                ->where('status', 'valide')
+                ->first();
+            if ($entry) {
+                $this->accountingService->reverseEntry(
+                    $entry,
+                    'Annulation encaissement ' . $payment->number . ' — ' . $reason
+                );
+            }
+
+            // 3. Restitution caisse : mouvement inverse (débit de ce qui avait été
+            //    crédité). recordTransaction refuse un solde négatif → l'annulation
+            //    échoue proprement si l'argent est déjà ressorti.
+            $cashTx = \App\Models\CashTransaction::where(function ($q) use ($payment) {
+                $q->where('reference_type', 'ClientPayment')->where('reference_id', $payment->id);
+            })->orWhere(function ($q) use ($payment) {
+                $q->where('reference_type', 'App\\Models\\ClientPayment')->where('reference_id', $payment->id);
+            })->first();
+            // [Distinction métier] L'ANNULATION neutralise l'entrée de caisse du
+            // jour même (mouvement inverse daté d'aujourd'hui — les clôtures de
+            // caisse antérieures restent intactes). Le REMBOURSEMENT PHYSIQUE au
+            // client est une autre opération (décaissement dédié) : si la caisse
+            // ne contient plus les fonds, l'annulation est refusée avec ce guidage.
+            if ($cashTx && $payment->cashAccount) {
+                try {
+                    $this->cashService->recordTransaction($payment->cashAccount, [
+                        'type'             => 'debit',
+                        'reference_type'   => 'ClientPayment',
+                        'reference_id'     => $payment->id,
+                        'amount'           => $payment->amount,
+                        'label'            => 'Annulation encaissement ' . $payment->number,
+                        'transaction_date' => today(),
+                    ]);
+                } catch (\RuntimeException $e) {
+                    throw new \RuntimeException(
+                        'La caisse « ' . $payment->cashAccount->name . ' » ne contient plus les fonds de cet encaissement (' .
+                        $e->getMessage() . '). Enregistrez d\'abord un approvisionnement ou traitez le cas comme un ' .
+                        'remboursement client via un décaissement dédié, puis annulez.'
+                    );
+                }
+            }
+
+            // 4. Statut annulé + motif tracé
+            $cancelNote = sprintf(
+                '[ANNULATION %s par %s] %s',
+                now()->format('d/m/Y H:i'),
+                Auth::user()?->name ?? 'système',
+                $reason
+            );
+            $payment->update([
+                'status'             => 'annule',
+                'unallocated_amount' => 0,
+                'allocated_amount'   => 0,
+                'notes'              => trim(($payment->notes ?? '') . "\n\n" . $cancelNote),
+            ]);
+
+            // 5. Solde client recalculé
+            $payment->client?->recalculateBalance();
+
+            // [SEC-PHASE2] Journal d'audit : annulation financière tracée
+            app(AuditService::class)->log('encaissement.annulation', $payment, ['status' => 'confirme'], ['status' => 'annule', 'motif' => $reason, 'montant' => $payment->amount]);
+
+            return $payment->fresh();
+        });
     }
 }

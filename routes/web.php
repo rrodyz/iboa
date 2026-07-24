@@ -39,6 +39,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Endpoint JSON polling — actualisation automatique KPIs (60s cache)
     Route::get('/dashboard/kpis', [DashboardController::class, 'kpisJson'])->name('dashboard.kpis');
 
+    // [PIL-04] Alertes par seuil (config + évaluation) — perm gérée dans le contrôleur
+    Route::prefix('pilotage')->name('pilotage.')->group(function () {
+        Route::get('alertes',                 [\App\Http\Controllers\AlertRuleController::class, 'index'])->name('alertes.index');
+        Route::post('alertes',                [\App\Http\Controllers\AlertRuleController::class, 'store'])->name('alertes.store');
+        Route::put('alertes/{alerte}',        [\App\Http\Controllers\AlertRuleController::class, 'update'])->whereNumber('alerte')->name('alertes.update');
+        Route::delete('alertes/{alerte}',     [\App\Http\Controllers\AlertRuleController::class, 'destroy'])->whereNumber('alerte')->name('alertes.destroy');
+        Route::post('alertes/evaluer',        [\App\Http\Controllers\AlertRuleController::class, 'run'])->name('alertes.run');
+    });
+
     // [CDC §Workflow] « Mes validations » — tout ce qui attend l'action de
     // l'utilisateur selon ses habilitations (le contrôleur filtre par permission).
     Route::get('/mes-validations', [\App\Http\Controllers\MyValidationsController::class, 'index'])->name('validations.index');
@@ -135,11 +144,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Products (products.view minimum) ────────────────────────────────────────
     Route::middleware('permission:products.view')->group(function () {
         Route::resource('products', ProductController::class);
+        // [X3 §10] Article-sites
+        Route::post('products/{product}/sites', [ProductController::class, 'storeSite'])->name('products.sites.store');
+        Route::delete('products/{product}/sites/{site}', [ProductController::class, 'destroySite'])->name('products.sites.destroy');
         Route::resource('brands', \App\Http\Controllers\BrandController::class)->except(['show']);
         // 'show' exclu — la méthode n'est pas implémentée (gestion via index + edit suffit pour les familles).
         Route::resource('product-families', \App\Http\Controllers\ProductFamilyController::class)
-            ->except(['show'])
-            ->parameters(['product-families' => 'family']);
+                        ->parameters(['product-families' => 'family']);
+        // [X3] Catégories d'article (modèle de gestion ≠ familles)
+        Route::prefix('articles/categories')->name('articles.categories.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\ItemCategoryController::class, 'index'])->name('index');
+            Route::get('/nouvelle', [\App\Http\Controllers\ItemCategoryController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\ItemCategoryController::class, 'store'])->name('store');
+            Route::get('/{category}', [\App\Http\Controllers\ItemCategoryController::class, 'show'])->whereNumber('category')->name('show');
+            Route::get('/{category}/modifier', [\App\Http\Controllers\ItemCategoryController::class, 'edit'])->whereNumber('category')->name('edit');
+            Route::put('/{category}', [\App\Http\Controllers\ItemCategoryController::class, 'update'])->whereNumber('category')->name('update');
+            Route::post('/{category}/disable', [\App\Http\Controllers\ItemCategoryController::class, 'disable'])->whereNumber('category')->name('disable');
+            Route::post('/{category}/duplicate', [\App\Http\Controllers\ItemCategoryController::class, 'duplicate'])->whereNumber('category')->name('duplicate');
+            Route::get('/{category}/propager', [\App\Http\Controllers\ItemCategoryController::class, 'propagatePreview'])->whereNumber('category')->name('propagate.preview');
+            Route::post('/{category}/propager', [\App\Http\Controllers\ItemCategoryController::class, 'propagate'])->whereNumber('category')->name('propagate');
+        });
         Route::resource('units', \App\Http\Controllers\UnitController::class)->except(['show']);
         Route::resource('promotions', \App\Http\Controllers\ProductPromotionController::class)->except(['show']);
         Route::post('product-price-tiers', [\App\Http\Controllers\ProductPriceTierController::class, 'store'])->name('product-price-tiers.store');
@@ -197,6 +221,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::resource('clients', ClientController::class);
             Route::post('clients/{client}/interactions', [ClientController::class, 'storeInteraction'])->name('clients.interactions.store');
+            // [VEN Crédit client] Historique & décisions de crédit
+            // [Dossier client] Synthèse commerciale bout-en-bout (statuts par document)
+            Route::get('clients/{client}/dossier', [\App\Http\Controllers\ClientController::class, 'dossier'])->name('clients.dossier');
+            Route::get('clients/{client}/credit',  [\App\Http\Controllers\CreditDecisionController::class, 'index'])->name('clients.credit.index');
+            Route::post('clients/{client}/credit', [\App\Http\Controllers\CreditDecisionController::class, 'store'])->name('clients.credit.store');
             Route::get('relances', [\App\Http\Controllers\ClientRelanceController::class, 'index'])->name('relances.index');
             Route::post('relances/send', [\App\Http\Controllers\ClientRelanceController::class, 'send'])->name('relances.send');
             Route::get('relances/lettre', [\App\Http\Controllers\ClientRelanceController::class, 'letter'])->name('relances.letter');
@@ -289,6 +318,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // [VENTES-PRO] Tableau de bord ventes (KPIs, top clients, pipeline)
         Route::middleware('permission:invoices.view')->group(function () {
             Route::get('/', [\App\Http\Controllers\Sales\SalesDashboardController::class, 'index'])->name('dashboard');
+            // [VEN Marge] Rapport marge brute par commercial / par site
+            Route::get('marges', [\App\Http\Controllers\Sales\SalesMarginController::class, 'index'])->name('marges');
         });
 
         Route::middleware('permission:quotes.view')->group(function () {
@@ -302,6 +333,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:quotes.create')->group(function () {
             // [VENTES-PRO] Action Duplicate (équivalent Odoo)
             Route::post('devis/{devis}/duplicate', [\App\Http\Controllers\Sales\QuoteController::class, 'duplicate'])->name('devis.duplicate');
+            Route::post('devis/{devis}/revise', [\App\Http\Controllers\Sales\QuoteController::class, 'revise'])->name('devis.revise');
         });
         // [WORKFLOW-V2] Transformer un devis validé en commande (sales.transform)
         Route::middleware('permission:sales.transform')->group(function () {
@@ -357,6 +389,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:payments.create')->group(function () {
             Route::post('commandes/{commande}/register-payment', [\App\Http\Controllers\Sales\OrderController::class, 'registerPayment'])->name('commandes.register-payment');
         });
+        // [Flux tôle bac §3] Approbation gérant d'une commande non réglée pour production
+        Route::middleware('permission:production.approve_financial')->group(function () {
+            Route::post('commandes/{commande}/approve-production', [\App\Http\Controllers\Sales\OrderController::class, 'approveProduction'])->name('commandes.approve-production');
+            Route::post('commandes/{commande}/revoke-production', [\App\Http\Controllers\Sales\OrderController::class, 'revokeProduction'])->name('commandes.revoke-production');
+        });
         // [CDC §bon-préparation] Module bon de préparation
         Route::middleware('permission:bon_preparations.view')->group(function () {
             Route::resource('bons-preparation', \App\Http\Controllers\Sales\BonPreparationController::class)
@@ -364,6 +401,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->only(['index', 'show']);
         });
         Route::middleware('permission:bon_preparations.update')->group(function () {
+            Route::get('bons-preparation/{bonPreparation}/pdf',            [\App\Http\Controllers\Sales\BonPreparationController::class, 'pdf'])->name('bons-preparation.pdf');
             Route::post('bons-preparation/{bonPreparation}/start-loading',  [\App\Http\Controllers\Sales\BonPreparationController::class, 'startLoading'])->name('bons-preparation.start-loading');
             Route::post('bons-preparation/{bonPreparation}/finish-loading', [\App\Http\Controllers\Sales\BonPreparationController::class, 'finishLoading'])->name('bons-preparation.finish-loading');
         });
@@ -441,8 +479,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('avoirs/{avoir}/pdf', [\App\Http\Controllers\Sales\CreditNoteController::class, 'pdf'])->name('avoirs.pdf');
         });
         Route::middleware('permission:credit_notes.create')->group(function () {
-            Route::post('avoirs/{avoir}/validate', [\App\Http\Controllers\Sales\CreditNoteController::class, 'validateNote'])->name('avoirs.validate');
+            // [SEC-PHASE2 §3] Valider un avoir (stock + GL) ≠ le créer
+            Route::post('avoirs/{avoir}/validate', [\App\Http\Controllers\Sales\CreditNoteController::class, 'validateNote'])->middleware('permission:credit_notes.validate')->name('avoirs.validate');
             Route::post('avoirs/{avoir}/apply', [\App\Http\Controllers\Sales\CreditNoteController::class, 'applyToInvoice'])->name('avoirs.apply');
+            // [VEN Retour] Génère un BL de remplacement depuis un avoir validé
+            Route::post('avoirs/{avoir}/remplacement', [\App\Http\Controllers\Sales\CreditNoteController::class, 'replacement'])->name('avoirs.replacement');
         });
         // ── Workflow de validation interne — avoirs ─────────────────────────────
         Route::middleware('permission:sales.submit')->group(function () {
@@ -520,7 +561,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('commandes/{commande}/pdf', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'pdf'])->name('commandes.pdf');
         });
         Route::middleware('permission:purchase_orders.create')->group(function () {
-            Route::post('commandes/{commande}/confirm', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'confirm'])->name('commandes.confirm');
+            // [SEC-PHASE2 §3] Confirmer une CF = engagement fournisseur ≠ la créer
+            Route::post('commandes/{commande}/confirm', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'confirm'])->middleware('permission:purchase_orders.confirm')->name('commandes.confirm');
             Route::post('commandes/{commande}/duplicate', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'duplicate'])->name('commandes.duplicate');
         });
         Route::middleware('permission:receptions.create')->group(function () {
@@ -532,7 +574,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('receptions/{reception}', [\App\Http\Controllers\Purchases\ReceptionController::class, 'show'])->name('receptions.show');
         });
         Route::middleware('permission:receptions.create')->group(function () {
-            Route::post('receptions/{reception}/validate', [\App\Http\Controllers\Purchases\ReceptionController::class, 'validateReception'])->name('receptions.validate');
+            // [SEC-PHASE2 §3] Valider/annuler une réception (stock) ≠ la créer
+            Route::post('receptions/{reception}/validate', [\App\Http\Controllers\Purchases\ReceptionController::class, 'validateReception'])->middleware('permission:receptions.validate')->name('receptions.validate');
+            Route::post('receptions/{reception}/cancel', [\App\Http\Controllers\Purchases\ReceptionController::class, 'cancelReception'])->middleware('permission:receptions.cancel')->name('receptions.cancel');
         });
         Route::middleware('permission:supplier_invoices.create')->group(function () {
             Route::post('commandes/{commande}/facture', [\App\Http\Controllers\Purchases\PurchaseOrderController::class, 'createSupplierInvoice'])->name('commandes.facture');
@@ -606,7 +650,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // §8 CDC — Traçabilité inverse : lot → OF → clients impactés
             Route::get('lots/{lot}/traceabilite', [\App\Http\Controllers\Stock\StockController::class, 'lotTraceability'])->name('lots.traceability');
             Route::get('valorisation', [\App\Http\Controllers\Stock\StockController::class, 'valuation'])->name('valuation');
+            // [STO-12] Pertes & casses (lecture + déclaration)
+            Route::get('pertes',              [\App\Http\Controllers\Stock\StockLossController::class, 'index'])->name('pertes.index');
+            Route::get('pertes/creer',        [\App\Http\Controllers\Stock\StockLossController::class, 'create'])->name('pertes.create');
+            Route::post('pertes',             [\App\Http\Controllers\Stock\StockLossController::class, 'store'])->name('pertes.store');
+            Route::get('pertes/{perte}',      [\App\Http\Controllers\Stock\StockLossController::class, 'show'])->whereNumber('perte')->name('pertes.show');
+            Route::get('pertes/{perte}/photo', [\App\Http\Controllers\Stock\StockLossController::class, 'photo'])->whereNumber('perte')->name('pertes.photo');
             Route::get('produit/{product}', [\App\Http\Controllers\Stock\StockController::class, 'show'])->name('show');
+        });
+
+        // [STO-12] Validation d'une perte → sortie de stock (au PMP)
+        Route::middleware('permission:stocks.adjust')->group(function () {
+            Route::post('pertes/{perte}/valider', [\App\Http\Controllers\Stock\StockLossController::class, 'validateLoss'])->whereNumber('perte')->name('pertes.validate');
+            Route::post('pertes/{perte}/rejeter', [\App\Http\Controllers\Stock\StockLossController::class, 'reject'])->whereNumber('perte')->name('pertes.reject');
         });
 
         Route::middleware('permission:stocks.adjust')->group(function () {
@@ -826,7 +882,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // ── Trésorerie / Module 8 ───────────────────────────────────────────────────
-    Route::prefix('tresorerie')->name('tresorerie.')->group(function () {
+    // [RBAC] Accès module réservé au profil trésorerie (treasury.view). Le commercial,
+    // qui possède payments.view pour la visibilité des règlements ventes, n'entre PAS
+    // dans le module Trésorerie. Gate au niveau du groupe → couvre aussi le dashboard.
+    Route::prefix('tresorerie')->name('tresorerie.')->middleware('permission:treasury.view')->group(function () {
 
         // Dashboard
         Route::get('/', \App\Http\Controllers\Treasury\TresorerieDashboardController::class)->name('dashboard');
@@ -838,6 +897,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('encaissements/{encaissement}/recu', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'recu'])->name('encaissements.recu');
             // Imputation a posteriori (lettrage)
             Route::post('encaissements/{encaissement}/imputer', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'imputer'])->name('encaissements.imputer');
+            // [SEC-PHASE2 §3] Annuler un encaissement = extourne + débit caisse : permission
+            // DÉDIÉE (treasury.write = saisie courante, trop large pour une action irréversible)
+            Route::post('encaissements/{encaissement}/cancel', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'cancel'])->middleware('permission:treasury.cancel')->name('encaissements.cancel');
             Route::resource('encaissements', \App\Http\Controllers\Treasury\ClientPaymentController::class)
                 ->only(['index', 'create', 'store', 'show'])
                 ->parameters(['encaissements' => 'encaissement']);
@@ -846,10 +908,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             // Reçu PDF décaissement
             Route::get('decaissements/{decaissement}/recu', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'recu'])->name('decaissements.recu');
             // [TRESO] Annulation décaissement : contre-passation compta + restauration facture
-            Route::post('decaissements/{decaissement}/cancel', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'cancel'])->name('decaissements.cancel');
-            // [TRESO-WORKFLOW] Validation / rejet par seuil
-            Route::post('decaissements/{decaissement}/approve', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'approve'])->name('decaissements.approve');
-            Route::post('decaissements/{decaissement}/reject',  [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'reject'])->name('decaissements.reject');
+            // [SEC-PHASE2] Écriture exigée (l'ancienne route héritait de treasury.view|payments.view)
+            Route::post('decaissements/{decaissement}/cancel', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'cancel'])->middleware('permission:treasury.cancel')->name('decaissements.cancel');
+            // [TRESO-WORKFLOW] Validation / rejet par seuil — treasury.validate en plus de la
+            // garde de niveau du service (TreasuryApprovalService::userCanApprove)
+            Route::post('decaissements/{decaissement}/approve', [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'approve'])->middleware('permission:treasury.validate')->name('decaissements.approve');
+            Route::post('decaissements/{decaissement}/reject',  [\App\Http\Controllers\Treasury\SupplierPaymentController::class, 'reject'])->middleware('permission:treasury.validate')->name('decaissements.reject');
             Route::resource('decaissements', \App\Http\Controllers\Treasury\SupplierPaymentController::class)
                 ->only(['index', 'create', 'store', 'show'])
                 ->parameters(['decaissements' => 'decaissement']);
@@ -915,7 +979,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:treasury.write')->group(function () {
             Route::get('clotures/create', [\App\Http\Controllers\Treasury\CashClosureController::class, 'create'])->name('clotures.create');
             Route::post('clotures',       [\App\Http\Controllers\Treasury\CashClosureController::class, 'store'])->name('clotures.store');
-            Route::post('clotures/{cloture}/validate', [\App\Http\Controllers\Treasury\CashClosureController::class, 'validateClosure'])->name('clotures.validate');
+            // [SEC-PHASE2 §3] Valider une clôture de caisse : permission dédiée
+            Route::post('clotures/{cloture}/validate', [\App\Http\Controllers\Treasury\CashClosureController::class, 'validateClosure'])->middleware('permission:cash_closures.validate')->name('clotures.validate');
         });
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('clotures',            [\App\Http\Controllers\Treasury\CashClosureController::class, 'index'])->name('clotures.index');
@@ -987,6 +1052,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // [UX] Alias des URL « intuitives » constatées en recette : redirection
+    // permanente vers les vraies pages plutôt qu'un 404 sec.
+    Route::redirect('/gestion/articles', '/products', 301);
+    Route::redirect('/articles', '/products', 301);
+    Route::redirect('/analytique', '/analytique/centres-couts', 301);
+    Route::redirect('/rh-paie', '/rh/employes', 301);
+    Route::redirect('/rh', '/rh/employes', 301);
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -1028,6 +1101,83 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::post('/{employe}/photo',   [\App\Http\Controllers\HR\EmployeeDocumentController::class, 'updatePhoto'])->whereNumber('employe')->name('photo.update');
     });
 
+    // ── Postes / grades / emplois [RH-01] ──────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('postes')->name('postes.')->group(function () {
+        Route::get('/',        [\App\Http\Controllers\HR\JobPositionController::class, 'index'])->name('index');
+        Route::get('/creer',   [\App\Http\Controllers\HR\JobPositionController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',       [\App\Http\Controllers\HR\JobPositionController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{poste}', [\App\Http\Controllers\HR\JobPositionController::class, 'show'])->whereNumber('poste')->name('show');
+        Route::get('/{poste}/modifier', [\App\Http\Controllers\HR\JobPositionController::class, 'edit'])->whereNumber('poste')->middleware('permission:rh.employees.manage')->name('edit');
+        Route::put('/{poste}',    [\App\Http\Controllers\HR\JobPositionController::class, 'update'])->whereNumber('poste')->middleware('permission:rh.employees.manage')->name('update');
+        Route::delete('/{poste}', [\App\Http\Controllers\HR\JobPositionController::class, 'destroy'])->whereNumber('poste')->middleware('permission:rh.employees.manage')->name('destroy');
+    });
+
+    // ── [RH-03] Recrutement & onboarding ──────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('recrutement')->name('recrutement.')->group(function () {
+        Route::get('/',            [\App\Http\Controllers\HR\RecruitmentController::class, 'index'])->name('index');
+        Route::get('/creer',       [\App\Http\Controllers\HR\RecruitmentController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',           [\App\Http\Controllers\HR\RecruitmentController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{recrutement}', [\App\Http\Controllers\HR\RecruitmentController::class, 'show'])->whereNumber('recrutement')->name('show');
+        Route::get('/{recrutement}/modifier', [\App\Http\Controllers\HR\RecruitmentController::class, 'edit'])->whereNumber('recrutement')->middleware('permission:rh.employees.manage')->name('edit');
+        Route::put('/{recrutement}',    [\App\Http\Controllers\HR\RecruitmentController::class, 'update'])->whereNumber('recrutement')->middleware('permission:rh.employees.manage')->name('update');
+        Route::delete('/{recrutement}', [\App\Http\Controllers\HR\RecruitmentController::class, 'destroy'])->whereNumber('recrutement')->middleware('permission:rh.employees.manage')->name('destroy');
+        Route::post('/{recrutement}/candidats', [\App\Http\Controllers\HR\RecruitmentController::class, 'storeCandidate'])->whereNumber('recrutement')->middleware('permission:rh.employees.manage')->name('candidates.store');
+        Route::post('/{recrutement}/candidats/{candidate}/statut', [\App\Http\Controllers\HR\RecruitmentController::class, 'advanceCandidate'])->whereNumber('recrutement')->middleware('permission:rh.employees.manage')->name('candidates.advance');
+    });
+
+    // ── [RH-05] Mouvements & carrière ─────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('carriere')->name('carriere.')->group(function () {
+        Route::get('/',       [\App\Http\Controllers\HR\CareerEventController::class, 'index'])->name('index');
+        Route::get('/creer',  [\App\Http\Controllers\HR\CareerEventController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',      [\App\Http\Controllers\HR\CareerEventController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+    });
+
+    // ── [RH-11] Évaluations & performance ─────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('evaluations')->name('evaluations.')->group(function () {
+        Route::get('/',              [\App\Http\Controllers\HR\AppraisalController::class, 'index'])->name('index');
+        Route::get('/creer',         [\App\Http\Controllers\HR\AppraisalController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',             [\App\Http\Controllers\HR\AppraisalController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{evaluation}',  [\App\Http\Controllers\HR\AppraisalController::class, 'show'])->whereNumber('evaluation')->name('show');
+        Route::put('/{evaluation}',  [\App\Http\Controllers\HR\AppraisalController::class, 'update'])->whereNumber('evaluation')->middleware('permission:rh.employees.manage')->name('update');
+        Route::post('/{evaluation}/finaliser', [\App\Http\Controllers\HR\AppraisalController::class, 'finalize'])->whereNumber('evaluation')->middleware('permission:rh.employees.manage')->name('finalize');
+    });
+
+    // ── [RH-10] Formation & compétences ───────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('formations')->name('formations.')->group(function () {
+        Route::get('/',             [\App\Http\Controllers\HR\TrainingController::class, 'index'])->name('index');
+        Route::get('/creer',        [\App\Http\Controllers\HR\TrainingController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',            [\App\Http\Controllers\HR\TrainingController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{formation}',  [\App\Http\Controllers\HR\TrainingController::class, 'show'])->whereNumber('formation')->name('show');
+        Route::put('/{formation}',  [\App\Http\Controllers\HR\TrainingController::class, 'update'])->whereNumber('formation')->middleware('permission:rh.employees.manage')->name('update');
+        Route::post('/{formation}/participants', [\App\Http\Controllers\HR\TrainingController::class, 'storeParticipant'])->whereNumber('formation')->middleware('permission:rh.employees.manage')->name('participants.store');
+        Route::put('/{formation}/participants/{participant}', [\App\Http\Controllers\HR\TrainingController::class, 'updateParticipant'])->whereNumber('formation')->middleware('permission:rh.employees.manage')->name('participants.update');
+        Route::delete('/{formation}/participants/{participant}', [\App\Http\Controllers\HR\TrainingController::class, 'destroyParticipant'])->whereNumber('formation')->middleware('permission:rh.employees.manage')->name('participants.destroy');
+    });
+
+    // ── [RH-09] Notes de frais ────────────────────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('frais')->name('frais.')->group(function () {
+        Route::get('/',            [\App\Http\Controllers\HR\ExpenseReportController::class, 'index'])->name('index');
+        Route::get('/creer',       [\App\Http\Controllers\HR\ExpenseReportController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',           [\App\Http\Controllers\HR\ExpenseReportController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{frais}',     [\App\Http\Controllers\HR\ExpenseReportController::class, 'show'])->whereNumber('frais')->name('show');
+        Route::get('/{frais}/modifier', [\App\Http\Controllers\HR\ExpenseReportController::class, 'edit'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('edit');
+        Route::put('/{frais}',     [\App\Http\Controllers\HR\ExpenseReportController::class, 'update'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('update');
+        Route::post('/{frais}/soumettre', [\App\Http\Controllers\HR\ExpenseReportController::class, 'submit'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('submit');
+        Route::post('/{frais}/approuver', [\App\Http\Controllers\HR\ExpenseReportController::class, 'approve'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('approve');
+        Route::post('/{frais}/rejeter',   [\App\Http\Controllers\HR\ExpenseReportController::class, 'reject'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('reject');
+        Route::post('/{frais}/rembourser', [\App\Http\Controllers\HR\ExpenseReportController::class, 'reimburse'])->whereNumber('frais')->middleware('permission:rh.employees.manage')->name('reimburse');
+    });
+
+    // ── [RH-13] Départs & solde de tout compte ────────────────────────────────
+    Route::middleware('permission:rh.employees.view')->prefix('departs')->name('departs.')->group(function () {
+        Route::get('/',           [\App\Http\Controllers\HR\DepartureController::class, 'index'])->name('index');
+        Route::get('/creer',      [\App\Http\Controllers\HR\DepartureController::class, 'create'])->middleware('permission:rh.employees.manage')->name('create');
+        Route::post('/',          [\App\Http\Controllers\HR\DepartureController::class, 'store'])->middleware('permission:rh.employees.manage')->name('store');
+        Route::get('/{depart}',   [\App\Http\Controllers\HR\DepartureController::class, 'show'])->whereNumber('depart')->name('show');
+        Route::put('/{depart}',   [\App\Http\Controllers\HR\DepartureController::class, 'update'])->whereNumber('depart')->middleware('permission:rh.employees.manage')->name('update');
+        Route::post('/{depart}/cloturer', [\App\Http\Controllers\HR\DepartureController::class, 'finalize'])->whereNumber('depart')->middleware('permission:rh.employees.manage')->name('finalize');
+    });
+
     // ── Départements ──────────────────────────────────────────────────────────
     Route::middleware('permission:rh.employees.view')->prefix('departements')->name('departments.')->group(function () {
         Route::get('/',  [\App\Http\Controllers\HR\EmployeeController::class, 'departments'])->name('index');
@@ -1060,6 +1210,11 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::get('/{run}/iuts-xlsx',           [\App\Http\Controllers\HR\PayrollRunController::class, 'iutsXlsx'])->whereNumber('run')->name('iuts-xlsx');
         Route::get('/{run}/avances-pdf',         [\App\Http\Controllers\HR\PayrollRunController::class, 'avancesPdf'])->whereNumber('run')->name('avances-pdf');
         Route::get('/{run}/prets-pdf',           [\App\Http\Controllers\HR\PayrollRunController::class, 'pretsPdf'])->whereNumber('run')->name('prets-pdf');
+        // [PAI-07] Virements — suivi ligne par ligne
+        Route::get('/{run}/virements',                 [\App\Http\Controllers\HR\PayrollPaymentController::class, 'index'])->whereNumber('run')->name('virements.index');
+        Route::get('/{run}/virements/fichier-bancaire',[\App\Http\Controllers\HR\PayrollPaymentController::class, 'bankFile'])->whereNumber('run')->name('virements.bank-file');
+        // [PAI-08] Archive des déclarations CNSS/IUTS
+        Route::get('/declarations', [\App\Http\Controllers\HR\PayrollDeclarationController::class, 'index'])->name('declarations.index');
     });
     Route::middleware('permission:rh.payroll.manage')->prefix('paie')->name('paie.')->group(function () {
         Route::get('/creer',                         [\App\Http\Controllers\HR\PayrollRunController::class, 'create'])->name('create');
@@ -1067,11 +1222,19 @@ Route::middleware(['auth', 'verified'])->prefix('rh')->name('rh.')->group(functi
         Route::post('/{run}/calculer',               [\App\Http\Controllers\HR\PayrollRunController::class, 'calculate'])->whereNumber('run')->name('calculate');
         Route::post('/{run}/variables',              [\App\Http\Controllers\HR\PayrollVariableController::class, 'store'])->whereNumber('run')->name('variables.store');
         Route::delete('/{run}/variables/{variable}', [\App\Http\Controllers\HR\PayrollVariableController::class, 'destroy'])->whereNumber('run')->name('variables.destroy');
+        // [PAI-08] Déclarations — figeage + suivi
+        Route::post('/{run}/declarations/generer',   [\App\Http\Controllers\HR\PayrollDeclarationController::class, 'generate'])->whereNumber('run')->name('declarations.generate');
+        Route::post('/declarations/{declaration}/deposer', [\App\Http\Controllers\HR\PayrollDeclarationController::class, 'markDeposited'])->whereNumber('declaration')->name('declarations.deposit');
+        Route::post('/declarations/{declaration}/payer',   [\App\Http\Controllers\HR\PayrollDeclarationController::class, 'markPaid'])->whereNumber('declaration')->name('declarations.pay');
     });
     Route::middleware('permission:rh.payroll.validate')->prefix('paie')->name('paie.')->group(function () {
         Route::post('/{run}/valider',      [\App\Http\Controllers\HR\PayrollRunController::class, 'approuver'])->whereNumber('run')->name('validate');
         Route::post('/{run}/payer',        [\App\Http\Controllers\HR\PayrollRunController::class, 'markPaid'])->whereNumber('run')->name('mark-paid');
         Route::post('/{run}/comptabiliser',[\App\Http\Controllers\HR\PayrollRunController::class, 'journalize'])->whereNumber('run')->name('journalize');
+        // [PAI-07] Virements — génération & rapprochement
+        Route::post('/{run}/virements/generer',        [\App\Http\Controllers\HR\PayrollPaymentController::class, 'generate'])->whereNumber('run')->name('virements.generate');
+        Route::post('/{run}/virements/payer-tout',     [\App\Http\Controllers\HR\PayrollPaymentController::class, 'markRunPaid'])->whereNumber('run')->name('virements.pay-all');
+        Route::post('/{run}/virements/{payment}/payer',[\App\Http\Controllers\HR\PayrollPaymentController::class, 'markPaid'])->whereNumber('run')->whereNumber('payment')->name('virements.pay');
     });
 
     // ── Avances sur salaire ───────────────────────────────────────────────────
@@ -1403,6 +1566,12 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
         Route::get('planning', [\App\Modules\Production\Controllers\ProductionPlanningController::class, 'index'])->name('planning');
         // [X3 §19] Déplacer OF / réaffecter ligne depuis le plan de charge
         Route::post('planning/replan/{order}', [\App\Modules\Production\Controllers\ProductionPlanningController::class, 'replan'])->name('planning.replan');
+        // [PRO Temps d'arrêt] Suivi + déclaration des arrêts de production
+        Route::get('temps-arret', [\App\Modules\Production\Controllers\ProductionDowntimeController::class, 'index'])->name('downtimes');
+        Route::post('temps-arret', [\App\Modules\Production\Controllers\ProductionDowntimeController::class, 'store'])->name('downtimes.store');
+        Route::post('temps-arret/{downtime}/cloturer', [\App\Modules\Production\Controllers\ProductionDowntimeController::class, 'close'])->name('downtimes.close');
+        Route::delete('temps-arret/{downtime}', [\App\Modules\Production\Controllers\ProductionDowntimeController::class, 'destroy'])->name('downtimes.destroy');
+
         Route::get('cutting', [\App\Modules\Production\Controllers\CuttingController::class, 'index'])->name('cutting');
         Route::post('cutting', [\App\Modules\Production\Controllers\CuttingController::class, 'optimize'])->name('cutting.optimize');
         // [Maquette Optimisation de découpe] fiches persistées
@@ -1413,6 +1582,7 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
         Route::put('cutting/{optimization}', [\App\Modules\Production\Controllers\CuttingController::class, 'update'])->name('cutting.update');
         Route::delete('cutting/{optimization}', [\App\Modules\Production\Controllers\CuttingController::class, 'destroyOptimization'])->name('cutting.destroy');
         Route::post('cutting/{optimization}/run', [\App\Modules\Production\Controllers\CuttingController::class, 'run'])->name('cutting.run');
+        Route::post('cutting/{optimization}/cloturer', [\App\Modules\Production\Controllers\CuttingController::class, 'close'])->name('cutting.close');
     });
 
     // Maintenance machines
@@ -1452,6 +1622,7 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::post('sales/{commande}/reserve-stock', [\App\Modules\Production\Controllers\ProductionReservationController::class, 'reserveStock'])->name('sales.reserve-stock');
 
     // Ordres de fabrication — workflow
+    Route::get('orders/{order}/pdf', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'pdf'])->name('orders.pdf');
     Route::post('orders/{order}/allocate', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'allocateMaterial'])->name('orders.allocate');
     Route::post('orders/{order}/launch', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'launch'])->name('orders.launch');
     Route::post('orders/{order}/start',  [\App\Modules\Production\Controllers\ProductionOrderController::class, 'start'])->name('orders.start');
@@ -1476,24 +1647,25 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::post('orders/{order}/modification-approve-dg', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'modificationDgApprove'])->name('orders.modification-approve-dg');
     Route::post('orders/{order}/modification-reject', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'modificationReject'])->name('orders.modification-reject');
 
-    // Exécution : consommation matière, sorties PF, chutes
-    Route::post('orders/{order}/consume', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'consume'])->name('orders.consume');
+    // Exécution — corrections/annulations et visa chef : encadrement (production.update)
     Route::delete('consumptions/{consumption}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyConsumption'])->name('consumptions.destroy');
-    Route::post('orders/{order}/output', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'output'])->name('orders.output');
     Route::delete('outputs/{output}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyOutput'])->name('outputs.destroy');
     // [CDC §13.3] Visa chef d'équipe sur déclaration de production
     Route::post('outputs/{output}/validate', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'validateOutput'])->name('outputs.validate');
-    Route::post('orders/{order}/waste', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'waste'])->name('orders.waste');
-    Route::post('orders/{order}/byproduct', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'byproduct'])->name('orders.byproduct');
     Route::delete('wastes/{waste}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'destroyWaste'])->name('wastes.destroy');
     // [§13.9 CDC] Validation rebuts : Chef Atelier → Responsable Qualité → GL
     Route::post('wastes/{waste}/validate-chef',    [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'validateChef'])->middleware('permission:production.declare')->name('wastes.validate-chef');
     Route::post('wastes/{waste}/validate-quality', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'validateQuality'])->middleware('permission:quality.manage')->name('wastes.validate-quality');
 
-    // Coût de revient + contrôle qualité
+    // Coût de revient
     Route::post('orders/{order}/cost', [\App\Modules\Production\Controllers\ProductionCostController::class, 'compute'])->name('orders.cost');
-    Route::post('orders/{order}/quality', [\App\Modules\Production\Controllers\ProductionQualityController::class, 'store'])->name('orders.quality');
     Route::delete('quality/{qualityControl}', [\App\Modules\Production\Controllers\ProductionQualityController::class, 'destroy'])->name('quality.destroy');
+
+    // [Flux tôle bac §3] Tableau des commandes éligibles à la production (réglées ou approuvées, sans OF)
+    Route::get('orders/eligible', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'eligible'])->name('orders.eligible');
+
+    // [MTS §2.2] Planification production pour stock (fer à béton…) — besoin net + création OF MTS
+    Route::get('orders/mts', [\App\Modules\Production\Controllers\ProductionOrderController::class, 'mts'])->name('orders.mts');
 
     Route::resource('orders', \App\Modules\Production\Controllers\ProductionOrderController::class);
 
@@ -1511,6 +1683,24 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
     Route::resource('bom', \App\Modules\Production\Controllers\BillOfMaterialController::class)->parameter('bom', 'bom');
 });
 
+// [FIX A2 — rapport de test MTO] Saisie atelier ouverte à l'opérateur
+// (production.declare) EN PLUS de l'encadrement (production.update) :
+// consommation matière, déclaration de production, chutes et sous-produits.
+Route::middleware(['auth', 'verified', 'permission:production.declare|production.update'])
+    ->prefix('production')->name('production.')->group(function () {
+    Route::post('orders/{order}/consume', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'consume'])->name('orders.consume');
+    Route::post('orders/{order}/output', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'output'])->name('orders.output');
+    Route::post('orders/{order}/waste', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'waste'])->name('orders.waste');
+    Route::post('orders/{order}/byproduct', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'byproduct'])->name('orders.byproduct');
+});
+
+// [FIX A3 — rapport de test MTO] Contrôle qualité de l'OF accessible au
+// responsable qualité (quality.manage) en plus de la production.
+Route::middleware(['auth', 'verified', 'permission:production.update|quality.manage'])
+    ->prefix('production')->name('production.')->group(function () {
+    Route::post('orders/{order}/quality', [\App\Modules\Production\Controllers\ProductionQualityController::class, 'store'])->name('orders.quality');
+});
+
 // ═══ Direction — tableau de bord exécutif (cross-module) ═══
 // [SEC §15] Synthèse exécutive (trésorerie, marges, cross-module) : réservée
 // à la direction — reports.view ne suffit pas (le commercial l'a pour SES rapports).
@@ -1525,6 +1715,19 @@ Route::middleware(['auth', 'verified', 'permission:direction.view'])
 Route::middleware(['auth', 'verified', 'permission:quality.view'])->prefix('qualite')->name('qualite.')->group(function () {
     Route::resource('inspections', \App\Modules\Quality\Controllers\QualityInspectionController::class)->except('show');
     Route::resource('non-conformities', \App\Modules\Quality\Controllers\NonConformityController::class)->except('show')->parameters(['non-conformities' => 'nonConformity']);
+    // [QUA-08] Tableau de bord indicateurs qualité
+    Route::get('indicateurs', [\App\Modules\Quality\Controllers\QualityDashboardController::class, 'index'])->name('dashboard');
+    // [QUA-01] Plans de contrôle
+    Route::resource('plans-controle', \App\Modules\Quality\Controllers\ControlPlanController::class)->parameters(['plans-controle' => 'controlPlan'])->names('control-plans');
+    // [QUA-07] Libération qualité des lots
+    Route::get('liberations', [\App\Modules\Quality\Controllers\QualityReleaseController::class, 'index'])->name('releases.index');
+    Route::post('liberations/{batch}/decision', [\App\Modules\Quality\Controllers\QualityReleaseController::class, 'decide'])->whereNumber('batch')->name('releases.decide');
+    // [QUA-05] Actions correctives / préventives (CAPA)
+    Route::get('actions-correctives', [\App\Modules\Quality\Controllers\CorrectiveActionController::class, 'index'])->name('corrective-actions.index');
+    Route::get('non-conformities/{nonConformity}/actions', [\App\Modules\Quality\Controllers\CorrectiveActionController::class, 'forNc'])->name('corrective-actions.nc');
+    Route::post('non-conformities/{nonConformity}/actions', [\App\Modules\Quality\Controllers\CorrectiveActionController::class, 'store'])->name('corrective-actions.store');
+    Route::post('actions-correctives/{action}/statut', [\App\Modules\Quality\Controllers\CorrectiveActionController::class, 'changeStatus'])->name('corrective-actions.status');
+    Route::post('actions-correctives/{action}/verifier', [\App\Modules\Quality\Controllers\CorrectiveActionController::class, 'verify'])->name('corrective-actions.verify');
     // Certificats qualité (§8 Traçabilité + §10 Qualité)
     Route::resource('certificats', \App\Http\Controllers\Quality\QualityCertificateController::class)->parameters(['certificats' => 'certificat']);
     Route::post('certificats/{certificat}/approve', [\App\Http\Controllers\Quality\QualityCertificateController::class, 'approve'])->name('certificats.approve')->middleware('permission:quality.manage');
@@ -1540,3 +1743,16 @@ Route::middleware(['auth', 'verified', 'permission:analytic.view'])->prefix('ana
 });
 
 require __DIR__.'/auth.php';
+
+// [PHASE 2.5 — E2E UI] Connexion de recette SANS saisie de mot de passe.
+// STRICTEMENT environnement local : inexistante en production/staging.
+if (app()->environment('local')) {
+    Route::get('/dev-login/{role?}', function (?string $role = null) {
+        $user = $role
+            ? \App\Models\User::where('is_active', true)->role($role)->firstOrFail()
+            : \App\Models\User::where('is_active', true)->role('super_admin')->firstOrFail();
+        \Illuminate\Support\Facades\Auth::login($user);
+
+        return redirect('/dashboard');
+    })->name('dev.login');
+}

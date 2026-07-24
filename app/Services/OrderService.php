@@ -305,20 +305,32 @@ class OrderService
                 continue;
             }
 
-            // [§5 TÔLE BAC] Quantité en mètres linéaires = nombre de tôles × métrage.
+            // [§5 TÔLE BAC] Quantité en mètres linéaires = nombre de tôles × métrage
+            // (règle et arrondi centralisés dans SheetConversion).
             $nbToles = isset($item['nb_toles']) ? (float) $item['nb_toles'] : null;
             $metrage = isset($item['metrage_par_tole']) ? (float) $item['metrage_par_tole'] : null;
-            if ($nbToles && $metrage) {
-                $qty = round($nbToles * $metrage, 2);
-            } else {
-                $qty = (float) ($item['quantity'] ?? 1);
-            }
+            $qty     = \App\Support\SheetConversion::resolveQuantity($nbToles, $metrage, $item['quantity'] ?? 1);
 
             $price = (float) ($item['unit_price'] ?? 0);
             $disc  = (float) ($item['discount_percent'] ?? 0);
 
+            // [X3 §14] Vente d'un article non vendable interdite (catégorie prioritaire, repli article).
+            if (! empty($item['product_id'])) {
+                $prod = \App\Models\Product::with('itemCategory')->find($item['product_id']);
+                $sellable = $prod?->itemCategory ? (bool) $prod->itemCategory->is_sellable : (bool) ($prod?->is_sellable ?? true);
+                if ($prod && ! $sellable) {
+                    throw new \RuntimeException(sprintf(
+                        'Article « %s » non vendable (catégorie %s) — vente refusée.',
+                        $prod->name, $prod->itemCategory?->code ?? 'article'
+                    ));
+                }
+            }
+
             // [§5 PRIX PLANCHER] Vente sous le prix plancher interdite, sauf rôle autorisé.
             $this->assertFloorPrice($item['product_id'] ?? null, $price, $disc);
+
+            // [§6 DIMENSIONS] Longueur unitaire hors bornes fabricables interdite.
+            $this->assertSheetLength($item['product_id'] ?? null, $metrage);
 
             $tax   = (float) ($item['tax_rate_value'] ?? 0);
             $ht    = (int) round($qty * $price * (1 - $disc / 100));
@@ -370,6 +382,39 @@ class OrderService
             'Prix de vente (%s) inférieur au prix plancher (%s) pour « %s ». Autorisation spéciale requise.',
             number_format($net, 0, ',', ' '), number_format($floor, 0, ',', ' '), $product->name
         ));
+    }
+
+    /**
+     * [§6] Refuse une longueur unitaire (métrage par tôle) hors des bornes
+     * fabricables de l'article (longueur_min / longueur_max, en mètres).
+     * Article sans bornes = aucun contrôle.
+     */
+    private function assertSheetLength(?int $productId, ?float $length): void
+    {
+        if (! $productId || $length === null || $length <= 0) {
+            return;
+        }
+        $product = \App\Models\Product::find($productId);
+        if (! $product) {
+            return;
+        }
+        $min = $product->longueur_min !== null ? (float) $product->longueur_min : null;
+        $max = $product->longueur_max !== null ? (float) $product->longueur_max : null;
+
+        if ($max !== null && $length > $max) {
+            throw new \RuntimeException(sprintf(
+                'Longueur unitaire (%s m) supérieure à la longueur maximale fabricable (%s m) pour « %s ».',
+                rtrim(rtrim(number_format($length, 3, ',', ' '), '0'), ','),
+                rtrim(rtrim(number_format($max, 3, ',', ' '), '0'), ','), $product->name
+            ));
+        }
+        if ($min !== null && $length < $min) {
+            throw new \RuntimeException(sprintf(
+                'Longueur unitaire (%s m) inférieure à la longueur minimale fabricable (%s m) pour « %s ».',
+                rtrim(rtrim(number_format($length, 3, ',', ' '), '0'), ','),
+                rtrim(rtrim(number_format($min, 3, ',', ' '), '0'), ','), $product->name
+            ));
+        }
     }
 
     /** [TVA-EXEMPT] Met tous les taux TVA à 0 sur un tableau d'items. */

@@ -84,7 +84,10 @@ class ProductsExport implements FromArray, WithTitle, WithColumnWidths, WithEven
         $products = Product::with(['family', 'brand', 'unit', 'taxRate'])
             ->where('is_active', true)
             ->orderBy('name')
-            ->when(!empty($this->filters['family_id']), fn($q) => $q->where('family_id', $this->filters['family_id']))
+            ->when(!empty($this->filters['family_id']), fn($q) => $q->where(fn($qq) => $qq
+                ->where('family_id', $this->filters['family_id'])
+                ->orWhere('sub_family_id', $this->filters['family_id'])))
+            ->when(!empty($this->filters['item_category_id']), fn($q) => $q->where('item_category_id', $this->filters['item_category_id']))
             ->when(!empty($this->filters['search']), function ($q) {
                 $s = '%' . $this->filters['search'] . '%';
                 $q->where(fn($q2) => $q2->where('name', 'like', $s)->orWhere('reference', 'like', $s));

@@ -70,6 +70,9 @@ class Client extends Model
         'tax_exemption_reason',
         'tax_exemption_number',
         'soumis_tva',
+        // [Précompte BIC] inclusion/exclusion au précompte BIC + motif d'exemption
+        'soumis_bic',
+        'bic_exemption_reason',
         // Statuts
         'is_livrable',
         'is_facturable',
@@ -105,6 +108,24 @@ class Client extends Model
         'blocked_reason',
         'notes',
         'sales_rep_id',
+        // [Parité Sage X3] Juridique / fiscal
+        'forme_juridique',
+        'regime_imposition',
+        'no_agrement',
+        // [Parité Sage X3] Risque crédit
+        'code_risque',
+        'garantie_montant',
+        'nature_garantie',
+        'assurance_credit',
+        'rrr_montant',
+        'rrr_taux',
+        'reference_cadastrale',
+        // [Parité Sage X3] Tiers comptables
+        'client_facture_id',
+        'client_payeur_id',
+        'client_groupe_id',
+        'client_risque_id',
+        'factor_id',
     ];
 
     protected $casts = [
@@ -115,12 +136,16 @@ class Client extends Model
         'is_active'        => 'boolean',
         'is_tax_exempt'    => 'boolean',
         'soumis_tva'       => 'boolean',
+        'soumis_bic'       => 'boolean',
         'is_livrable'      => 'boolean',
         'is_facturable'    => 'boolean',
         'blocage_commande' => 'boolean',
         'gps_lat'          => 'decimal:6',
         'gps_lng'          => 'decimal:6',
         'delai_livraison'  => 'integer',
+        'garantie_montant' => 'decimal:2',
+        'rrr_montant'      => 'decimal:2',
+        'rrr_taux'         => 'decimal:2',
     ];
 
     public function site(): BelongsTo { return $this->belongsTo(Warehouse::class, 'site_id'); }
@@ -165,6 +190,13 @@ class Client extends Model
         return $this->belongsTo(SalesRep::class);
     }
 
+    // [Parité Sage X3] Tiers comptables (self-références nullable)
+    public function clientFacture(): BelongsTo { return $this->belongsTo(self::class, 'client_facture_id'); }
+    public function clientPayeur(): BelongsTo  { return $this->belongsTo(self::class, 'client_payeur_id'); }
+    public function clientGroupe(): BelongsTo  { return $this->belongsTo(self::class, 'client_groupe_id'); }
+    public function clientRisque(): BelongsTo  { return $this->belongsTo(self::class, 'client_risque_id'); }
+    public function factor(): BelongsTo        { return $this->belongsTo(self::class, 'factor_id'); }
+
     public function taxRate(): BelongsTo
     {
         return $this->belongsTo(TaxRate::class);
@@ -178,6 +210,12 @@ class Client extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /** [VEN Crédit] Historique des décisions de crédit. */
+    public function creditDecisions(): HasMany
+    {
+        return $this->hasMany(CreditDecision::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function invoices(): HasMany

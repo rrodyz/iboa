@@ -7,6 +7,14 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreOrderRequest extends FormRequest
 {
     use \App\Http\Requests\Sale\Concerns\ChecksFloorPrice;
+    use \App\Http\Requests\Sale\Concerns\ChecksSheetLength;
+
+    // [CDC §4/§6] Contrôles serveur des lignes : prix plancher + longueur fabricable.
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $this->checkFloorPrice($validator);
+        $this->checkSheetLength($validator);
+    }
 
     public function authorize(): bool
     {
@@ -37,7 +45,7 @@ class StoreOrderRequest extends FormRequest
             // [Maquette Commande client]
             'contact_id'                   => 'nullable|exists:client_contacts,id',
             'sales_rep_id'                 => 'nullable|exists:users,id',
-            'price_mode'                   => 'nullable|in:ttc,ht',
+            'price_mode'                   => 'nullable|in:ttc,ht,exonere',
             'net_prices'                   => 'nullable|boolean',
             'price_list'                   => 'nullable|string|max:60',
             'payment_terms'                => 'nullable|string|max:100',

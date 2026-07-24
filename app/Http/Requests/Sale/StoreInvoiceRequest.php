@@ -7,6 +7,14 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreInvoiceRequest extends FormRequest
 {
     use \App\Http\Requests\Sale\Concerns\ChecksFloorPrice;
+    use \App\Http\Requests\Sale\Concerns\ChecksSheetLength;
+
+    // [CDC §4/§6] Contrôles serveur des lignes : prix plancher + longueur fabricable.
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $this->checkFloorPrice($validator);
+        $this->checkSheetLength($validator);
+    }
 
     public function authorize(): bool
     {
@@ -38,7 +46,7 @@ class StoreInvoiceRequest extends FormRequest
             // [Maquette Facture de vente]
             'contact_id'                   => 'nullable|exists:client_contacts,id',
             'warehouse_id'                 => 'nullable|exists:warehouses,id',
-            'price_mode'                   => 'nullable|in:ttc,ht',
+            'price_mode'                   => 'nullable|in:ttc,ht,exonere',
             'net_prices'                   => 'nullable|boolean',
             'project_reference'            => 'nullable|string|max:60',
             'price_list'                   => 'nullable|string|max:60',
@@ -62,6 +70,8 @@ class StoreInvoiceRequest extends FormRequest
             'items.*.description'          => 'required|string|max:255',
             'items.*.unit_id'              => 'nullable|exists:units,id',
             'items.*.quantity'             => 'required|numeric|min:0.0001',
+            'items.*.nb_toles'             => 'nullable|numeric|min:0',
+            'items.*.metrage_par_tole'     => 'nullable|numeric|min:0',
             'items.*.unit_price'           => 'required|numeric|min:0',
             'items.*.discount_percent'     => 'nullable|numeric|min:0|max:100',
             'items.*.tax_rate_id'          => 'nullable|exists:tax_rates,id',

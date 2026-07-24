@@ -18,19 +18,24 @@
 @endphp
 <div class="space-y-4">
 
-    {{-- Bandeau --}}
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-[22px] font-bold text-gray-900 leading-tight">Ordres de fabrication</h1>
-            <p class="text-[12px] text-gray-500">Lancement, suivi &amp; clôture de la production tôle bac</p>
+    {{-- ═══ Bandeau SAGE X3 ═══ --}}
+    <div class="bg-white border border-gray-300 rounded-[4px]">
+        <div class="flex items-center justify-between px-4 py-2.5 bg-gradient-to-b from-gray-50 to-white flex-wrap gap-2">
+            <div>
+                <h2 class="text-[22px] font-bold text-gray-900 leading-tight">Ordres de fabrication</h2>
+                <p class="text-[11.5px] text-gray-400">Lancement, suivi &amp; clôture de la production</p>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+                @can('production.create')
+                <a href="{{ route('production.orders.create') }}"
+                   class="text-[14px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-5 py-2 rounded-[4px] transition-colors">Nouvel OF</a>
+                @endcan
+                <a href="{{ route('production.orders.eligible') }}"
+                   class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Éligibles MTO</a>
+                <a href="{{ route('production.orders.mts') }}"
+                   class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Planification MTS</a>
+            </div>
         </div>
-        @can('production.create')
-        <a href="{{ route('production.orders.create') }}"
-           class="bg-emerald-700 hover:bg-emerald-800 text-white text-[13px] font-semibold px-4 py-1.5 rounded-[4px] flex items-center gap-1.5 transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Nouvel OF
-        </a>
-        @endcan
     </div>
 
     {{-- KPI --}}
@@ -165,15 +170,22 @@
                         <th class="{{ $th }} text-left hidden 2xl:table-cell">Ligne</th>
                         <th class="{{ $th }} text-left hidden xl:table-cell">Prévue</th>
                         <th class="{{ $th }} text-left hidden 2xl:table-cell">Responsable</th>
-                        <th class="{{ $th }} text-center">Statut</th>
+                        {{-- [Charte X3] Statut figé à droite : reste visible même quand la
+                             table déborde (colonnes Ligne/Responsable au breakpoint 2xl). --}}
+                        <th class="{{ $th }} text-center sticky right-0 bg-[#3b4248] z-20">Statut</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($orders as $o)
                     @php
                         $reste    = max(0, (float) $o->quantity_requested - (float) $o->quantity_produced);
-                        $enRetard = in_array($o->status, ['lance', 'en_cours', 'termine_partiellement'], true)
-                                    && $o->date_fin_prevue && $o->date_fin_prevue->isPast();
+                        // Même définition que ProductionOrder::scopeEnRetard (KPI du haut) :
+                        // statuts actifs (suspendu inclus) + fin prévue STRICTEMENT avant aujourd'hui.
+                        $enRetard = in_array($o->status, ['lance', 'en_cours', 'termine_partiellement', 'suspendu'], true)
+                                    && $o->date_fin_prevue && $o->date_fin_prevue->lt(today());
+                        // La colonne « Prévue » doit montrer la date qui fonde le retard :
+                        // fabrication prévue si saisie, sinon fin prévue.
+                        $datePrevue = $o->date_fabrication_prevue ?? $o->date_fin_prevue;
                     @endphp
                     <tr class="border-b border-gray-100 odd:bg-white even:bg-gray-50/40 hover:bg-emerald-50/50 transition-colors {{ $o->status === 'annule' ? 'opacity-50' : '' }}">
                         <td class="px-2 py-1.5 whitespace-nowrap">
@@ -200,9 +212,10 @@
                             <span class="inline-flex px-1.5 py-0.5 rounded-[2px] text-[10.5px] font-semibold {{ $pc }}">{{ $pl }}</span>
                         </td>
                         <td class="px-2 py-1.5 text-gray-500 text-[12px] hidden 2xl:table-cell max-w-[100px] truncate">{{ $o->productionLine?->name ?? '—' }}</td>
-                        <td class="px-2 py-1.5 text-gray-600 tabular-nums hidden xl:table-cell whitespace-nowrap {{ $enRetard ? 'text-red-600 font-semibold' : '' }}">{{ $o->date_fabrication_prevue?->format('d/m/y') ?? '—' }}</td>
+                        <td class="px-2 py-1.5 text-gray-600 tabular-nums hidden xl:table-cell whitespace-nowrap {{ $enRetard ? 'text-red-600 font-semibold' : '' }}"
+                            @if($datePrevue) title="{{ $o->date_fabrication_prevue ? 'Fabrication prévue' : 'Fin prévue' }}" @endif>{{ $datePrevue?->format('d/m/y') ?? '—' }}</td>
                         <td class="px-2 py-1.5 text-gray-500 text-[12px] hidden 2xl:table-cell max-w-[100px] truncate">{{ $o->responsible?->name ?? '—' }}</td>
-                        <td class="px-2 py-1.5 text-center">
+                        <td class="px-2 py-1.5 text-center sticky right-0 bg-white z-10 shadow-[-6px_0_6px_-4px_rgba(0,0,0,0.08)]">
                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium
                                 @switch($o->status)
                                     @case('brouillon') bg-gray-100 text-gray-600 @break

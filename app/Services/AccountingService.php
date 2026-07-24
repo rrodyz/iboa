@@ -49,9 +49,13 @@ class AccountingService
         'clients'             => ['411',  'Clients',                         'actif',   4],
         'fournisseurs'        => ['401',  'Fournisseurs',                    'passif',  4],
         'ventes'              => ['7011', 'Ventes de marchandises',          'produit', 7],
+        // [SYSCOHADA] Produit fabriqué (famille adossée au stock 361) vendu → 702, pas 7011
+        'ventes_produits_finis' => ['702', 'Ventes de produits finis',       'produit', 7],
         'achats'              => ['6011', 'Achats de marchandises',          'charge',  6],
         'tva_collectee'       => ['4431', 'TVA facturée sur ventes',         'passif',  4],
-        'tva_deductible'      => ['4432', 'TVA récupérable sur achats',      'actif',   4],
+        // [SYSCOHADA] 445 = État, TVA récupérable (4432 était une subdivision
+        // de 443 « TVA facturée » — écart au plan corrigé avant production)
+        'tva_deductible'      => ['4452', 'État — TVA récupérable sur achats', 'actif',  4],
         'retours_ventes'      => ['7085', 'Remises accordées et retours',    'produit', 7],
         'banque'              => ['521',  'Banques, chèques postaux',        'actif',   5],
         'caisse'              => ['571',  'Caisse',                          'actif',   5],
@@ -124,7 +128,7 @@ class AccountingService
         if ($ttc <= 0) return null;
 
         // [COMPTA-FAMILLE] Charger les comptes de vente associés aux familles + taxes par taux
-        $invoice->loadMissing('items.product.family.saleAccount', 'items.taxRate.collectedAccount');
+        $invoice->loadMissing('items.product.family.saleAccount', 'items.product.family.stockAccount', 'items.taxRate.collectedAccount');
 
         $defaultSaleAccount = $this->account($company, 'ventes');
 
@@ -146,7 +150,17 @@ class AccountingService
         // Ventilation du HT par compte de vente (selon famille de l'article)
         // Le montant $ht est passé comme fallback pour éviter une écriture déséquilibrée
         // si la facture n'a pas de lignes (ex. factures créées sans articles).
-        $ventilation = $this->ventilateByFamilyAccount($invoice->items, $defaultSaleAccount->id, 'sale_account_id', $ht);
+        $ventilation = $this->ventilateByFamilyAccount(
+            $invoice->items,
+            $defaultSaleAccount->id,
+            'sale_account_id',
+            $ht,
+            // [SYSCOHADA] Famille sans compte de vente configuré mais adossée au
+            // stock 361 (produits finis fabriqués) → 702, pas 7011 marchandises.
+            fn ($item) => $item->product?->family?->stockAccount?->code === '361'
+                ? $this->account($company, 'ventes_produits_finis')->id
+                : null
+        );
         foreach ($ventilation as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Facture '.$invoice->number, 0, $amount);
         }
@@ -566,7 +580,6 @@ class AccountingService
         $invoice->loadMissing('items.product.family.stockAccount');
 
         $defaultStockAccount = $this->account($company, 'stocks');
-        $variationAccount    = $this->account($company, 'variation_stocks');
 
         // Calcul du coût par compte stock (ventilation)
         $buckets = [];
@@ -596,10 +609,11 @@ class AccountingService
 
         if ($totalCost <= 0) return null; // rien à comptabiliser (services seulement, ou coûts manquants)
 
-        $lines = [
-            $this->line($variationAccount, 'Sortie stock '.$invoice->number, $totalCost, 0),
-        ];
+        // [SYSCOHADA] Compte de variation adossé au compte de stock du bucket :
+        //   361 PF → 736 Production stockée, 321 MP → 6032, 3111 marchandises → 6031.
+        $lines = [];
         foreach ($buckets as $accountId => $amount) {
+            $lines[] = $this->line($this->variationForStock($company, (int) $accountId), 'Sortie stock '.$invoice->number, $amount, 0);
             $lines[] = $this->lineByAccountId($accountId, 'Sortie stock '.$invoice->number, 0, $amount);
         }
 
@@ -626,7 +640,6 @@ class AccountingService
         $invoice->loadMissing('items.product.family.stockAccount');
 
         $defaultStockAccount = $this->account($company, 'stocks');
-        $variationAccount    = $this->account($company, 'variation_stocks');
 
         $buckets = [];
         $totalCost = 0;
@@ -645,17 +658,37 @@ class AccountingService
 
         if ($totalCost <= 0) return null;
 
+        // [SYSCOHADA] Compte de variation adossé au compte de stock (par bucket) :
+        //   321 MP → 6032, 361 PF → 736, 3111 marchandises → 6031.
         $lines = [];
         foreach ($buckets as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Entrée stock '.$invoice->number, $amount, 0);
+            $lines[] = $this->line($this->variationForStock($company, (int) $accountId), 'Entrée stock '.$invoice->number, 0, $amount);
         }
-        $lines[] = $this->line($variationAccount, 'Entrée stock '.$invoice->number, 0, $totalCost);
 
         return $this->post($company, 'operations_diverses', [
             'entry_date'  => $invoice->received_at ?? today(),
             'reference'   => $invoice->number.'-STK',
             'description' => 'Entrée de stock sur fact. fournisseur '.$invoice->number,
         ], $lines);
+    }
+
+    /**
+     * Compte de variation de stock adossé à un compte de stock (SYSCOHADA) :
+     *   321  Stocks matières premières → 6032 Variation MP
+     *   361  Produits finis            → 736  Production stockée
+     *   3111 Marchandises (défaut)     → 6031 Variation marchandises
+     */
+    private function variationForStock(Company $company, int $stockAccountId): \App\Models\Account
+    {
+        $code = \App\Models\Account::find($stockAccountId)?->code;
+        $key = match ($code) {
+            '321'   => 'variation_stocks_matieres',
+            '361'   => 'production_stockee',
+            default => 'variation_stocks',
+        };
+
+        return $this->account($company, $key);
     }
 
     /**
@@ -672,13 +705,16 @@ class AccountingService
         $creditNote->loadMissing('items.product.family.stockAccount');
 
         $defaultStockAccount = $this->account($company, 'stocks');
-        $variationAccount    = $this->account($company, 'variation_stocks');
 
         $buckets = [];
         $totalCost = 0;
         foreach ($creditNote->items as $item) {
             $product = $item->product;
             if (!$product || !$product->is_stockable) continue;
+
+            // [VEN Retour] Les lignes mises au rebut ne réintègrent pas le stock :
+            // pas d'entrée d'actif au grand livre (biens détruits, déjà sortis à la vente).
+            if (($item->disposition ?? 'restock') === 'rebut') continue;
 
             $cost = (int) round((float) $item->quantity * (float) ($product->purchase_price ?? 0));
             if ($cost <= 0) continue;
@@ -690,11 +726,12 @@ class AccountingService
 
         if ($totalCost <= 0) return null;
 
+        // [SYSCOHADA] Variation adossée au compte de stock (361 PF → 736, 321 → 6032, défaut 6031)
         $lines = [];
         foreach ($buckets as $accountId => $amount) {
             $lines[] = $this->lineByAccountId($accountId, 'Retour stock avoir '.$creditNote->number, $amount, 0);
+            $lines[] = $this->line($this->variationForStock($company, (int) $accountId), 'Retour stock avoir '.$creditNote->number, 0, $amount);
         }
-        $lines[] = $this->line($variationAccount, 'Retour stock avoir '.$creditNote->number, 0, $totalCost);
 
         return $this->post($company, 'operations_diverses', [
             'entry_date'  => $creditNote->issued_at ?? today(),
@@ -821,6 +858,70 @@ class AccountingService
             'reference'   => $session->number,
             'description' => $label,
         ], $lines);
+    }
+
+    /**
+     * [ULTIMATUM parcours D] Remboursement réel d'un avoir client :
+     *   D 411 Clients / C 571 ou 521 (selon le compte de trésorerie).
+     * L'avoir avait crédité 411 (dette envers le client) ; le remboursement
+     * éteint cette dette par une sortie de fonds.
+     */
+    public function postCreditNoteRefund(CreditNote $creditNote, \App\Models\CashAccount $cashAccount, int $amount, int $alreadyRefunded = 0): ?JournalEntry
+    {
+        $company = $this->company($creditNote->company_id);
+        if (! $company || $amount <= 0) {
+            return null;
+        }
+        $treasuryKey = $cashAccount->type === 'caisse' ? 'caisse'
+            : ($cashAccount->type === 'mobile_money' ? 'mobile_money' : 'banque');
+        // [R2 §2] Référence unique PAR remboursement (partiels successifs) :
+        // suffixe = cumul déjà remboursé, pour ne pas retomber sur l'idempotence.
+        $reference = 'REMB-' . $creditNote->number . ($alreadyRefunded > 0 ? '-' . $alreadyRefunded : '');
+        if ($this->entryExists($company, $reference)) {
+            return null; // idempotent (rejeu exact du même remboursement partiel)
+        }
+        $label = 'Remboursement avoir ' . $creditNote->number;
+        // Journal selon le support de paiement (enum journal_types :
+        // caisse | banque — « tresorerie » n'existe pas dans l'enum)
+        $journal = $cashAccount->type === 'caisse' ? 'caisse' : 'banque';
+
+        return $this->post($company, $journal, [
+            'entry_date'  => today(),
+            'reference'   => $reference,
+            'description' => $label,
+        ], [
+            $this->line($this->account($company, 'clients'), $label, $amount, 0),
+            $this->line($this->account($company, $treasuryKey), $label, 0, $amount),
+        ]);
+    }
+
+    /**
+     * [DÉCISION 23/07] Perte en transit sur transfert partiellement reçu :
+     *   DR 6097 Pertes sur inventaire / CR 3111 Stocks  = valeur de l'écart.
+     * Le stock physique reflète déjà la perte (sortie source sans entrée
+     * destination) — cette écriture aligne la valorisation comptable.
+     */
+    public function postTransferLoss(\App\Models\StockTransfer $transfer, int $amount): ?JournalEntry
+    {
+        $company = $this->company($transfer->company_id);
+        if (! $company || $amount <= 0) {
+            return null;
+        }
+
+        $reference = 'PERTE-TRANSIT-' . $transfer->number;
+        if ($this->entryExists($company, $reference)) {
+            return null; // idempotent : une seule écriture de perte par transfert
+        }
+        $label = 'Perte en transit — transfert ' . $transfer->number;
+
+        return $this->post($company, 'operations_diverses', [
+            'entry_date'  => today(),
+            'reference'   => $reference,
+            'description' => $label,
+        ], [
+            $this->line($this->account($company, 'pertes_inventaire'), $label, $amount, 0),
+            $this->line($this->account($company, 'stocks'), $label, 0, $amount),
+        ]);
     }
 
     /**
@@ -1146,14 +1247,16 @@ class AccountingService
      * @param  string    $accountField       'sale_account_id' ou 'purchase_account_id'
      * @return array<int,int>                [accountId => totalHt, ...]
      */
-    private function ventilateByFamilyAccount($items, int $fallbackAccountId, string $accountField, int $fallbackAmount = 0): array
+    private function ventilateByFamilyAccount($items, int $fallbackAccountId, string $accountField, int $fallbackAmount = 0, ?\Closure $fallbackForItem = null): array
     {
         $buckets = [];
         foreach ($items as $item) {
             $ht = (int) ($item->line_total_ht ?? 0);
             if ($ht <= 0) continue;
 
-            $accountId = $item->product?->family?->{$accountField} ?? $fallbackAccountId;
+            $accountId = $item->product?->family?->{$accountField}
+                ?? ($fallbackForItem ? $fallbackForItem($item) : null)
+                ?? $fallbackAccountId;
             $buckets[$accountId] = ($buckets[$accountId] ?? 0) + $ht;
         }
 
@@ -1246,13 +1349,24 @@ class AccountingService
 
     private function journalType(Company $company, string $type): JournalType
     {
+        // orderBy('id') : résolution déterministe si plusieurs journaux du même
+        // type existent (cas historique VT/VE — doublon auto-créé puis seedé).
         $existing = JournalType::where('company_id', $company->id)
             ->where('type', $type)
-            ->where('is_active', true)
-            ->first();
+            ->orderBy('id')
+            ->get();
 
-        if ($existing) {
-            return $existing;
+        $active = $existing->firstWhere('is_active', true);
+        if ($active) {
+            return $active;
+        }
+
+        // Un journal du bon type existe mais est inactif : le réactiver plutôt
+        // que d'en créer un doublon (origine du duo VT/VE).
+        if ($existing->isNotEmpty()) {
+            $journal = $existing->first();
+            $journal->update(['is_active' => true]);
+            return $journal;
         }
 
         // Auto-create a default journal type when none exists (e.g. in test or fresh company)
@@ -1266,21 +1380,33 @@ class AccountingService
 
         $default = $defaults[$type] ?? ['code' => strtoupper(substr($type, 0, 2)), 'name' => 'Journal '.$type];
 
-        return JournalType::firstOrCreate(
-            ['company_id' => $company->id, 'type' => $type],
-            [
-                'code'      => $default['code'],
-                'name'      => $default['name'],
-                'is_active' => true,
-            ]
-        );
+        return JournalType::create([
+            'company_id' => $company->id,
+            'type'       => $type,
+            'code'       => $default['code'],
+            'name'       => $default['name'],
+            'is_active'  => true,
+        ]);
     }
+
+    /** Libellés SYSCOHADA officiels des classes de comptes. */
+    public const ACCOUNT_CLASS_NAMES = [
+        1 => 'Comptes de ressources durables',
+        2 => "Comptes d'actif immobilisé",
+        3 => 'Comptes de stocks',
+        4 => 'Comptes de tiers',
+        5 => 'Comptes de trésorerie',
+        6 => 'Comptes de charges des activités ordinaires',
+        7 => 'Comptes de produits des activités ordinaires',
+        8 => 'Comptes des autres charges et produits',
+        9 => 'Comptes des engagements hors bilan et comptes analytiques',
+    ];
 
     private function accountClassId(Company $company, int $number): int
     {
         return AccountClass::firstOrCreate(
             ['company_id' => $company->id, 'number' => $number],
-            ['name' => 'Classe '.$number]
+            ['name' => self::ACCOUNT_CLASS_NAMES[$number] ?? 'Classe '.$number]
         )->id;
     }
 

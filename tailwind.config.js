@@ -3,6 +3,11 @@ import forms from '@tailwindcss/forms';
 
 /** @type {import('tailwindcss').Config} */
 export default {
+    // [Fix mode sombre] Le toggle pose la classe `.dark` sur <html> (Alpine store +
+    // script inline anti-FOUC). Sans ceci, Tailwind resterait en mode `media` (OS) et
+    // les utilitaires dark: ignoreraient la classe → toggle sans effet visuel.
+    darkMode: 'class',
+
     content: [
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
@@ -11,14 +16,17 @@ export default {
 
     theme: {
         extend: {
+            // [Typo globale] Inter servie en local (@fontsource) — plus de Figtree CDN.
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', ...defaultTheme.fontFamily.sans],
             },
             fontSize: {
                 'xs': ['14px', { lineHeight: '1.4' }],   // sous-titres sidebar (défaut Tailwind : 12px)
                 'sm': ['16px', { lineHeight: '1.5' }],   // titres sidebar     (défaut Tailwind : 14px)
             },
             colors: {
+                // [Design system X3] bandeau de section (bg-band, hover:bg-band/40…)
+                band: '#eef5f0',
                 brand: {
                     dark:   '#0c0c1d',   // auth panel, login bg
                     darker: '#0f0f23',   // dashboard hero

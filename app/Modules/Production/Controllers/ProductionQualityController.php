@@ -13,7 +13,10 @@ class ProductionQualityController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('permission:production.update');
+        // [FIX A3 — rapport de test MTO] L'enregistrement du contrôle qualité de l'OF
+        // est ouvert au Responsable Qualité (quality.manage) en plus de la production.
+        $this->middleware('permission:production.update|quality.manage')->only('store');
+        $this->middleware('permission:production.update')->except('store');
     }
 
     public function store(Request $request, ProductionOrder $order): RedirectResponse
@@ -40,6 +43,19 @@ class ProductionQualityController extends Controller
             && ($last->reason ?? '') === ($request->input('reason') ?? '')
             && optional($last->controlled_at)->isSameDay($request->input('controlled_at') ?? now())) {
             return back()->with('error', 'Contrôle identique déjà enregistré aujourd\'hui — doublon ignoré.');
+        }
+
+        // [CDC §31.33 — séparation des tâches] Un déclarant de production ne peut pas
+        // valider CONFORME sa propre production (auto-libération interdite). L'auto-signalement
+        // d'un défaut (non_conforme / a_reprendre) reste permis. Dérogation : super_admin.
+        if ($request->input('status') === 'conforme') {
+            $declarerIds = \App\Modules\Production\Models\ProductionOutput::where('production_order_id', $order->id)
+                ->pluck('created_by')->filter()->unique();
+            $isDeclarer  = $declarerIds->contains(Auth::id());
+            $canOverride = Auth::user()?->hasRole('super_admin') ?? false;
+            if ($isDeclarer && ! $canOverride) {
+                return back()->with('error', "Séparation des tâches : vous avez déclaré cette production, un autre contrôleur doit valider la conformité.");
+            }
         }
 
         $order->qualityControls()->create([

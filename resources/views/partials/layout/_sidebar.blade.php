@@ -322,7 +322,8 @@ request()->routeIs('achats.*')                                                  
                             auth()->user()->can('clients.view')   ? [route('clients.grand-livre'),  'Grand livre clients', 'clients.grand-livre']  : null,
                             auth()->user()->can('suppliers.view') ? [route('suppliers.index'),      'Fournisseurs',        'suppliers*']           : null,
                             auth()->user()->can('products.view')  ? [route('products.index'),         'Articles',             'products*']             : null,
-                            auth()->user()->can('products.view')  ? [route('product-families.index'), 'Catégories articles','product-families*']     : null,
+                            auth()->user()->can('categories.view') ? [route('articles.categories.index'), 'Catégories de gestion','articles.categories*'] : null,
+                            auth()->user()->can('products.view')  ? [route('product-families.index'), 'Familles articles','product-families*']     : null,
                             auth()->user()->can('products.view')  ? [route('brands.index'),           'Marques',              'brands*']               : null,
                         ]) as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
@@ -374,6 +375,7 @@ request()->routeIs('achats.*')                                                  
                             auth()->user()->can('inventory.view')  ? [route('stocks.inventaires.index'),  'Inventaires',       'stocks.inventaires*']                    : null,
                             auth()->user()->can('stocks.adjust')   ? [route('stocks.seuils'),             'Seuils min / max',  'stocks.seuils']                          : null,
                             auth()->user()->can('stocks.view')     ? [route('stocks.lots'),               'Lots & Traçabilité','stocks.lots']                            : null,
+                            auth()->user()->can('stocks.view')     ? [route('stocks.pertes.index'),       'Pertes & casses',   'stocks.pertes*']                         : null,
                             auth()->user()->can('stocks.adjust')   ? [route('stocks.warehouses.index'),   'Entrepôts',         'stocks.warehouses*']                     : null,
                         ]) as [$href, $label, $match])
                         @php $sub = request()->routeIs(...explode(',', $match)); @endphp
@@ -418,6 +420,8 @@ request()->routeIs('achats.*')                                                  
                         @foreach(array_filter([
                             /* Suivi OF : tous les porteurs de production.view (dont commercial §13.10) */
                             [route('production.dashboard'),      'Tableau de bord',       'production.dashboard'],
+                            [route('production.orders.eligible'), 'Commandes à produire', 'production.orders.eligible'],
+                            [route('production.orders.mts'),      'Planification MTS',    'production.orders.mts'],
                             [route('production.orders.index'),   'Ordres de fabrication', 'production.orders*'],
                             [route('production.trackings.index'), 'Suivi de fabrication', 'production.trackings*'],
                             /* Bobines : plus de sous-menu dédié — rattachées à la fiche article
@@ -433,10 +437,15 @@ request()->routeIs('achats.*')                                                  
                             $puser->can('maintenance.view') ? [route('production.maintenance.index'), 'Maintenance', 'production.maintenance*'] : null,
                             /* Pilotage : chef production / directeur usine */
                             $puser->can('production.update') ? [route('production.planning'), 'Plan de charge',       'production.planning'] : null,
+                            $puser->can('production.update') ? [route('production.downtimes'), 'Temps d\'arrêt',       'production.downtimes'] : null,
                             $puser->can('production.update') ? [route('production.cutting'),  'Optimisation découpe', 'production.cutting'] : null,
                             /* Qualité : profils qualité */
+                            $puser->can('quality.view') ? [route('qualite.dashboard'),              'Indicateurs qualité', 'qualite.dashboard'] : null,
+                            $puser->can('quality.view') ? [route('qualite.control-plans.index'),    'Plans de contrôle', 'qualite.control-plans*'] : null,
                             $puser->can('quality.view') ? [route('qualite.inspections.index'),      'Contrôles qualité', 'qualite.inspections*'] : null,
                             $puser->can('quality.view') ? [route('qualite.non-conformities.index'), 'Non-conformités',   'qualite.non-conformities*'] : null,
+                            $puser->can('quality.view') ? [route('qualite.corrective-actions.index'), 'Actions correctives', 'qualite.corrective-actions*'] : null,
+                            $puser->can('quality.view') ? [route('qualite.releases.index'),         'Libération qualité', 'qualite.releases*'] : null,
                             $puser->can('quality.view') ? [route('qualite.certificats.index'),      'Certificats qualité', 'qualite.certificats*'] : null,
                             $puser->can('production.update') ? [route('production.mrp'), 'Réappro (MRP)', 'production.mrp'] : null,
                             $puser->can('production.cost.view') ? [route('production.treasury'), 'Prévision trésorerie', 'production.treasury'] : null,
@@ -510,7 +519,9 @@ request()->routeIs('achats.*')                                                  
             @endcanany
 
             {{-- ── TRÉSORERIE ───────────────────────────── --}}
-            @canany(['payments.view', 'cash_accounts.view', 'treasury.write', 'treasury.validate'])
+            {{-- [RBAC] Accès module réservé au profil trésorerie (treasury.view) : le
+                 commercial (payments.view pour les ventes) ne voit pas ce menu. --}}
+            @canany(['treasury.view'])
             @php $gId = 'tresorerie'; $gActive = request()->routeIs('tresorerie.*'); @endphp
             <div class="space-y-0.5">
                 <button type="button" @click="open = open === '{{ $gId }}' ? null : '{{ $gId }}'"
@@ -694,8 +705,15 @@ request()->routeIs('achats.*')                                                  
                             $rhUser->can('rh.employees.view') ? [route('rh.employes.index'),    'Employés',            'rh.employes*'] : null,
                             $rhUser->can('rh.employees.view') ? [route('rh.contrats.index'),    'Contrats',            'rh.contrats*'] : null,
                             $rhUser->can('rh.employees.view') ? [route('rh.departments.index'), 'Départements',        'rh.departments*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.postes.index'),      'Postes & grades',     'rh.postes*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.recrutement.index'), 'Recrutement',         'rh.recrutement*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.carriere.index'),    'Mouvements & carrière','rh.carriere*'] : null,
                             $rhUser->can('rh.employees.view') ? [route('rh.presences.index'),   'Présences & absences','rh.presences*'] : null,
                             $rhUser->can('rh.leaves.view')    ? [route('rh.conges.index'),      'Congés',              'rh.conges*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.evaluations.index'), 'Évaluations',         'rh.evaluations*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.formations.index'),  'Formation',           'rh.formations*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.departs.index'),     'Départs & STC',       'rh.departs*'] : null,
+                            $rhUser->can('rh.employees.view') ? [route('rh.frais.index'),       'Notes de frais',      'rh.frais*'] : null,
                         ]) as [$href, $label, $match])
                         @php $sub = request()->routeIs($match); @endphp
                         <a href="{{ $href }}"
@@ -934,6 +952,13 @@ request()->routeIs('achats.*')                                                  
                                   {{ $sub ? 'bg-[#00A651]/20 text-emerald-300 font-semibold' : 'text-gray-400 hover:text-white hover:bg-white/10' }}">
                             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-emerald-400' : 'bg-white/25' }}"></span>
                             Société
+                        </a>
+                        @php $sub = request()->routeIs('pilotage.alertes*'); @endphp
+                        <a href="{{ route('pilotage.alertes.index') }}"
+                           class="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-100
+                                  {{ $sub ? 'bg-[#00A651]/20 text-emerald-300 font-semibold' : 'text-gray-400 hover:text-white hover:bg-white/10' }}">
+                            <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 {{ $sub ? 'bg-emerald-400' : 'bg-white/25' }}"></span>
+                            Alertes par seuil
                         </a>
                         @endcan
                         @php $sub = request()->routeIs('units*'); @endphp

@@ -4,47 +4,49 @@
 @section('breadcrumb')
     <a href="{{ route('dashboard') }}" class="hover:text-gray-700">Accueil</a>
     <span class="mx-1">/</span>
-    <span class="text-gray-900 font-medium">Familles / Catégories</span>
+    <span class="text-gray-900 font-medium">Familles d'articles</span>
 @endsection
 
 @section('content')
 @php
     $niveau = $niveau ?? 'categorie';
     $isFam  = $niveau === 'famille';
-    if ($isFam) {
-        $totalFamilies    = $families->total();
-        $totalSubFamilies = $families->total();
-        $totalProducts    = $families->sum('products_count');
-    } else {
-        $totalFamilies    = $families->count();
-        $totalSubFamilies = $families->sum(fn($f) => $f->children->count());
-        $totalProducts    = $families->sum(fn($f) => $f->products_count + $f->children->sum('products_count'));
-    }
 @endphp
 
 <div class="space-y-3">
 
-    {{-- Header --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-            <h1 class="text-[22px] font-bold text-gray-900 leading-tight">{{ $isFam ? 'Familles d\'articles' : 'Catégories d\'articles' }}</h1>
-            <p class="text-sm text-gray-500 mt-0.5">{{ $isFam ? 'Sous-familles rattachées à une catégorie parente' : 'Catégories racines et leur arborescence de familles' }}</p>
-        </div>
-        <div class="flex items-center gap-2 self-start">
-            {{-- Bascule Catégories / Familles --}}
-            <div class="inline-flex rounded-[4px] border border-gray-300 overflow-hidden text-[13px] font-semibold">
-                <a href="{{ route('product-families.index') }}"
-                   class="px-3 py-2 {{ ! $isFam ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Catégories</a>
-                <a href="{{ route('product-families.index', ['niveau' => 'famille']) }}"
-                   class="px-3 py-2 border-l border-gray-300 {{ $isFam ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Familles</a>
+    {{-- ═══ Bandeau SAGE X3 (même squelette que fiche/modification) ═══ --}}
+    @php $statutToutes = request('statut') === 'toutes'; @endphp
+    <div class="bg-white border border-gray-300 rounded-[4px]">
+        <div class="flex items-center justify-between px-4 py-2.5 bg-gradient-to-b from-gray-50 to-white flex-wrap gap-2">
+            <div>
+                <h2 class="text-[22px] font-bold text-gray-900 leading-tight">Familles d'articles</h2>
+                <p class="text-[11.5px] text-gray-400">{{ $isFam ? 'Sous-familles rattachées à leur famille parente' : 'Classement commercial et statistique — la gestion relève des catégories' }}</p>
             </div>
-            <a href="{{ route('product-families.create') }}"
-               class="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-3 py-2.5 rounded-[4px] transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                {{ $isFam ? 'Nouvelle famille' : 'Nouvelle catégorie' }}
-            </a>
+            <div class="flex items-center gap-1.5 flex-wrap">
+                {{-- Bascule Familles (arborescence) / Sous-familles (à plat) --}}
+                <div class="inline-flex rounded-[4px] border border-gray-300 overflow-hidden text-[13px] font-semibold">
+                    <a href="{{ route('product-families.index', array_filter(['statut' => request('statut')])) }}"
+                       class="px-3 py-2 {{ ! $isFam ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Familles</a>
+                    <a href="{{ route('product-families.index', array_filter(['niveau' => 'famille', 'statut' => request('statut')])) }}"
+                       class="px-3 py-2 border-l border-gray-300 {{ $isFam ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Sous-familles</a>
+                </div>
+                {{-- Bascule Actives / Toutes (archivées incluses) --}}
+                <div class="inline-flex rounded-[4px] border border-gray-300 overflow-hidden text-[13px] font-semibold">
+                    <a href="{{ route('product-families.index', array_filter(['niveau' => request('niveau')])) }}"
+                       class="px-3 py-2 {{ ! $statutToutes ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Actives</a>
+                    <a href="{{ route('product-families.index', array_filter(['niveau' => request('niveau'), 'statut' => 'toutes'])) }}"
+                       class="px-3 py-2 border-l border-gray-300 {{ $statutToutes ? 'bg-emerald-700 text-white' : 'bg-white text-gray-600 hover:bg-gray-50' }}">Toutes</a>
+                </div>
+                <a href="{{ route('product-families.create') }}"
+                   class="text-[14px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-5 py-2 rounded-[4px] transition-colors">
+                    {{ $isFam ? 'Nouvelle sous-famille' : 'Nouvelle famille' }}
+                </a>
+                <a href="{{ route('articles.categories.index') }}"
+                   class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">
+                    Catégories
+                </a>
+            </div>
         </div>
     </div>
 
@@ -57,8 +59,8 @@
                 </svg>
             </div>
             <div>
-                <p class="text-[16px] font-bold text-gray-900">{{ $totalFamilies }}</p>
-                <p class="text-xs text-gray-500">{{ $isFam ? 'Famille(s)' : 'Catégorie(s) racine' }}</p>
+                <p class="text-[16px] font-bold text-gray-900">{{ $stats['racines'] }}</p>
+                <p class="text-xs text-gray-500">Famille(s)</p>
             </div>
         </div>
         <div class="bg-white rounded-[4px] border border-gray-300 p-4 flex items-center gap-3">
@@ -68,7 +70,7 @@
                 </svg>
             </div>
             <div>
-                <p class="text-[16px] font-bold text-gray-900">{{ $totalSubFamilies }}</p>
+                <p class="text-[16px] font-bold text-gray-900">{{ $stats['sous'] }}</p>
                 <p class="text-xs text-gray-500">Sous-famille(s)</p>
             </div>
         </div>
@@ -79,20 +81,20 @@
                 </svg>
             </div>
             <div>
-                <p class="text-[16px] font-bold text-gray-900">{{ $totalProducts }}</p>
+                <p class="text-[16px] font-bold text-gray-900">{{ $stats['articles'] }}</p>
                 <p class="text-xs text-gray-500">Articles classifiés</p>
             </div>
         </div>
     </div>
 
     {{-- Table --}}
-    <div class="bg-white rounded-[4px] border border-gray-300 overflow-hidden">
+    <div class="bg-white rounded-[4px] border border-gray-300 overflow-x-auto">
         @if($isFam)
         {{-- Vue Familles : sous-familles à plat avec catégorie parente --}}
         @if($families->isEmpty())
         <div class="text-center py-16">
-            <p class="text-sm font-medium text-gray-600">Aucune famille (sous-famille) créée</p>
-            <p class="text-xs mt-1 text-gray-400">Créez une famille en la rattachant à une catégorie parente.</p>
+            <p class="text-sm font-medium text-gray-600">Aucune sous-famille créée</p>
+            <p class="text-xs mt-1 text-gray-400">Créez une sous-famille en la rattachant à sa famille parente.</p>
         </div>
         @else
         <table class="w-full text-[12.5px] border-collapse">
@@ -100,7 +102,7 @@
                 <tr>
                     <th class="px-3 py-1.5 text-left text-[11px] font-semibold text-white uppercase tracking-wide">Nom</th>
                     <th class="px-3 py-1.5 text-left text-[11px] font-semibold text-white uppercase tracking-wide">Code</th>
-                    <th class="px-3 py-1.5 text-left text-[11px] font-semibold text-white uppercase tracking-wide">Catégorie parente</th>
+                    <th class="px-3 py-1.5 text-left text-[11px] font-semibold text-white uppercase tracking-wide">Famille parente</th>
                     <th class="px-3 py-1.5 text-center text-[11px] font-semibold text-white uppercase tracking-wide">Articles</th>
                     <th class="px-3 py-1.5 text-center text-[11px] font-semibold text-white uppercase tracking-wide">Statut</th>
                     <th class="px-3 py-1.5 text-right text-[11px] font-semibold text-white uppercase tracking-wide">Actions</th>
@@ -110,7 +112,7 @@
                 @foreach($families as $fam)
                 <tr class="border-b border-gray-100 odd:bg-white even:bg-gray-50/40 hover:bg-emerald-50/50 transition-colors">
                     <td class="px-3 py-1.5">
-                        <span class="font-medium text-gray-900">{{ $fam->name }}</span>
+                        <a href="{{ route('product-families.show', $fam) }}" class="font-medium text-gray-900 hover:text-emerald-700 hover:underline">{{ $fam->name }}</a>
                         @unless($fam->is_active)<span class="text-xs text-gray-400 italic ml-1">(inactif)</span>@endunless
                     </td>
                     <td class="px-3 py-1.5">
@@ -118,13 +120,13 @@
                     </td>
                     <td class="px-3 py-1.5 text-gray-600">
                         @if($fam->parent)
-                            <a href="{{ route('product-families.edit', $fam->parent) }}" class="hover:underline">{{ $fam->parent->name }}</a>
+                            <a href="{{ route('product-families.show', $fam->parent) }}" class="hover:underline">{{ $fam->parent->name }}</a>
                             @if($fam->parent->code)<code class="font-mono text-[11px] text-gray-400 ml-1">{{ $fam->parent->code }}</code>@endif
                         @else — @endif
                     </td>
                     <td class="px-3 py-1.5 text-center">
-                        @if($fam->products_count > 0)
-                            <a href="{{ route('products.index', ['family_id' => $fam->id]) }}" class="font-semibold text-emerald-800 tabular-nums hover:underline">{{ $fam->products_count }}</a>
+                        @if($fam->sub_products_count > 0)
+                            <a href="{{ route('products.index', ['family_id' => $fam->id]) }}" class="font-semibold text-emerald-800 tabular-nums hover:underline">{{ $fam->sub_products_count }}</a>
                         @else<span class="text-gray-400 text-xs">0</span>@endif
                     </td>
                     <td class="px-3 py-1.5 text-center">
@@ -216,7 +218,7 @@
                             <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
                             </svg>
-                            <span class="font-semibold text-gray-900">{{ $family->name }}</span>
+                            <a href="{{ route('product-families.show', $family) }}" class="font-semibold text-gray-900 hover:text-emerald-700 hover:underline">{{ $family->name }}</a>
                             @unless($family->is_active)
                                 <span class="text-xs text-gray-400 italic">(inactif)</span>
                             @endunless
@@ -240,7 +242,7 @@
                         @endif
                     </td>
                     <td class="px-3 py-1.5 text-center">
-                        @php $totalFamilyProducts = $family->products_count + $family->children->sum('products_count'); @endphp
+                        @php $totalFamilyProducts = $family->products_count; @endphp
                         @if($totalFamilyProducts > 0)
                             <a href="{{ route('products.index', ['family_id' => $family->id]) }}"
                                class="font-semibold text-emerald-800 tabular-nums hover:underline"
@@ -302,7 +304,7 @@
                             <svg class="w-3 h-3 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                             </svg>
-                            <span class="text-gray-700">{{ $child->name }}</span>
+                            <a href="{{ route('product-families.show', $child) }}" class="text-gray-700 hover:text-emerald-700 hover:underline">{{ $child->name }}</a>
                             @unless($child->is_active)
                                 <span class="text-xs text-gray-400 italic">(inactif)</span>
                             @endunless
@@ -317,10 +319,10 @@
                     </td>
                     <td class="px-3 py-2.5 text-center text-gray-300">—</td>
                     <td class="px-3 py-2.5 text-center">
-                        @if($child->products_count > 0)
+                        @if($child->sub_products_count > 0)
                             <a href="{{ route('products.index', ['family_id' => $child->id]) }}"
                                class="font-semibold text-emerald-800 tabular-nums hover:underline"
-                               title="Voir les articles">{{ $child->products_count }}</a>
+                               title="Voir les articles">{{ $child->sub_products_count }}</a>
                         @else
                             <span class="text-gray-400 text-xs">0</span>
                         @endif
@@ -378,7 +380,7 @@
     <div class="bg-[#232a30] text-gray-300 rounded-[4px] px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px]">
         <span>Société : <span class="text-white font-semibold">{{ currentCompany()?->name }}</span></span>
         <span class="border-l border-white/10 pl-6">Site : <span class="text-white font-semibold">01</span></span>
-        <span class="border-l border-white/10 pl-6">Référentiel : <span class="text-white font-semibold">familles / catégories articles</span></span>
+        <span class="border-l border-white/10 pl-6">Référentiel : <span class="text-white font-semibold">familles d'articles</span></span>
         <span class="ml-auto">Utilisateur : <span class="text-white font-semibold">{{ auth()->user()->name }}</span></span>
         <span class="border-l border-white/10 pl-6 tabular-nums">{{ now()->format('d/m/Y H:i') }}</span>
     </div>
