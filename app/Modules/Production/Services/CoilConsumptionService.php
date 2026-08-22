@@ -242,9 +242,12 @@ class CoilConsumptionService
     }
 
     /**
-     * Facteur kg par mètre linéaire — recherche : bobine > lot > produit.
-     * Retourne null si aucun facteur exploitable (l'appelant décide si c'est
-     * bloquant : obligatoire pour une saisie en ML, facultatif sinon).
+     * Facteur kg par mètre linéaire — ordre de priorité strict :
+     * 1. explicite bobine, 2. explicite lot, 3. explicite article,
+     * 4. déduction physique (poids initial / longueur estimée),
+     * 5. fallback géométrique (largeur × épaisseur bobine × densité article),
+     * 6. null si rien d'exploitable (l'appelant décide si c'est bloquant :
+     *    obligatoire pour une saisie en ML, facultatif sinon).
      */
     public function kgPerLinearMeter(Coil $coil): ?float
     {
@@ -258,11 +261,23 @@ class CoilConsumptionService
                 return $factor;
             }
         }
-        // Dernier recours : déduction du physique de la bobine.
+        // 4. Déduction physique : poids initial connu / longueur estimée connue.
         if ((float) $coil->estimated_length > 0 && (float) $coil->initial_weight > 0) {
             return round((float) $coil->initial_weight / (float) $coil->estimated_length, 4);
         }
 
+        // 5. Fallback géométrique — largeur × épaisseur DE LA BOBINE (mm, jamais
+        //    l'article fini : une bobine de 1250mm produit un utile de 1000mm après
+        //    refente) × densité matière (kg/dm³, cf. ArticlesSageSeeder : acier=7.850).
+        //    kg/m = largeur_mm × épaisseur_mm × densité_kg/dm³ / 1000.
+        $width     = (float) ($coil->width ?? 0);
+        $thickness = (float) ($coil->thickness ?? 0);
+        $density   = (float) ($coil->product?->density ?? 0);
+        if ($width > 0 && $thickness > 0 && $density > 0) {
+            return round($width * $thickness * $density / 1000, 4);
+        }
+
+        // 6. Aucune donnée exploitable.
         return null;
     }
 
