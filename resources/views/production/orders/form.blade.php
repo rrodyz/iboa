@@ -43,6 +43,7 @@
                     pid: '{{ old('product_id', $o->product_id ?? '') }}', bomId: '{{ old('bill_of_material_id', $o->bill_of_material_id ?? '') }}',
                     qty: '{{ old('quantity_requested', $o->quantity_requested ?? '') }}',
                     ppm: '{{ old('poids_par_metre', $o->poids_par_metre ?? '') }}',
+                    ppmTouched: false,
                     saveAndSubmit: false,
                     boms: {{ Js::from($bomData) }},
                     byproducts: {{ Js::from($byproducts) }},
@@ -59,7 +60,11 @@
                     },
                     /* ── Prévisionnel LIVE ── */
                     get totalQty() { const lq = this.lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0), 0); return lq > 0 ? lq : (parseFloat(this.qty) || 0); },
-                    get totalMeters() { return this.lines.reduce((s, l) => s + (parseFloat(l.length) || 0) * (parseFloat(l.quantity) || 0), 0); },
+                    /* [Repli identique à totalQty] Sans coupe détaillée saisie, le texte
+                       d'aide affiché (la quantité demandée est prise du champ ci-dessus)
+                       promet que Qté demandée sert de métrage — sans ce repli, Métrage
+                       total et Poids théorique restaient à 0,00 pour tout OF sans coupe. */
+                    get totalMeters() { const lm = this.lines.reduce((s, l) => s + (parseFloat(l.length) || 0) * (parseFloat(l.quantity) || 0), 0); return lm > 0 ? lm : (parseFloat(this.qty) || 0); },
                     get bom() { return this.boms[this.bomId] || null; },
                     get comps() { return this.bom ? this.bom.components : []; },
                     need(c) { return c.coef * this.totalQty; },
@@ -75,7 +80,18 @@
                     get ops() { return this.bom && this.bom.routing ? this.bom.routing.ops : []; },
                     get opsMin() { return this.ops.reduce((s, o) => s + o.setup + o.run * this.totalQty, 0); },
                     get theoWeight() { return (parseFloat(this.ppm) || 0) * this.totalMeters; },
-                    fmt(n, d = 0) { return (n || 0).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }); } }" class="space-y-3">
+                    fmt(n, d = 0) { return (n || 0).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }); } }"
+          x-init="$watch('bomId', v => {
+                    /* [Auto-remplissage] Le coefficient kg/m existe déjà dans la
+                       nomenclature (1er composant = bobine matière) — sans ce watcher,
+                       Poids théorique restait 0,00 tant que l'utilisateur ne retapait
+                       pas à la main un chiffre déjà connu. Ne jamais écraser une saisie
+                       manuelle (ppmTouched) ni une valeur chargée en édition. */
+                    if (ppmTouched) return;
+                    const c = boms[v] && boms[v].components && boms[v].components[0];
+                    if (c) ppm = String(c.coef);
+                  })"
+          class="space-y-3">
         @csrf
         @if($isEdit)@method('PUT')@endif
 
@@ -356,7 +372,7 @@
                         <div><label class="{{ $lbl }}">Tolérance épaisseur (mm)</label><input type="number" step="0.001" min="0" name="tolerance_epaisseur" value="{{ old('tolerance_epaisseur', $o->tolerance_epaisseur) }}" class="{{ $inpR }}"></div>
 
                         <div><label class="{{ $lbl }}">Qté demandée <span class="text-red-500">*</span></label><input type="number" step="0.01" min="0" name="quantity_requested" x-model="qty" class="{{ $inpR }}"></div>
-                        <div><label class="{{ $lbl }}">Poids par mètre (kg/m)</label><input type="number" step="0.001" min="0" name="poids_par_metre" x-model="ppm" class="{{ $inpR }}"></div>
+                        <div><label class="{{ $lbl }}">Poids par mètre (kg/m)</label><input type="number" step="0.001" min="0" name="poids_par_metre" x-model="ppm" @input="ppmTouched = true" class="{{ $inpR }}"></div>
                         <div>
                             <label class="{{ $lbl }}">Poids théorique (kg)</label>
                             <input type="hidden" name="poids_theorique" :value="theoWeight.toFixed(2)">
