@@ -71,6 +71,16 @@ class ProductionCostService
                 ->sum('total_cost');
         }
 
+        // [Ventilation analytique — CDC §6 récupérable/perdu] La chute (ProductionWaste)
+        // est valorisée par ProductionStockService::recordWaste() au coût déjà
+        // consommé (averageConsumedCostPerKg) : elle ne génère AUCUN mouvement de
+        // stock et ne s'ajoute donc jamais à $material (preuve : TmpMaterialBalanceTest,
+        // bobine_restant_kg et material_cost identiques avant/après déclaration de
+        // chute). waste_cost est une pure ventilation de $material, jamais un ajout.
+        $grossMaterial = $material;
+        $wasteCost = (int) $order->wastes()->sum('value');
+        $usefulMaterial = $grossMaterial - $wasteCost;
+
         // 2. Main-d'œuvre — priorité au pointage RÉEL (production_time_logs),
         //    sinon override manuel, sinon estimation nomenclature (BOM),
         //    sinon temps standard de la GAMME (opérations × coût horaire poste).
@@ -167,6 +177,9 @@ class ProductionCostService
             [
                 'company_id'       => $order->company_id,
                 'material_cost'    => $material,
+                'gross_material_cost' => $grossMaterial,
+                'waste_cost'          => $wasteCost,
+                'useful_material_cost' => $usefulMaterial,
                 'labor_cost'       => $labor,
                 'machine_cost'     => $machine,
                 'energy_cost'      => $energy,
