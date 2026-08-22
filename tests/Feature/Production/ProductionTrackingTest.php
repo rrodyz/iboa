@@ -81,6 +81,28 @@ it('enregistre un suivi complet : opération pointée + production déclarée + 
         ->and($t->track_materials)->toBeTrue();
 });
 
+it('n\'offre pas au suivi un OF « lancé » non encore démarré', function () {
+    $this->actingAs(trkAdmin());
+    $co = Company::first();
+
+    $ofLance = ProductionOrder::create([
+        'company_id' => $co->id, 'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'OF-TRK-LANCE', 'status' => 'lance', 'quantity_requested' => 5,
+    ]);
+    $ofEnCours = ProductionOrder::create([
+        'company_id' => $co->id, 'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'OF-TRK-ENCOURS', 'status' => 'en_cours', 'quantity_requested' => 5,
+    ]);
+
+    $html = $this->get(route('production.trackings.create'))->assertOk()->getContent();
+
+    // Un OF « lancé » proposé ici serait accepté par ce formulaire puis rejeté
+    // par store() (isInProgress() exclut « lance ») — écran qui promettrait ce
+    // que le serveur refuse toujours.
+    expect($html)->not->toContain('OF-TRK-LANCE')
+        ->and($html)->toContain('OF-TRK-ENCOURS');
+});
+
 it('refuse le suivi sur un OF non « en cours » et sans type de suivi coché', function () {
     $this->actingAs(trkAdmin());
     $co = Company::first();

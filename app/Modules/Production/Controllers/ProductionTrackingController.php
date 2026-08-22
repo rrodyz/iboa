@@ -45,9 +45,14 @@ class ProductionTrackingController extends Controller
 
     public function create(Request $request): View
     {
-        // [FIX] Un OF « lancé » (avant démarrage) doit déjà être suivable :
-        // pointage d'opérations et déclaration possibles dès le lancement.
-        $orders = ProductionOrder::whereIn('status', ['lance', 'en_cours', 'termine_partiellement'])
+        // Un OF « lancé » n'est pas encore suivable : il doit d'abord être démarré
+        // (ProductionOrderController::start(), lance → en_cours) avant tout pointage
+        // ou déclaration — mêmes statuts que ProductionOrder::isInProgress(), gate
+        // utilisé par store() ci-dessous et par les services de consommation/sortie
+        // (CoilConsumptionService::consume, ProductionStockService::recordOutput).
+        // Un OF « lancé » proposé ici serait accepté par ce formulaire puis rejeté
+        // par store() — écran qui promet ce que le serveur refuse toujours.
+        $orders = ProductionOrder::whereIn('status', ['en_cours', 'termine_partiellement'])
             ->orderByDesc('id')->get(['id', 'number', 'quantity_requested', 'quantity_produced', 'length', 'site_production']);
 
         $order = null;
