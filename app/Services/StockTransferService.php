@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\InventorySession;
 use App\Models\ProductStock;
+use App\Models\StockLot;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
@@ -129,7 +130,14 @@ class StockTransferService
                 throw new \RuntimeException('Expédition bloquée : un inventaire est en cours sur le dépôt source.');
             }
 
-            // Vérifie stock dispo en amont — meilleur message d'erreur
+            // Vérifie stock dispo en amont — meilleur message d'erreur. [P1-F]
+            // Résout aussi le StockLot source ici (avant toute écriture) : un
+            // lot_number inconnu, appartenant à un autre article/dépôt, ou en
+            // quantité insuffisante doit bloquer TOUT le transfert sans le
+            // moindre effet de bord — ordre de verrouillage : StockLot d'abord,
+            // ProductStock ensuite (boucle d'écriture suivante), même ordre
+            // pour ship() et receive().
+            $sourceLots = [];
             foreach ($transfer->items as $item) {
                 $available = $this->availableQty($item->product_id, $transfer->from_warehouse_id);
                 if ((float) $available < (float) $item->quantity) {
@@ -140,6 +148,35 @@ class StockTransferService
                         number_format($item->quantity, 2, ',', ' ')
                     ));
                 }
+
+                if (! empty($item->lot_number)) {
+                    // La recherche par (product_id, warehouse_id, lot_number) rejette
+                    // NATURELLEMENT un lot d'un autre article ou d'un autre dépôt —
+                    // il ne sera simplement pas trouvé (mêmes garde-fous que #29/#30).
+                    $lot = StockLot::where('product_id', $item->product_id)
+                        ->where('warehouse_id', $transfer->from_warehouse_id)
+                        ->where('lot_number', $item->lot_number)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $lot) {
+                        throw new \RuntimeException(sprintf(
+                            'Lot « %s » introuvable pour %s au dépôt source — aucun autre lot n\'est substitué automatiquement.',
+                            $item->lot_number,
+                            $item->product?->name ?? '#'.$item->product_id
+                        ));
+                    }
+                    if ((float) $lot->quantity < (float) $item->quantity) {
+                        throw new \RuntimeException(sprintf(
+                            'Lot « %s » : quantité disponible %s, quantité demandée %s.',
+                            $item->lot_number,
+                            number_format((float) $lot->quantity, 4, ',', ' '),
+                            number_format((float) $item->quantity, 4, ',', ' ')
+                        ));
+                    }
+
+                    $sourceLots[$item->id] = $lot;
+                }
             }
 
             // Décrément source + mouvement type sortie
@@ -149,13 +186,21 @@ class StockTransferService
                     ['quantity' => 0, 'reserved_quantity' => 0]
                 );
 
+                $sourceLot = $sourceLots[$item->id] ?? null;
+
                 // [FIX valorisation] Si aucun coût n'a été saisi sur la ligne (cas normal :
                 // l'UI ne demande pas de coût), reprendre le CMP du dépôt SOURCE et le
                 // persister sur la ligne — la réception l'utilisera pour valoriser l'entrée.
                 // Sans cela, sortie + entrée partaient à 0 F et le CMP destination était
                 // écrasé à 0 (stock sous-évalué).
+                // [P1-F] Pour un article loté, le coût du LOT lui-même (unit_cost déjà
+                // figé à réception) est une source plus précise que le CMP produit
+                // générique — préférée quand disponible, avant le fallback existant.
                 if ((float) ($item->unit_cost ?? 0) <= 0) {
-                    $sourceCost = (float) ($stock->avg_cost ?? 0);
+                    $sourceCost = $sourceLot ? (float) $sourceLot->unit_cost : 0.0;
+                    if ($sourceCost <= 0) {
+                        $sourceCost = (float) ($stock->avg_cost ?? 0);
+                    }
                     if ($sourceCost <= 0) {
                         $sourceCost = (float) ($item->product?->weighted_avg_cost ?? 0);
                     }
@@ -167,6 +212,13 @@ class StockTransferService
 
                 $stock->decrement('quantity', (float) $item->quantity);
                 $stock->update(['last_movement_at' => now()]);
+
+                // [P1-F] Répercute le transfert sur le grand livre des lots — décrémente
+                // la ligne SOURCE (jamais supprimée, même à 0 : cohérent avec la
+                // convention StockLot existante, cf. §16 du rapport final).
+                if ($sourceLot) {
+                    $sourceLot->decrement('quantity', (float) $item->quantity);
+                }
 
                 StockMovement::create([
                     'product_id'        => $item->product_id,
@@ -180,6 +232,7 @@ class StockTransferService
                     'from_warehouse_id' => $transfer->from_warehouse_id,
                     'to_warehouse_id'   => $transfer->to_warehouse_id,
                     'lot_number'        => $item->lot_number,
+                    'stock_lot_id'      => $sourceLot?->id,
                     'serial_number'     => $item->serial_number,
                     'expiry_date'       => $item->expiry_date,
                     'notes'             => "Transfert {$transfer->number} — expédition",
@@ -257,6 +310,64 @@ class StockTransferService
                     $stock->increment('quantity', $received);
                     $stock->update(['last_movement_at' => now()]);
 
+                    // [P1-F] Répercute la réception sur le grand livre des lots — même
+                    // ordre de verrouillage que ship() : StockLot avant ProductStock
+                    // (ProductStock ci-dessus n'est pas verrouillé explicitement, comme
+                    // avant ce fix — non modifié, hors périmètre P1-F).
+                    $destLot = null;
+                    if (! empty($item->lot_number)) {
+                        $destLot = StockLot::where('product_id', $item->product_id)
+                            ->where('warehouse_id', $transfer->to_warehouse_id)
+                            ->where('lot_number', $item->lot_number)
+                            ->lockForUpdate()
+                            ->first();
+
+                        if ($destLot) {
+                            // Lot déjà présent au dépôt destination (§17) : cumule, ne
+                            // duplique jamais (contrainte unique product+warehouse+lot).
+                            $destLot->increment('quantity', $received);
+                            $destLot->increment('initial_quantity', $received);
+                        } else {
+                            // Lot absent au dépôt destination (§18) : création contrôlée.
+                            // Métadonnées héritées du lot SOURCE quand il existe encore
+                            // (jamais supprimé par ship(), seulement décrémenté) — évite
+                            // de relancer un cycle qualité/valorisation déjà tranché sur
+                            // le même lot physique. Ce qui N'EST PAS copié : reserved_quantity
+                            // (lié au dépôt, colonne d'ailleurs inutilisée en base ce jour),
+                            // status/received_at (recalculés pour l'arrivée destination),
+                            // qty_released/qty_quarantine/qty_rejected (ventilation d'une
+                            // décision qualité ponctuelle, non proratisable sans règle
+                            // métier dédiée — hors périmètre P1-F).
+                            $sourceLotForMeta = StockLot::where('product_id', $item->product_id)
+                                ->where('warehouse_id', $transfer->from_warehouse_id)
+                                ->where('lot_number', $item->lot_number)
+                                ->first();
+
+                            $destLot = StockLot::create([
+                                'product_id'          => $item->product_id,
+                                'warehouse_id'        => $transfer->to_warehouse_id,
+                                'lot_number'          => $item->lot_number,
+                                'supplier_lot_number' => $sourceLotForMeta?->supplier_lot_number,
+                                'serial_number'       => $item->serial_number ?? $sourceLotForMeta?->serial_number,
+                                'expiry_date'         => $item->expiry_date ?? $sourceLotForMeta?->expiry_date,
+                                'quantity'            => $received,
+                                'initial_quantity'    => $received,
+                                'reserved_quantity'   => 0,
+                                'stock_uom'           => $sourceLotForMeta?->stock_uom,
+                                'kg_per_linear_meter' => $sourceLotForMeta?->kg_per_linear_meter,
+                                'unit_cost'           => $item->unit_cost ?? ($sourceLotForMeta->unit_cost ?? 0),
+                                'received_at'         => now()->toDateString(),
+                                'status'              => 'disponible',
+                                'quality_status'      => $sourceLotForMeta?->quality_status,
+                                'valuation_status'     => $sourceLotForMeta?->valuation_status ?? 'valorisation_definitive',
+                                'valuation_reason'     => $sourceLotForMeta?->valuation_reason,
+                                'source_type'          => StockTransfer::class,
+                                'source_id'            => $transfer->id,
+                                'created_by'           => Auth::id(),
+                            ]);
+                        }
+                    }
+
                     StockMovement::create([
                         'product_id'        => $item->product_id,
                         'warehouse_id'      => $transfer->to_warehouse_id,
@@ -269,6 +380,7 @@ class StockTransferService
                         'from_warehouse_id' => $transfer->from_warehouse_id,
                         'to_warehouse_id'   => $transfer->to_warehouse_id,
                         'lot_number'        => $item->lot_number,
+                        'stock_lot_id'      => $destLot?->id,
                         'serial_number'     => $item->serial_number,
                         'expiry_date'       => $item->expiry_date,
                         'notes'             => "Transfert {$transfer->number} — réception"
@@ -334,6 +446,19 @@ class StockTransferService
                     $stock->increment('quantity', (float) $item->quantity);
                     $stock->update(['last_movement_at' => now()]);
 
+                    // [P1-F] Symétrique à ship() : la ligne source a été décrémentée à
+                    // l'expédition sans être supprimée — elle existe donc forcément
+                    // encore ici si un lot avait été renseigné.
+                    $sourceLot = null;
+                    if (! empty($item->lot_number)) {
+                        $sourceLot = StockLot::where('product_id', $item->product_id)
+                            ->where('warehouse_id', $transfer->from_warehouse_id)
+                            ->where('lot_number', $item->lot_number)
+                            ->lockForUpdate()
+                            ->first();
+                        $sourceLot?->increment('quantity', (float) $item->quantity);
+                    }
+
                     StockMovement::create([
                         'product_id'     => $item->product_id,
                         'warehouse_id'   => $transfer->from_warehouse_id,
@@ -343,6 +468,8 @@ class StockTransferService
                         'quantity'       => $item->quantity,
                         'unit_cost'      => $item->unit_cost ?? 0,
                         'total_cost'     => ($item->unit_cost ?? 0) * (float) $item->quantity,
+                        'lot_number'     => $item->lot_number,
+                        'stock_lot_id'   => $sourceLot?->id,
                         'notes'          => "Transfert {$transfer->number} — ANNULÉ : {$reason}",
                         'created_by'     => Auth::id(),
                         'occurred_at'    => now(),
