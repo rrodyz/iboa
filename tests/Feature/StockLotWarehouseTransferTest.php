@@ -130,6 +130,37 @@ it('T2 — transfert complet (300→300) : source reste à 0 (non supprimée), d
     expect(StockLot::where('id', $sourceLot->id)->exists())->toBeTrue();
 });
 
+// ═══ T11 — annulation APRÈS ship() mais AVANT receive() : restaure le lot source, aucun crédit destination ═══
+
+it('T11 — cancel() après ship() : ProductStock et StockLot source restaurés, aucun crédit destination', function () {
+    $co = sltSociete();
+    [$a, $b] = sltWarehouses($co, '-T11');
+    $product = Product::factory()->create(['is_stockable' => true, 'has_lot_number' => true]);
+
+    ProductStock::create(['product_id' => $product->id, 'warehouse_id' => $a->id, 'quantity' => 300, 'reserved_quantity' => 0]);
+    StockLot::create(['product_id' => $product->id, 'warehouse_id' => $a->id, 'lot_number' => 'LOT-CANCEL', 'quantity' => 300, 'unit_cost' => 450]);
+
+    $transfer = app(StockTransferService::class)->create([
+        'from_warehouse_id' => $a->id, 'to_warehouse_id' => $b->id,
+        'items' => [['product_id' => $product->id, 'quantity' => 100, 'lot_number' => 'LOT-CANCEL']],
+    ]);
+    app(StockTransferService::class)->ship($transfer);
+
+    // Après ship() seul (avant receive()) : source débitée, rien encore côté B.
+    expect(sltStockQty($product->id, $a->id))->toBe(200.0);
+    expect(sltLotQty($product->id, $a->id, 'LOT-CANCEL'))->toBe(200.0);
+    expect(StockLot::where('product_id', $product->id)->where('warehouse_id', $b->id)->exists())->toBeFalse();
+
+    app(StockTransferService::class)->cancel($transfer->fresh(), 'Test T11 annulation après expédition');
+
+    // Restauration intégrale côté source, aucun crédit destination créé.
+    expect(sltStockQty($product->id, $a->id))->toBe(300.0);
+    expect(sltLotQty($product->id, $a->id, 'LOT-CANCEL'))->toBe(300.0);
+    expect(sltStockQty($product->id, $b->id))->toBe(0.0);
+    expect(StockLot::where('product_id', $product->id)->where('warehouse_id', $b->id)->exists())->toBeFalse();
+    expect($transfer->fresh()->status)->toBe('annule');
+});
+
 // ═══ T3 — lot destination déjà existant : cumule, ne duplique jamais ═══
 
 it('T3 — lot destination déjà existant (A=200,B=50) : transfert 100 → A=100, B=150, pas de doublon', function () {
