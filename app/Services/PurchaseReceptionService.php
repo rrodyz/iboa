@@ -109,8 +109,27 @@ class PurchaseReceptionService
                 ]);
 
                 if ($item->purchase_order_item_id) {
-                    $poItem = $item->purchaseOrderItem;
+                    // [P1-C] Verrou explicite sur LA LIGNE de commande : deux
+                    // réceptions distinctes validées en parallèle sur le même
+                    // reliquat doivent se sérialiser ici, pas seulement sur
+                    // $reception (id différent d'une validation à l'autre).
+                    $poItem = \App\Models\PurchaseOrderItem::lockForUpdate()->find($item->purchase_order_item_id);
                     if ($poItem) {
+                        // [P1-C] Sur-réception : refuser explicitement plutôt
+                        // que plafonner en silence (min() ci-dessous restait
+                        // le seul garde-fou — la quantité EXCÉDENTAIRE demandée
+                        // disparaissait sans jamais être signalée à personne).
+                        $remaining = max(0, (float) $poItem->quantity - (float) $poItem->received_quantity);
+                        if ($receivedQty - $remaining > 0.0001) {
+                            throw new \RuntimeException(sprintf(
+                                'Ligne « %s » : reliquat disponible %s, quantité soumise %s. '
+                                . 'La réception dépasserait la quantité commandée.',
+                                $item->description ?: ('#' . $item->id),
+                                number_format($remaining, 4, ',', ' '),
+                                number_format($receivedQty, 4, ',', ' ')
+                            ));
+                        }
+
                         $totalReceived = $poItem->received_quantity + $receivedQty;
                         $totalAccepted = (float) $poItem->accepted_quantity + $accepted;
                         $poItem->update([

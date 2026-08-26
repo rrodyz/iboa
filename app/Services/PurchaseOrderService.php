@@ -237,13 +237,19 @@ class PurchaseOrderService
             $po->load('items');
 
             foreach ($po->items as $item) {
+                // [P1-C] Préremplir avec le RELIQUAT (commandé − déjà validé),
+                // jamais la quantité totale commandée. $po est verrouillé
+                // (lockForUpdate ci-dessus) : received_quantity lu ici est à
+                // jour pour toute réception déjà validée sur cette ligne.
+                $remaining = max(0, (float) $item->quantity - (float) $item->received_quantity);
+
                 $reception->items()->create([
                     'purchase_order_item_id' => $item->id,
                     'product_id'             => $item->product_id,
                     'description'            => $item->description,
                     'unit_id'                => $item->unit_id,
-                    'expected_quantity'      => $item->quantity,
-                    'received_quantity'      => $item->quantity,
+                    'expected_quantity'      => $remaining,
+                    'received_quantity'      => $remaining,
                     'rejected_quantity'      => 0,
                     'unit_cost'              => $item->unit_price,
                     'quality_status'         => 'accepte',
