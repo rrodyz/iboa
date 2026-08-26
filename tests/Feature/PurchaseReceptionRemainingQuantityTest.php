@@ -131,13 +131,20 @@ it('T4 — refuse une réception qui dépasse le reliquat (reliquat 500, tentati
     $item2 = $rec2->items()->first();
 
     $movementsAvant = \App\Models\StockMovement::where('product_id', $article->id)->count();
+    $stockAvant     = (float) ProductStock::where('product_id', $article->id)->where('warehouse_id', $wh->id)->value('quantity');
     expect(fn () => app(PurchaseReceptionService::class)->validate($rec2, $wh->id, [$item2->id => ['received_quantity' => 501]]))
         ->toThrow(\RuntimeException::class);
 
-    // Aucune écriture : ni mouvement de stock, ni cumul PO, ni statut réception.
+    // T11 — AUCUNE écriture métier : ni mouvement de stock, ni cumul PO,
+    // ni statut réception, ni quantité en stock. Le backend refuse AVANT
+    // toute écriture (le throw se produit dans la Passe 1, avant la
+    // Passe 2 qui génère les mouvements de stock).
     expect(\App\Models\StockMovement::where('product_id', $article->id)->count())->toBe($movementsAvant);
     expect((float) $po->fresh()->items()->first()->received_quantity)->toBe(1000.0);
     expect($rec2->fresh()->status)->toBe('brouillon');
+    expect((float) ProductStock::where('product_id', $article->id)->where('warehouse_id', $wh->id)->value('quantity'))->toBe($stockAvant);
+    // Article non coil-managed dans ce test : stock_lots / coils sans objet (N/A),
+    // couverts séparément par T8 pour le cas coil-managed.
 });
 
 it('T5 — accepte une réception qui consomme exactement le reliquat (500)', function () {
@@ -267,10 +274,40 @@ it('§20 — annuler une réception validée restaure le reliquat (mécanisme ca
     $rec1 = app(PurchaseOrderService::class)->createReception($po->fresh());
     app(PurchaseReceptionService::class)->validate($rec1, $wh->id, [$rec1->items()->first()->id => ['received_quantity' => 1000]]);
     expect((float) $po->fresh()->items()->first()->received_quantity)->toBe(1000.0);
+    expect((float) ProductStock::where('product_id', $article->id)->where('warehouse_id', $wh->id)->value('quantity'))->toBe(1000.0);
 
     app(PurchaseOrderService::class)->cancelReception($rec1->fresh(), 'Test annulation P1-C');
 
+    // T9 — l'annulation (mécanisme cancelReception EXISTANT, non modifié par
+    // P1-C) restaure le reliquat ET contre-passe le stock physique.
     expect((float) $po->fresh()->items()->first()->received_quantity)->toBe(0.0);
+    expect((float) ProductStock::where('product_id', $article->id)->where('warehouse_id', $wh->id)->value('quantity'))->toBe(0.0);
     $recAfterCancel = app(PurchaseOrderService::class)->createReception($po->fresh());
     expect((float) $recAfterCancel->items()->first()->received_quantity)->toBe(1500.0);
+});
+
+// ═══ T-UI — le formulaire affiche Commandé / Déjà reçu / Reste à recevoir / Cette réception ═══
+
+it('T-UI — la page de réception affiche commandé, déjà reçu et le reliquat, pas seulement la quantité totale', function () {
+    $co = prqSociete();
+    $wh = prqWarehouse($co);
+    $supplier = Supplier::create(['company_id' => $co->id, 'name' => 'Fournisseur PRQ', 'code' => 'FPRQ11']);
+    $article = Product::factory()->create(['is_stockable' => true]);
+    $po = prqPO($co, $supplier, [['product' => $article, 'quantity' => 1500]]);
+
+    $rec1 = app(PurchaseOrderService::class)->createReception($po->fresh());
+    app(PurchaseReceptionService::class)->validate($rec1, $wh->id, [$rec1->items()->first()->id => ['received_quantity' => 1000]]);
+
+    $rec2 = app(PurchaseOrderService::class)->createReception($po->fresh());
+
+    $response = test()->get(route('achats.receptions.show', $rec2));
+    $response->assertOk();
+    $response->assertSee('Commandé');
+    $response->assertSee('Déjà reçu');
+    $response->assertSee('Reste à recevoir');
+    $response->assertSee('Cette réception');
+    // Commandé = 1 500,00 ; Déjà reçu = 1 000,00 ; Reste à recevoir = 500,00
+    $response->assertSee('1 500,00');
+    $response->assertSee('1 000,00');
+    $response->assertSee('500,00');
 });

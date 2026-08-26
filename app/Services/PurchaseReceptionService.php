@@ -119,7 +119,10 @@ class PurchaseReceptionService
                         // que plafonner en silence (min() ci-dessous restait
                         // le seul garde-fou — la quantité EXCÉDENTAIRE demandée
                         // disparaissait sans jamais être signalée à personne).
-                        $remaining = max(0, (float) $poItem->quantity - (float) $poItem->received_quantity);
+                        // Formule centralisée : PurchaseOrderItem::remainingQuantity()
+                        // — même source que le préremplissage, lue APRÈS lockForUpdate
+                        // ci-dessus (pas de fenêtre TOCTOU entre lecture et verrou).
+                        $remaining = $poItem->remainingQuantity();
                         if ($receivedQty - $remaining > 0.0001) {
                             throw new \RuntimeException(sprintf(
                                 'Ligne « %s » : reliquat disponible %s, quantité soumise %s. '

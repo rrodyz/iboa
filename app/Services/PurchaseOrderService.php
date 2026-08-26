@@ -241,7 +241,8 @@ class PurchaseOrderService
                 // jamais la quantité totale commandée. $po est verrouillé
                 // (lockForUpdate ci-dessus) : received_quantity lu ici est à
                 // jour pour toute réception déjà validée sur cette ligne.
-                $remaining = max(0, (float) $item->quantity - (float) $item->received_quantity);
+                // Formule centralisée : PurchaseOrderItem::remainingQuantity().
+                $remaining = $item->remainingQuantity();
 
                 $reception->items()->create([
                     'purchase_order_item_id' => $item->id,

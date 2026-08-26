@@ -217,8 +217,10 @@
                             <thead class="bg-[#eef5f0] border-b border-gray-300">
                                 <tr>
                                     <th class="px-3 py-2 text-left text-[11px] font-bold text-emerald-900 uppercase tracking-wide">Produit</th>
-                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide">Attendu</th>
-                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide">Reçu</th>
+                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide hidden md:table-cell">Commandé</th>
+                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide hidden md:table-cell">Déjà reçu</th>
+                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide">Reste à recevoir</th>
+                                    <th class="px-3 py-2 text-right text-[11px] font-bold text-emerald-900 uppercase tracking-wide">Cette réception</th>
                                     <th class="px-3 py-2 text-left text-[11px] font-bold text-emerald-900 uppercase tracking-wide hidden sm:table-cell">N° lot</th>
                                     <th class="px-3 py-2 text-left text-[11px] font-bold text-emerald-900 uppercase tracking-wide hidden sm:table-cell">Péremption</th>
                                 </tr>
@@ -229,7 +231,16 @@
                                         <td class="px-3 py-2">
                                             <div class="font-medium text-gray-800 text-xs">{{ $item->product?->name ?? $item->description }}</div>
                                         </td>
-                                        <td class="px-3 py-2 text-right text-gray-600 text-xs">
+                                        {{-- [P1-C] Commandé / Déjà reçu : lus sur la ligne de commande liée
+                                             (source unique PurchaseOrderItem::remainingQuantity()). "Reste à
+                                             recevoir" (= Attendu ci-dessous, déjà préfait par le backend). --}}
+                                        <td class="px-3 py-2 text-right text-gray-500 text-xs hidden md:table-cell">
+                                            {{ $item->purchaseOrderItem ? number_format($item->purchaseOrderItem->quantity, 2, ',', ' ') : '—' }}
+                                        </td>
+                                        <td class="px-3 py-2 text-right text-gray-500 text-xs hidden md:table-cell">
+                                            {{ $item->purchaseOrderItem ? number_format($item->purchaseOrderItem->received_quantity, 2, ',', ' ') : '—' }}
+                                        </td>
+                                        <td class="px-3 py-2 text-right text-gray-600 text-xs font-medium">
                                             {{ number_format($item->expected_quantity, 2, ',', ' ') }}
                                         </td>
                                         <td class="px-3 py-2">

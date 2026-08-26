@@ -63,4 +63,15 @@ class PurchaseOrderItem extends Model
     {
         return $this->belongsTo(TaxRate::class);
     }
+
+    /**
+     * [P1-C] Source unique du reliquat de réception : commandé − déjà validé,
+     * jamais négatif. Utilisée par PurchaseOrderService::createReception()
+     * (préremplissage) ET PurchaseReceptionService::validate() (contrôle
+     * anti-sur-réception) — une seule formule, deux appelants.
+     */
+    public function remainingQuantity(): float
+    {
+        return max(0.0, (float) $this->quantity - (float) $this->received_quantity);
+    }
 }
