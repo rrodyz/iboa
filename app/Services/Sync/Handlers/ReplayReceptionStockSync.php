@@ -120,6 +120,14 @@ class ReplayReceptionStockSync
             'lot_number' => $item->lot_number,
             'expiry_date' => $item->expiry_date,
             'notes' => $notes,
+            // [FIX double crédit stock_lots] Pour un article coil-managed,
+            // CoilReceptionService (appelé juste après par PurchaseReceptionService)
+            // est seul propriétaire du crédit de lot — il crée le StockLot ET le
+            // Coil, gère le coût/poids réels. Sans ce flag, recordMovement()
+            // upsert déjà le même lot via son mécanisme générique lot_number
+            // (aucun stock_lot_id fourni ici), puis CoilReceptionService le
+            // recrédite une seconde fois : le lot finit à 2× la quantité reçue.
+            'skip_lot_upsert' => (bool) $product?->isCoilManaged(),
         ]);
 
         return 1;

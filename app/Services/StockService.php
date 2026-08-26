@@ -244,7 +244,8 @@ class StockService
             // ---------------------------------------------------------------
             // 4. Remove dest_warehouse_id before creating movement (not a DB column)
             // ---------------------------------------------------------------
-            unset($data['dest_warehouse_id'], $data['allow_negative']);
+            $skipLotUpsert = ! empty($data['skip_lot_upsert']);
+            unset($data['dest_warehouse_id'], $data['allow_negative'], $data['skip_lot_upsert']);
 
             // ---------------------------------------------------------------
             // 4b. [Sync coils/lots] Delta sur le lot explicitement ciblé.
@@ -286,9 +287,13 @@ class StockService
             // ---------------------------------------------------------------
             // 6. Lot / serial tracking (manual lot number provided by user)
             // [Sync coils/lots] Ignoré si un stock_lot_id explicite a déjà été
-            // mouvementé ci-dessus (sinon double delta sur le même lot).
+            // mouvementé ci-dessus (sinon double delta sur le même lot), OU si
+            // l'appelant signale que le crédit du lot est pris en charge
+            // ailleurs (skip_lot_upsert — cf. CoilReceptionService, seul
+            // propriétaire du lot pour un article coil-managed : sans ce
+            // garde-fou, le lot recevait deux fois le même crédit).
             // ---------------------------------------------------------------
-            if (! empty($data['lot_number']) && empty($data['stock_lot_id'])) {
+            if (! empty($data['lot_number']) && empty($data['stock_lot_id']) && ! $skipLotUpsert) {
                 $this->upsertLot($data, $type, $qty, $unitCost);
             }
 
