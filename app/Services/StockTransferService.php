@@ -130,17 +130,27 @@ class StockTransferService
                 throw new \RuntimeException('Expédition bloquée : un inventaire est en cours sur le dépôt source.');
             }
 
-            // Vérifie stock dispo en amont — meilleur message d'erreur. [P1-F]
-            // Résout aussi le StockLot source ici (avant toute écriture) : un
-            // lot_number inconnu, appartenant à un autre article/dépôt, ou en
-            // quantité insuffisante doit bloquer TOUT le transfert sans le
-            // moindre effet de bord — ordre de verrouillage : StockLot d'abord,
-            // ProductStock ensuite (boucle d'écriture suivante), même ordre
-            // pour ship() et receive().
+            // Vérifie stock dispo en amont — meilleur message d'erreur. [P1-F-C]
+            // ProductStock source verrouillé ICI (lockForUpdate), AVANT le calcul
+            // de disponibilité et AVANT toute écriture : sans ce verrou, deux
+            // ship() concurrents sur le même produit+dépôt lisaient tous deux le
+            // même solde non verrouillé, passaient tous deux la validation, puis
+            // décrémentaient tous deux — stock pouvant devenir négatif (aucune
+            // contrainte CHECK en base ne l'empêchait). [P1-F] Résout aussi le
+            // StockLot source ici (avant toute écriture) : un lot_number inconnu,
+            // appartenant à un autre article/dépôt, ou en quantité insuffisante
+            // doit bloquer TOUT le transfert sans le moindre effet de bord —
+            // ordre de verrouillage stable : ProductStock puis StockLot, dans ce
+            // même ordre pour ship() et receive() (limite le risque de deadlock).
+            $sourceStocks = [];
             $sourceLots = [];
             foreach ($transfer->items as $item) {
-                $available = $this->availableQty($item->product_id, $transfer->from_warehouse_id);
-                if ((float) $available < (float) $item->quantity) {
+                $stock = ProductStock::where('product_id', $item->product_id)
+                    ->where('warehouse_id', $transfer->from_warehouse_id)
+                    ->lockForUpdate()
+                    ->first();
+                $available = $stock ? (float) $stock->quantity - (float) ($stock->reserved_quantity ?? 0) : 0.0;
+                if ($available < (float) $item->quantity) {
                     throw new \RuntimeException(sprintf(
                         'Stock insuffisant pour %s au dépôt source : disponible %s, demandé %s.',
                         $item->product?->name ?? '#'.$item->product_id,
@@ -148,6 +158,7 @@ class StockTransferService
                         number_format($item->quantity, 2, ',', ' ')
                     ));
                 }
+                $sourceStocks[$item->id] = $stock;
 
                 if (! empty($item->lot_number)) {
                     // La recherche par (product_id, warehouse_id, lot_number) rejette
@@ -181,7 +192,13 @@ class StockTransferService
 
             // Décrément source + mouvement type sortie
             foreach ($transfer->items as $item) {
-                $stock = ProductStock::firstOrCreate(
+                // [P1-F-C] Réutilise l'instance déjà verrouillée (lockForUpdate) dans
+                // la boucle de pré-vérification ci-dessus — le verrou est tenu tout au
+                // long de cette même transaction. Le fallback firstOrCreate() ne peut
+                // être atteint que si la ligne a été créée après la boucle de
+                // pré-vérification, ce qui n'arrive jamais ici (quantité toujours >0,
+                // donc une ligne absente aurait déjà fait échouer la validation).
+                $stock = $sourceStocks[$item->id] ?? ProductStock::firstOrCreate(
                     ['product_id' => $item->product_id, 'warehouse_id' => $transfer->from_warehouse_id],
                     ['quantity' => 0, 'reserved_quantity' => 0]
                 );
@@ -288,10 +305,11 @@ class StockTransferService
                 $item->update(['received_quantity' => $received]);
 
                 if ($received > 0) {
-                    $stock = ProductStock::firstOrCreate(
-                        ['product_id' => $item->product_id, 'warehouse_id' => $transfer->to_warehouse_id],
-                        ['quantity' => 0, 'reserved_quantity' => 0]
-                    );
+                    // [P1-F-C] Verrouillé : deux receive() concurrents sur le même
+                    // produit+dépôt destination ne doivent pas lire/recalculer avg_cost
+                    // à partir du même solde non verrouillé (lost update sur avg_cost),
+                    // même si l'incrément brut de quantity reste atomique côté SQL.
+                    $stock = $this->lockOrCreateProductStock($item->product_id, $transfer->to_warehouse_id);
 
                     // [FIX valorisation] Recalcul du CMP destination à la réception :
                     // nouveau CMP = (stock×CMP + reçu×coût transféré) / (stock + reçu).
@@ -437,12 +455,12 @@ class StockTransferService
             }
 
             // Si on annule un transfert déjà expédié, on réintègre le stock source.
+            // [P1-F-C] ProductStock source verrouillé : un cancel() concurrent d'un
+            // autre transfert sur le même produit+dépôt (ex. un nouveau ship())
+            // ne doit pas se croiser avec cette réintégration.
             if ($transfer->isInTransit()) {
                 foreach ($transfer->items as $item) {
-                    $stock = ProductStock::firstOrCreate(
-                        ['product_id' => $item->product_id, 'warehouse_id' => $transfer->from_warehouse_id],
-                        ['quantity' => 0, 'reserved_quantity' => 0]
-                    );
+                    $stock = $this->lockOrCreateProductStock($item->product_id, $transfer->from_warehouse_id);
                     $stock->increment('quantity', (float) $item->quantity);
                     $stock->update(['last_movement_at' => now()]);
 
@@ -518,12 +536,27 @@ class StockTransferService
         }
     }
 
-    private function availableQty(int $productId, int $warehouseId): float
+    /**
+     * [P1-F-C] Résout la ligne ProductStock sous lockForUpdate() ; la crée si
+     * absente. Le gap-lock InnoDB posé par le SELECT ... FOR UPDATE (index
+     * unique product_id+warehouse_id, isolation REPEATABLE-READ) empêche deux
+     * transactions concurrentes de créer chacune leur propre ligne pour le même
+     * couple produit+dépôt ; la contrainte unique reste le filet de sécurité
+     * ultime en cas d'imprévu (échec explicite, jamais un doublon silencieux).
+     */
+    private function lockOrCreateProductStock(int $productId, int $warehouseId): ProductStock
     {
         $stock = ProductStock::where('product_id', $productId)
             ->where('warehouse_id', $warehouseId)
+            ->lockForUpdate()
             ->first();
-        return $stock ? (float) $stock->quantity - (float) ($stock->reserved_quantity ?? 0) : 0;
+
+        return $stock ?? ProductStock::create([
+            'product_id'        => $productId,
+            'warehouse_id'      => $warehouseId,
+            'quantity'          => 0,
+            'reserved_quantity' => 0,
+        ]);
     }
 
     private function fallbackNumber(Company $company): string
