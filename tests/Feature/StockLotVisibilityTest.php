@@ -92,6 +92,42 @@ it('E05 — recherche par numéro de lot', function () {
     $response->assertSee('LOT-UNIQUE-XYZ');
 });
 
+it('E06 — recherche par numéro de série (exacte et partielle), lot non lié invisible', function () {
+    [$co] = slvSociete('06');
+    [$wh, $mp] = slvArticle($co, '06');
+    StockLot::create(['product_id' => $mp->id, 'warehouse_id' => $wh->id, 'lot_number' => 'LOT-SERIAL-001', 'serial_number' => 'SERIAL-XYZ-987', 'quantity' => 20, 'status' => 'disponible']);
+    StockLot::create(['product_id' => $mp->id, 'warehouse_id' => $wh->id, 'lot_number' => 'LOT-SANS-RAPPORT', 'serial_number' => 'AUTRE-SERIE-000', 'quantity' => 30, 'status' => 'disponible']);
+
+    $exact = test()->get(route('stocks.lots', ['search' => 'SERIAL-XYZ-987']));
+    $exact->assertSee('LOT-SERIAL-001')->assertDontSee('LOT-SANS-RAPPORT');
+
+    // Moteur réel = LIKE '%…%' (StockLotQueryService::baseQuery) : une
+    // recherche partielle doit donc, par construction, retrouver le même lot.
+    $partial = test()->get(route('stocks.lots', ['search' => 'XYZ-987']));
+    $partial->assertSee('LOT-SERIAL-001')->assertDontSee('LOT-SANS-RAPPORT');
+});
+
+it('P1-E3-01 — valuation_status distinct de quality_status, visible et distinguable en base', function () {
+    [$co] = slvSociete('val01');
+    [$wh, $mp] = slvArticle($co, 'val01');
+    $lotA = StockLot::create(['product_id' => $mp->id, 'warehouse_id' => $wh->id, 'lot_number' => 'LOT-VAL-A', 'quantity' => 100, 'unit_cost' => 500, 'status' => 'disponible', 'quality_status' => 'libere', 'valuation_status' => 'valorisation_definitive']);
+    $lotB = StockLot::create(['product_id' => $mp->id, 'warehouse_id' => $wh->id, 'lot_number' => 'LOT-VAL-B', 'quantity' => 100, 'unit_cost' => 0, 'status' => 'disponible', 'quality_status' => 'libere', 'valuation_status' => 'valorisation_manquante', 'valuation_reason' => 'Coût historique absent']);
+
+    $response = test()->get(route('stocks.lots', ['product_id' => $mp->id]));
+    $response->assertOk();
+
+    // Même quality_status (libere) sur les deux lots — la distinction ne peut
+    // venir QUE de valuation_status : preuve qu'il porte une information
+    // réellement différente, pas redondante avec la qualité.
+    expect($lotA->qualityStatusLabel())->toBe($lotB->qualityStatusLabel());
+    expect($lotA->valuationStatusLabel())->not->toBe($lotB->valuationStatusLabel());
+    expect($lotA->valuationStatusLabel())->toBe('Valorisé');
+    expect($lotB->valuationStatusLabel())->toBe('Coût manquant');
+
+    $response->assertSee('Valorisé');
+    $response->assertSee('Coût manquant');
+});
+
 it('E07/E08 — lot épuisé invisible par défaut, retrouvable via filtre disponibilité "épuisés"', function () {
     [$co] = slvSociete('07');
     [$wh, $mp] = slvArticle($co, '07');

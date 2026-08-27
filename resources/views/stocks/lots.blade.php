@@ -129,7 +129,7 @@
                         <th class="text-right">Disponible</th>
                         <th class="text-right hidden lg:table-cell">Coût unit.</th>
                         <th class="text-right hidden lg:table-cell">Valeur</th>
-                        <th class="text-center hidden md:table-cell">Qualité</th>
+                        <th class="text-center hidden md:table-cell">Qualité / Valorisation</th>
                         <th class="text-left hidden xl:table-cell">Péremption</th>
                         <th class="text-center">Statut</th>
                     </tr>
@@ -157,6 +157,15 @@
                             'en_attente' => 'bg-gray-100 text-gray-600',
                             'recu' => 'bg-gray-100 text-gray-600',
                         ];
+                        // [P1-E FINAL MICRO-GATE] valuation_status juge le COÛT du lot pour
+                        // la comptabilité (bloque la consommation indépendamment de la
+                        // qualité, cf. CoilConsumptionService::consume()) — distinct de
+                        // quality_status (aptitude physique). Vert = nominal, sinon anomalie.
+                        $valuationClasses = [
+                            'valorisation_manquante' => 'bg-red-100 text-red-700',
+                            'bloque_comptabilite' => 'bg-red-100 text-red-700',
+                        ];
+                        $valuationClass = $valuationClasses[$lot->valuation_status] ?? 'bg-green-100 text-green-700';
                     @endphp
                     <tr class="{{ $lot->status === 'expire' || ($daysLeft !== null && $daysLeft < 0) ? '!bg-red-50' : ($daysLeft !== null && $daysLeft <= 30 ? '!bg-orange-50' : '') }}">
                         <td>
@@ -191,13 +200,19 @@
                             {{ $value !== null ? number_format($value, 0, ',', ' ') : '—' }}
                         </td>
                         <td class="text-center hidden md:table-cell">
-                            @if($lot->quality_status)
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-[10.5px] font-medium {{ $qualityClasses[$lot->quality_status] ?? 'bg-gray-100 text-gray-600' }}">
-                                {{ $lot->qualityStatusLabel() }}
-                            </span>
-                            @else
-                            <span class="text-gray-300">—</span>
-                            @endif
+                            <div class="flex flex-col items-center gap-0.5">
+                                @if($lot->quality_status)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-[10.5px] font-medium {{ $qualityClasses[$lot->quality_status] ?? 'bg-gray-100 text-gray-600' }}">
+                                    {{ $lot->qualityStatusLabel() }}
+                                </span>
+                                @else
+                                <span class="text-gray-300">—</span>
+                                @endif
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-[3px] text-[10.5px] font-medium {{ $valuationClass }}"
+                                      @if($lot->valuation_reason) title="{{ $lot->valuation_reason }}" @endif>
+                                    {{ $lot->valuationStatusLabel() }}
+                                </span>
+                            </div>
                         </td>
                         <td class="hidden xl:table-cell">
                             @if($lot->expiry_date)

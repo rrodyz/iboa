@@ -150,4 +150,23 @@ class StockLot extends Model
             default => $this->quality_status,
         };
     }
+
+    /**
+     * [P1-E FINAL MICRO-GATE] Libellé du statut de VALORISATION — distinct de
+     * quality_status : quality_status juge l'aptitude physique de la matière
+     * (contrôle qualité réception/production), valuation_status juge si le
+     * lot est correctement COÛTÉ pour la comptabilité (bloque la consommation
+     * indépendamment de la qualité — cf. CoilConsumptionService::consume()
+     * qui vérifie les deux séparément). Valeurs réelles observées (migration
+     * 2026_07_25_180000, AuditUnvaluedStock, CoilConsumptionService).
+     */
+    public function valuationStatusLabel(): string
+    {
+        return match ($this->valuation_status) {
+            null, 'valorisation_definitive' => 'Valorisé',
+            'valorisation_manquante' => 'Coût manquant',
+            'bloque_comptabilite' => 'Bloqué compta',
+            default => $this->valuation_status,
+        };
+    }
 }
