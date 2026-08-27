@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StockLot extends Model
 {
@@ -56,6 +57,18 @@ class StockLot extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    /** [P1-E] Réservations formelles P1-D liées à CE lot précisément (jamais les réservations génériques produit+dépôt sans stock_lot_id — voir StockLotQueryService). */
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(StockReservation::class, 'stock_lot_id');
+    }
+
+    /** [P1-E] Bobine(s) physiques rattachées à ce lot (0, 1 ou plusieurs — jamais supposer 1:1). */
+    public function coils(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Production\Models\Coil::class, 'stock_lot_id');
     }
 
     // -------------------------------------------------------------------------
@@ -117,6 +130,24 @@ class StockLot extends Model
             'expire' => 'Expiré',
             'consomme' => 'Consommé',
             default => $this->status,
+        };
+    }
+
+    /** [P1-E] Libellé du statut qualité — valeurs réelles observées (PurchaseQualityService, Coil::QUALITY_*). */
+    public function qualityStatusLabel(): ?string
+    {
+        return match ($this->quality_status) {
+            null => null,
+            'recu' => 'Reçu',
+            'en_attente' => 'En attente',
+            'quarantaine' => 'Quarantaine',
+            'libere' => 'Libéré',
+            'libere_partiel' => 'Libéré partiel',
+            'refuse' => 'Refusé',
+            'retour_attente' => 'Retour en attente',
+            'retourne' => 'Retourné',
+            'annule' => 'Annulé',
+            default => $this->quality_status,
         };
     }
 }

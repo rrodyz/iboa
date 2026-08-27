@@ -399,43 +399,39 @@ class StockController extends Controller
     }
 
     /**
-     * Display stock lots (traceability: lot numbers, serial numbers, expiry dates).
+     * [P1-E] Consultation du stock par lot : physique / réservé / disponible /
+     * coût / qualité par lot, avec filtres article + dépôt combinables. Pure
+     * lecture — toute la logique de source de vérité est dans
+     * StockLotQueryService (voir docblock du service).
      */
-    public function lots(Request $request): View
+    public function lots(Request $request, \App\Services\StockLotQueryService $lotQuery): View
     {
-        $filters = $request->only(['search', 'warehouse_id', 'status', 'expiring_soon']);
+        $filters = $request->only(['search', 'product_id', 'warehouse_id', 'status', 'quality_status', 'availability', 'expiring_soon']);
 
-        $query = StockLot::with(['product', 'warehouse'])
-            ->whereHas('product', fn($q) => $q->where('is_active', true));
-
-        if (!empty($filters['warehouse_id'])) {
-            $query->where('warehouse_id', $filters['warehouse_id']);
-        }
-        if (!empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        } else {
-            $query->where('status', 'disponible'); // default: show only available
-        }
-        if (!empty($filters['expiring_soon'])) {
-            $query->expiringSoon(30);
-        }
-        if (!empty($filters['search'])) {
-            $s = '%' . $filters['search'] . '%';
-            $query->where(fn($q) =>
-                $q->where('lot_number', 'like', $s)
-                  ->orWhere('serial_number', 'like', $s)
-                  ->orWhereHas('product', fn($pq) => $pq->where('name', 'like', $s)->orWhere('reference', 'like', $s))
-            );
-        }
-
-        // Mark expired lots
+        // Marque expirés AVANT de construire la requête (comportement historique
+        // conservé — la page doit refléter l'état à jour à chaque consultation).
         StockLot::expired()->update(['status' => 'expire']);
 
-        $lots       = $query->orderByRaw('CASE WHEN expiry_date IS NULL THEN 1 ELSE 0 END, expiry_date ASC')
-                            ->paginate(25)->withQueryString();
-        $warehouses = Warehouse::active()->orderBy('name')->get(['id', 'name']);
+        $query = $lotQuery->baseQuery($filters);
+        if (! empty($filters['expiring_soon'])) {
+            $query->expiringSoon(30);
+        }
 
-        return view('stocks.lots', compact('lots', 'warehouses', 'filters'));
+        $kpi = $lotQuery->aggregate($query);
+        $lots = $lotQuery->paginate($query);
+
+        $pairs = $lots->getCollection()
+            ->filter(fn ($l) => (bool) $l->product?->has_lot_number)
+            ->map(fn ($l) => ['product_id' => $l->product_id, 'warehouse_id' => $l->warehouse_id])
+            ->unique(fn ($p) => $p['product_id'].'-'.$p['warehouse_id']);
+        $genericReservations = $lotQuery->genericReservationsFor($pairs)
+            ->keyBy(fn ($r) => $r['product_id'].'-'.$r['warehouse_id']);
+
+        $warehouses = Warehouse::active()->orderBy('name')->get(['id', 'name', 'code']);
+        $products = Product::whereHas('stockLots')->where('is_active', true)
+            ->orderBy('name')->get(['id', 'name', 'reference']);
+
+        return view('stocks.lots', compact('lots', 'warehouses', 'products', 'filters', 'kpi', 'genericReservations'));
     }
 
     /**
