@@ -59,6 +59,20 @@ class CoilConsumptionService
             }
             $weight = round($length * $factor, 2);
         }
+
+        // [P1-D3] Quantification CANONIQUE unique du poids consommé, à la même
+        // échelle que coils.remaining_weight / production_consumptions.
+        // weight_consumed (DECIMAL(12,2) — précision physique réelle d'une
+        // bobine sur balance industrielle, jamais plus fine que 10 g). Arrondi
+        // ICI, une seule fois, AVANT toute écriture : la même valeur alimente
+        // ensuite le solde bobine (applyCoilDelta), le mouvement de stock
+        // (StockService::recordMovement), le coût ET la consommation
+        // d'allocation formelle (ReservationService::recordAllocationConsumption)
+        // — jamais un poids brut à 4 décimales d'un côté et arrondi de l'autre
+        // (c'était exactement le bug P1-D3 : la réservation se canonisait déjà à
+        // 2 décimales en base, mais recevait un delta brut, non aligné avec la
+        // bobine physique qui, elle, a toujours été à 2 décimales).
+        $weight = round($weight, 2);
         if ($weight <= 0) {
             throw ValidationException::withMessages(['weight' => 'Le poids consommé doit être positif.']);
         }

@@ -266,6 +266,17 @@ class ReservationService
      */
     public function allocateMaterialLot(ProductionOrder $order, StockLot $stockLot, float $quantity, ?Coil $coil = null): StockReservation
     {
+        // [P1-D3] Quantification CANONIQUE unique, avant toute écriture : la même
+        // valeur (arrondie à l'échelle réelle de stock_reservations, 2 décimales —
+        // cf. matrice de précision P1-D3, alignée sur la précision physique réelle
+        // des bobines/consommations, déjà à 2 décimales bien avant P1-D) sert à la
+        // fois pour StockReservation.quantity ET pour le delta ProductStock.
+        // reserved_quantity. Avant ce correctif, la réservation stockait la valeur
+        // arrondie (cast decimal:2) tandis que l'agrégat recevait la valeur BRUTE
+        // (jusqu'à 4 décimales) : les deux représentations divergeaient dès
+        // l'allocation et ne se rejoignaient plus jamais (bug P1-D3 prouvé par
+        // tests réels — cf. rapport P1-D ABSOLUTE FINAL GATE).
+        $quantity = $this->canonicalizeQuantity($quantity);
         if ($quantity <= 0) {
             throw ValidationException::withMessages(['quantity' => 'La quantité à allouer doit être positive.']);
         }
@@ -398,6 +409,16 @@ class ReservationService
      */
     public function recordAllocationConsumption(ProductionOrder $order, Coil $coil, float $weight): StockReservation
     {
+        // [P1-D3] Même quantification canonique qu'à l'allocation (cf.
+        // allocateMaterialLot()) : consumed_quantity et le delta ProductStock
+        // doivent porter EXACTEMENT la même valeur que celle comparée à
+        // remainingReserved() (elle-même dérivée des colonnes canoniques
+        // quantity/consumed_quantity, 2 décimales). Sans ce recadrage, comparer
+        // un poids brut (jusqu'à 4 décimales) à une réservation stockée à 2
+        // décimales laissait un résidu qui empêchait le statut de passer à
+        // « consumed » même après consommation intégrale (bug P1-D3).
+        $weight = $this->canonicalizeQuantity($weight);
+
         return DB::transaction(function () use ($order, $coil, $weight) {
             $reservation = StockReservation::where('production_order_id', $order->id)
                 ->where('coil_id', $coil->id)
@@ -493,6 +514,23 @@ class ReservationService
             $this->adjustReserved($reservation->product_id, $reservation->warehouse_id, -$reservation->remainingReserved());
             $reservation->update(['status' => 'released', 'released_at' => now()]);
         });
+    }
+
+    /**
+     * [P1-D3] Point UNIQUE de quantification des quantités matière allouées/
+     * consommées. Échelle = celle réellement portée par stock_reservations.
+     * quantity/consumed_quantity (DECIMAL(14,2)) — qui coïncide avec la
+     * précision physique réelle des bobines (coils.remaining_weight,
+     * production_consumptions.weight_consumed, toutes deux DECIMAL(12,2)
+     * depuis bien avant P1-D). Le besoin BOM brut (jusqu'à 4 décimales,
+     * bill_of_material_lines à DECIMAL(12,4)) reste un calcul théorique ; la
+     * quantité OPÉRATIONNELLE de stock ne l'a jamais été à plus de 2 décimales
+     * dans ce système. Un seul appel ici — jamais round($x, 2) recopié
+     * ailleurs dans ce service.
+     */
+    private function canonicalizeQuantity(float $raw): float
+    {
+        return round($raw, 2);
     }
 
     private function adjustReserved(int $productId, ?int $warehouseId, float $delta): void
