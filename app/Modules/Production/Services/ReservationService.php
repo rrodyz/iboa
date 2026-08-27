@@ -257,9 +257,10 @@ class ReservationService
      * générique produit+dépôt en parallèle pour la même matière (voir le garde
      * ajouté dans reserveMaterialsForOrder()).
      *
-     * Verrouillage : bobine PUIS lot, même ordre que CoilConsumptionService::
-     * consume() — cohérence indispensable entre allocate() et consume() pour
-     * éviter tout risque d'interblocage entre les deux chemins.
+     * Verrouillage : bobine (si fournie), PUIS ProductStock, PUIS lot — ordre
+     * global cohérent avec CoilConsumptionService::consume() (Coil → ProductStock
+     * → StockLot) ET avec StockTransferService::ship()/receive()/cancel()
+     * (ProductStock → StockLot), qui n'a jamais connaissance de la bobine.
      *
      * @throws ValidationException
      */
@@ -270,9 +271,31 @@ class ReservationService
         }
 
         return DB::transaction(function () use ($order, $stockLot, $quantity, $coil) {
-            // Verrous : bobine (si fournie) puis lot — ordre stable, cf. docblock.
+            // [P1-D QA gate — ordre global des verrous] Bobine (si fournie), PUIS
+            // ProductStock, PUIS StockLot. ProductStock avant StockLot — jamais
+            // l'inverse — pour rester cohérent avec StockTransferService::ship()/
+            // receive()/cancel() (verrouillent toujours ProductStock avant
+            // StockLot) et avec CoilConsumptionService::consume() (Coil, puis
+            // ProductStock via recordAllocationConsumption()->adjustReserved(),
+            // puis StockLot via StockService::recordMovement()). L'ordre PRÉCÉDENT
+            // (StockLot avant ProductStock, ce dernier verrouillé seulement à la
+            // fin dans adjustReserved()) inversait l'ordre de ship()/receive() :
+            // un allocateMaterialLot() et un ship() concurrents sur le même
+            // produit+dépôt+lot pouvaient s'attendre mutuellement — deadlock
+            // structurel prouvé par lecture de code (jamais observé en usage
+            // normal aujourd'hui, mais un vrai risque dès que les deux flux
+            // peuvent réellement se croiser). Le verrou ci-dessous n'altère rien :
+            // il pose juste le verrou plus tôt sur la ligne que adjustReserved()
+            // verrouillera de toute façon en fin de méthode (ré-acquisition sans
+            // effet dans la même transaction).
             if ($coil) {
                 $coil = Coil::lockForUpdate()->findOrFail($coil->id);
+            }
+            if ($stockLot->product_id && $stockLot->warehouse_id) {
+                ProductStock::where('product_id', $stockLot->product_id)
+                    ->where('warehouse_id', $stockLot->warehouse_id)
+                    ->lockForUpdate()
+                    ->first();
             }
             $stockLot = StockLot::lockForUpdate()->findOrFail($stockLot->id);
 
