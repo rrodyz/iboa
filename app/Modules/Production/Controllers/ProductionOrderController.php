@@ -286,6 +286,12 @@ class ProductionOrderController extends Controller
             ? app(\App\Modules\Production\Services\CoilCompatibilityService::class)
                 ->compatibleCoilsQuery($order)->orderBy('reference')->get()
             : collect();
+
+        // [P1-D] Allocations formelles actives (lot/bobine) de cet OF — préalable
+        // à la consommation d'une matière coil-managed depuis P1-D2 (fail-closed).
+        $coilAllocations = $order->reservations()
+            ->whereNotNull('coil_id')->where('status', 'reserved')
+            ->with('coil', 'stockLot')->get();
         $machines   = $order->isInProgress() ? \App\Modules\Production\Models\ProductionMachine::where('is_active', true)->orderBy('name')->get() : collect();
         $employees  = in_array($order->status, ['lance', 'en_cours', 'termine'], true) ? \App\Models\Employee::orderBy('last_name')->get() : collect();
         $warehouses = $order->isInProgress() ? \App\Models\Warehouse::orderByDesc('is_default')->orderBy('name')->get() : collect();
@@ -299,7 +305,7 @@ class ProductionOrderController extends Controller
             ? $this->service->materialShortages($order)
             : [];
 
-        return view('production.orders.show', compact('order', 'metrics', 'componentMoves', 'coils', 'machines', 'employees', 'warehouses', 'workflow', 'opProgress', 'materialShortages'));
+        return view('production.orders.show', compact('order', 'metrics', 'componentMoves', 'coils', 'coilAllocations', 'machines', 'employees', 'warehouses', 'workflow', 'opProgress', 'materialShortages'));
     }
 
     /**

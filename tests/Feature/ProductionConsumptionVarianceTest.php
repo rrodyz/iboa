@@ -64,6 +64,7 @@ it('surconsommation RÉELLE : stock 20, théorique 10, réel 12 → accepté, é
     [, , $mp, , $of, $coil] = varSetup(20, 500);
 
     // Consommation réelle 12 kg ACCEPTÉE (bobine 20 kg suffit) — pas un refus.
+    p1dAllocate($of, $coil, 12.0);
     app(CoilConsumptionService::class)->consume($of, $coil, 12.0, null, null);
     expect((float) $coil->fresh()->remaining_weight)->toBe(8.0); // 20 − 12, la conso est bien passée
 
@@ -82,6 +83,7 @@ it('surconsommation RÉELLE : stock 20, théorique 10, réel 12 → accepté, é
 it('sous-consommation : théorique 10, réel 8 → écart −2 kg, valeur −1000 (favorable)', function () {
     [, , $mp, , $of, $coil] = varSetup(20, 500);
 
+    p1dAllocate($of, $coil, 8.0);
     app(CoilConsumptionService::class)->consume($of, $coil, 8.0, null, null);
 
     $var  = app(ConsumptionVarianceService::class)->forOrder($of->fresh());
@@ -105,7 +107,9 @@ it('multi-bobines à coûts différents : écart valorisé au coût réel pondé
         'warehouse_id' => $wh->id, 'cost_per_kg' => 800, 'purchase_price' => 8000, 'received_at' => now()]);
 
     $svc = app(CoilConsumptionService::class);
+    p1dAllocate($of, $b1, 6.0);
     $svc->consume($of, $b1, 6.0, null, null); // 6 × 500 = 3000
+    p1dAllocate($of, $b2, 6.0);
     $svc->consume($of, $b2, 6.0, null, null); // 6 × 800 = 4800
 
     $var  = app(ConsumptionVarianceService::class)->forOrder($of->fresh());
@@ -121,6 +125,7 @@ it('multi-bobines à coûts différents : écart valorisé au coût réel pondé
 it('rebut VALORISÉ : le rebut n\'est pas « aucun mouvement » — registre tracé et chiffré', function () {
     [$co, , , , $of, $coil] = varSetup(20, 500);
     // Consommation réelle 12 kg @ 500 → coût moyen consommé 500 FCFA/kg.
+    p1dAllocate($of, $coil, 12.0);
     app(CoilConsumptionService::class)->consume($of, $coil, 12.0, null, null);
 
     // Déclaration d'un rebut de 3 kg (cause opérateur), avec responsable.

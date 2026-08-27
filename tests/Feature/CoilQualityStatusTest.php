@@ -115,6 +115,7 @@ it('bobine LIBÉRÉE : consommation autorisée', function () {
     $coil = makeCoil($ctx, Coil::QUALITY_RELEASED);
     $of   = makeCoilQualityOf($ctx);
 
+    p1dAllocate($of, $coil, 30.0);
     app(CoilConsumptionService::class)->consume($of, $coil, 30.0, null, null);
 
     expect((float) $coil->fresh()->remaining_weight)->toBe(70.0)   // 100 − 30
@@ -126,6 +127,7 @@ it('bobine HISTORIQUE (statut qualité NULL) : consommable mais jamais présent�
     $coil = makeCoil($ctx, null); // héritage : statut inconnu
     $of   = makeCoilQualityOf($ctx);
 
+    p1dAllocate($of, $coil, 10.0);
     app(CoilConsumptionService::class)->consume($of, $coil, 10.0, null, null);
 
     expect((float) $coil->fresh()->remaining_weight)->toBe(90.0)
@@ -147,6 +149,9 @@ it('GARDE QUANTITATIVE : bobine 10 000 reçue, 6 000 libérée, 2 000 consommée
         'warehouse_id' => $wh->id, 'cost_per_kg' => 500, 'purchase_price' => 5000000, 'received_at' => now(),
     ]);
     expect($coil->availableReleasedQuantity())->toBe(6000.0);
+
+    // Allocation formelle couvrant les deux consommations légitimes de ce test (2000+4000).
+    p1dAllocate($of, $coil, 6000.0);
 
     // Consommation de 2 000 (≤ 6 000 libéré) → acceptée.
     app(CoilConsumptionService::class)->consume($of, $coil, 2000.0, null, null);
@@ -355,6 +360,7 @@ it('DIVISION PHYSIQUE : bobine mère → filles traçables, poids réconciliés,
 
     // La fille conforme est consommable ; la fille refusée ne l'est pas.
     $of = makeCoilQualityOf($ctx);
+    p1dAllocate($of, $children[0]->fresh(), 30.0);
     app(CoilConsumptionService::class)->consume($of, $children[0]->fresh(), 30.0, null, null);
     expect((float) $children[0]->fresh()->remaining_weight)->toBe(40.0);
     expect(fn () => app(CoilConsumptionService::class)->consume($of, $children[1]->fresh(), 5.0, null, null))

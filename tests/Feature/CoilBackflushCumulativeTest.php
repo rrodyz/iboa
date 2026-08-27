@@ -121,6 +121,7 @@ function cbcSetupBom(): array
 it('backflushes only the remaining uncovered quantity after multiple real consumptions', function () {
     [$warehouse, $mp, $order, $coil] = cbcSetupBom();
 
+    p1dAllocate($order, $coil, 300);
     app(CoilConsumptionService::class)->consume($order, $coil, 120);
     app(CoilConsumptionService::class)->consume($order->fresh(), $coil->fresh(), 180);
 

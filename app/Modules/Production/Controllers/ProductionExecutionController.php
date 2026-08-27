@@ -34,11 +34,39 @@ class ProductionExecutionController extends Controller
         // chutes, sous-produits) est ouverte à l'opérateur (production.declare) EN PLUS
         // de l'encadrement ; corrections/annulations restent réservées à production.update.
         $this->middleware('permission:production.declare|production.update')
-            ->only(['consume', 'output', 'waste', 'byproduct']);
+            ->only(['consume', 'output', 'waste', 'byproduct', 'allocateCoil', 'deallocate']);
         $this->middleware('permission:production.update')
-            ->except(['consume', 'output', 'waste', 'byproduct', 'validateChef', 'validateQuality', 'validateOutput']);
+            ->except(['consume', 'output', 'waste', 'byproduct', 'validateChef', 'validateQuality', 'validateOutput', 'allocateCoil', 'deallocate']);
         // [CDC §13.3] Visa chef d'équipe sur les déclarations de production.
         $this->middleware('permission:production.validate_declaration')->only('validateOutput');
+    }
+
+    // ── Allocation matière (P1-D — préalable à la consommation d'une bobine
+    //    coil-managed) ─────────────────────────────────────────────────────
+    public function allocateCoil(Request $request, ProductionOrder $order): RedirectResponse
+    {
+        $data = $request->validate([
+            'coil_id'  => ['required', 'integer', 'exists:coils,id'],
+            'quantity' => ['required', 'numeric', 'gt:0'],
+        ]);
+
+        $coil = Coil::findOrFail($data['coil_id']);
+        if (! $coil->stock_lot_id) {
+            return back()->with('error', 'Cette bobine n’est rattachée à aucun lot de stock — allocation impossible.');
+        }
+        $lot = \App\Models\StockLot::findOrFail($coil->stock_lot_id);
+
+        app(\App\Modules\Production\Services\ReservationService::class)
+            ->allocateMaterialLot($order, $lot, (float) $data['quantity'], $coil);
+
+        return back()->with('success', 'Matière allouée à l’OF.');
+    }
+
+    public function deallocate(\App\Models\StockReservation $reservation): RedirectResponse
+    {
+        app(\App\Modules\Production\Services\ReservationService::class)->release($reservation);
+
+        return back()->with('success', 'Allocation libérée.');
     }
 
     // ── Consommation matière ────────────────────────────────────────────────

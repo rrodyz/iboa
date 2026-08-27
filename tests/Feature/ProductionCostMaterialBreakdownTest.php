@@ -53,6 +53,7 @@ it('ventile material_cost en gross/waste/useful sans jamais additionner la chute
         'quantity_requested' => 100, 'quantity_produced' => 0, 'product_id' => $pf->id,
     ]);
 
+    p1dAllocate($order, $coil, 800.0);
     app(CoilConsumptionService::class)->consume($order, $coil, 800.0);
 
     $avantChute = app(ProductionCostService::class)->compute($order->fresh(), ['overhead_rate' => 0]);

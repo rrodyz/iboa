@@ -6,6 +6,7 @@ use App\Models\StockLot;
 use App\Modules\Production\Models\Coil;
 use App\Modules\Production\Models\ProductionConsumption;
 use App\Modules\Production\Models\ProductionOrder;
+use App\Modules\Production\Services\ReservationService;
 use App\Services\StockService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,7 @@ class CoilConsumptionService
     public function __construct(
         private StockService $stock,
         private CoilCompatibilityService $compatibility,
+        private ReservationService $reservations,
     ) {}
 
     /** Enregistre une consommation de matière depuis une bobine. */
@@ -129,6 +131,22 @@ class CoilConsumptionService
                 throw ValidationException::withMessages([
                     'quality' => 'Solde libéré par la qualité insuffisant pour cette consommation (concurrence).',
                 ]);
+            }
+
+            // [P1-D2 — §20 fail-closed] Une bobine ne peut être consommée que si
+            // elle est formellement allouée à CET OF (ReservationService::
+            // allocateMaterialLot()) — jamais de repli silencieux sur une
+            // réservation générique produit+dépôt. recordAllocationConsumption()
+            // lève une ValidationException si aucune allocation active ne couvre
+            // (production_order_id, coil_id) : AVANT toute écriture physique.
+            // Ne s'applique qu'aux bobines d'un article RÉELLEMENT coil-managed
+            // (itemCategory.coil_managed) — le périmètre métier exact de P1-D. Une
+            // bobine sans product_id, ou dont l'article n'est pas déclaré
+            // coil-managed (fixture de coût ad-hoc, jamais rattachée à une vraie
+            // catégorie bobine), ne touche déjà jamais product_stocks/stock_lots
+            // ou n'est pas le type de matière visé par l'allocation formelle.
+            if ($coil->product_id && $coil->product?->isCoilManaged()) {
+                $this->reservations->recordAllocationConsumption($order, $coil, $weight);
             }
 
             $cost = (int) round($weight * (float) $coil->cost_per_kg);

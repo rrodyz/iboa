@@ -534,6 +534,54 @@
     </div>
 
 <div x-show="tab === 'suivi'" x-cloak>
+{{-- ══ Allocation matière (P1-D) — préalable requis pour consommer une bobine
+     coil-managed depuis P1-D2 (fail-closed). Minimum indispensable : cet écran
+     n'est pas P1-E (consultation générale des lots), seulement ce qu'il faut
+     pour rendre l'allocation utilisable avant consommation. ══ --}}
+    <div class="bg-white rounded-[4px] border border-gray-300 overflow-hidden mb-3">
+        <div class="px-3 py-1.5 border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white">
+            <h2 class="text-[13px] font-bold text-gray-900">Allocation matière (lot / bobine)</h2>
+        </div>
+        @if($live)
+        <form method="POST" action="{{ route('production.orders.allocate-coil', $order) }}" class="px-3 py-1.5 bg-gray-50/60 border-b border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+            @csrf
+            <div class="md:col-span-2">
+                <label class="block text-[12px] font-medium text-gray-600 mb-1">Bobine à allouer</label>
+                <select name="coil_id" required class="w-full border border-gray-300 rounded-[4px] px-2 py-1.5 text-[13px]">
+                    <option value="">— Choisir —</option>
+                    @foreach($coils as $c)
+                        <option value="{{ $c->id }}">{{ $c->reference }} ({{ number_format($c->remaining_weight,0,',',' ') }} kg dispo)</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-[12px] font-medium text-gray-600 mb-1">Quantité à allouer (kg)</label>
+                <input type="number" name="quantity" step="0.01" min="0.01" required class="w-full border border-gray-300 rounded-[4px] px-2 py-1.5 text-[13px] text-right font-mono">
+            </div>
+            <button class="bg-emerald-700 hover:bg-emerald-800 text-white text-[13px] font-medium px-3 py-1.5 rounded-[4px]">Allouer</button>
+        </form>
+        @endif
+        <div class="tbl-scroll">
+            <table class="tbl tbl-sticky w-full">
+                <thead><tr><th class="text-left">Bobine</th><th class="text-left">Lot</th><th class="text-right">Alloué</th><th class="text-right">Consommé</th><th class="text-right">Reste réservé</th><th></th></tr></thead>
+                <tbody>
+                    @forelse($coilAllocations as $a)
+                    <tr>
+                        <td class="font-mono text-[12px] text-emerald-700">{{ $a->coil?->reference ?? '—' }}</td>
+                        <td class="font-mono text-[12px] text-gray-600">{{ $a->stockLot?->lot_number ?? '—' }}</td>
+                        <td class="text-right tabular-nums text-gray-900">{{ number_format($a->quantity,2,',',' ') }} kg</td>
+                        <td class="text-right tabular-nums text-gray-600">{{ number_format($a->consumed_quantity,2,',',' ') }} kg</td>
+                        <td class="text-right tabular-nums font-semibold text-gray-900">{{ number_format($a->remainingReserved(),2,',',' ') }} kg</td>
+                        <td class="text-right">@if($live)<form method="POST" action="{{ route('production.reservations.deallocate', $a) }}" data-confirm="Libérer cette allocation ?">@csrf @method('DELETE')<button class="text-gray-400 hover:text-red-600 text-[12px]">✕</button></form>@endif</td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Aucune allocation active — une bobine coil-managed doit être allouée avant d’être consommée.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 {{-- ══ Consommation matière ══ --}}
     <div class="bg-white rounded-[4px] border border-gray-300 overflow-hidden">
         <div class="px-3 py-1.5 border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white flex items-center justify-between">

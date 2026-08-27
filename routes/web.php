@@ -1705,6 +1705,8 @@ Route::middleware(['auth', 'verified', 'permission:production.view'])->prefix('p
 // consommation matière, déclaration de production, chutes et sous-produits.
 Route::middleware(['auth', 'verified', 'permission:production.declare|production.update'])
     ->prefix('production')->name('production.')->group(function () {
+    Route::post('orders/{order}/allocate-coil', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'allocateCoil'])->name('orders.allocate-coil');
+    Route::delete('reservations/{reservation}', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'deallocate'])->name('reservations.deallocate');
     Route::post('orders/{order}/consume', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'consume'])->name('orders.consume');
     Route::post('orders/{order}/output', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'output'])->name('orders.output');
     Route::post('orders/{order}/waste', [\App\Modules\Production\Controllers\ProductionExecutionController::class, 'waste'])->name('orders.waste');

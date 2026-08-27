@@ -160,6 +160,7 @@ describe('Consommation bobine synchronisée', function () {
         cslStock($mp, $wh, 3000);
         $order = cslOrder($company, $pf);
 
+        p1dAllocate($order, $coil, 120);
         $consumption = app(CoilConsumptionService::class)->consume($order, $coil, 120);
 
         expect((float) $coil->fresh()->remaining_weight)->toBe(380.0)
@@ -192,7 +193,8 @@ describe('Consommation bobine synchronisée', function () {
         cslStock($mp, $wh, 3000);
         $order = cslOrder($company, $pf);
 
-        // Saisie 100 ML, aucun poids : conversion attendue 175,13 KG.
+        // Saisie 100 ML, aucun poids : conversion attendue 175,13 KG (allocation en kg estimés).
+        p1dAllocate($order, $coil, 175.13);
         $consumption = app(CoilConsumptionService::class)->consume($order, $coil, 0, 100);
 
         expect((float) $consumption->weight_consumed)->toBe(175.13)
@@ -264,6 +266,7 @@ describe('Reverse de consommation', function () {
         cslStock($mp, $wh, 3000);
         $order = cslOrder($company, $pf);
 
+        p1dAllocate($order, $coil, 200);
         $svc = app(CoilConsumptionService::class);
         $consumption = $svc->consume($order, $coil, 200);
         $originalMovementId = $consumption->stock_movement_id;
@@ -336,6 +339,7 @@ describe('Backflush au reliquat', function () {
         $coil = cslCoil($company, $mp, $wh, ['stock_lot_id' => $lot->id]);
 
         // Consommation réelle : 420 kg (sort déjà du stock).
+        p1dAllocate($order, $coil, 420);
         app(CoilConsumptionService::class)->consume($order, $coil, 420);
         expect((float) ProductStock::where('product_id', $mp->id)->value('quantity'))->toBe(2580.0);
 
@@ -359,6 +363,7 @@ describe('Backflush au reliquat', function () {
         $coil = cslCoil($company, $mp, $wh, ['stock_lot_id' => $lot->id, 'initial_weight' => 600, 'remaining_weight' => 600]);
 
         // Consommation réelle 500 kg = besoin complet des 100 unités.
+        p1dAllocate($order, $coil, 500);
         app(CoilConsumptionService::class)->consume($order, $coil, 500);
 
         app(ProductionStockService::class)
@@ -395,6 +400,7 @@ describe('Cohérence multi-bobines / multi-lots', function () {
         $lot = cslLot($company, $mp, $wh, 1200);
         $coil = cslCoil($company, $mp, $wh, ['stock_lot_id' => $lot->id]);
 
+        p1dAllocate($order, $coil, 420);
         app(CoilConsumptionService::class)->consume($order, $coil, 420);
         expect((float) ProductStock::where('product_id', $mp->id)->value('quantity'))->toBe(2580.0);
 
@@ -423,6 +429,7 @@ describe('Cohérence multi-bobines / multi-lots', function () {
         cslStock($mp, $wh, 1500);
         $order = cslOrder($company, $pf);
 
+        p1dAllocate($order, $coilA, 200);
         app(CoilConsumptionService::class)->consume($order, $coilA, 200);
 
         expect((float) $coilA->fresh()->remaining_weight)->toBe(800.0)

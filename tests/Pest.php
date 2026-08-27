@@ -147,6 +147,33 @@ function bfAccountClasses(\App\Models\Company $company): void
     }
 }
 
+// ─── Helper P1-D (allocation formelle) — partagé par les fixtures de test qui
+// consomment une bobine et doivent désormais l'allouer formellement d'abord
+// (CoilConsumptionService::consume() est fail-closed depuis P1-D2). Crée le
+// StockLot manquant si le coil n'en porte pas déjà un (fixtures antérieures à
+// P1-D), puis appelle la vraie API métier — jamais une StockReservation brute.
+
+function p1dAllocate(\App\Modules\Production\Models\ProductionOrder $order, \App\Modules\Production\Models\Coil $coil, float $quantity): \App\Models\StockReservation
+{
+    $lot = $coil->stock_lot_id ? \App\Models\StockLot::find($coil->stock_lot_id) : null;
+
+    if (! $lot) {
+        $lot = \App\Models\StockLot::create([
+            'product_id' => $coil->product_id,
+            'warehouse_id' => $coil->warehouse_id,
+            'lot_number' => 'P1D-AUTO-' . $coil->id,
+            'quantity' => $coil->remaining_weight,
+            'unit_cost' => $coil->cost_per_kg,
+            'status' => 'disponible',
+            'valuation_status' => 'valorisation_definitive',
+        ]);
+        $coil->update(['stock_lot_id' => $lot->id]);
+    }
+
+    return app(\App\Modules\Production\Services\ReservationService::class)
+        ->allocateMaterialLot($order, $lot->fresh(), $quantity, $coil->fresh());
+}
+
 function bfEmployee(\App\Models\Company $company, int $baseSalary): \App\Models\Employee
 {
     $dept = \App\Models\Department::firstOrCreate(

@@ -62,6 +62,7 @@ it('ne compte la matière qu’une fois quand bobine consommée ET backflush BOM
         'initial_weight' => 500, 'remaining_weight' => 500, 'cost_per_kg' => 850,
         'purchase_price' => 425000, 'status' => 'disponible',
     ]);
+    p1dAllocate($order, $coil, 182);
     app(CoilConsumptionService::class)->consume($order, $coil, 182, 101);
 
     // Déclaration 100 ml → backflush BOM : bobine 175,13 (à EXCLURE) + visserie 50 × 100 = 5 000 (à garder)

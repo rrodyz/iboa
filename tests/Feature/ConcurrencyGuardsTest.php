@@ -230,6 +230,7 @@ it('double reverse de consommation bobine : une seule restitution de poids', fun
         'warehouse_id' => $wh->id, 'cost_per_kg' => 500, 'purchase_price' => 10000, 'received_at' => now(),
     ]);
     $svc = app(\App\Modules\Production\Services\CoilConsumptionService::class);
+    p1dAllocate($of, $coil, 6.0);
     $consumption = $svc->consume($of, $coil, 6.0, null, null);
     expect((float) $coil->fresh()->remaining_weight)->toBe(14.0); // 20 − 6
 

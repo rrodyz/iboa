@@ -106,6 +106,7 @@ function ccConsume(ProductionOrder $order, Coil $coil, float $weight = 10): mixe
 it('autorise une bobine dont l’article est un composant de la nomenclature', function () {
     ['order' => $o, 'coil' => $c] = ccContext();
 
+    p1dAllocate($o, $c, 10);
     $conso = ccConsume($o, $c);
 
     expect($conso->exists)->toBeTrue()
@@ -143,7 +144,9 @@ it('accepte un article déclaré comme SUBSTITUT dans la nomenclature', function
         'quantity_requested' => 100, 'status' => 'en_cours',
     ]);
 
-    expect(ccConsume($o, ccCoil($co, $substitut, $wh))->exists)->toBeTrue();
+    $coilSubstitut = ccCoil($co, $substitut, $wh);
+    p1dAllocate($o, $coilSubstitut, 10);
+    expect(ccConsume($o, $coilSubstitut)->exists)->toBeTrue();
 });
 
 // ── 3-5. Caractéristiques physiques ──────────────────────────────────────────
@@ -158,6 +161,7 @@ it('refuse une couleur différente de celle attendue par l’OF', function () {
 it('accepte la même couleur écrite différemment — casse et accents neutralisés', function () {
     ['order' => $o, 'coil' => $c] = ccContext(['color' => 'BEIGE  Clair'], ['color' => 'béige clair']);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 });
 
@@ -174,6 +178,7 @@ it('accepte une épaisseur dans la tolérance — comparaison décimale, pas tex
     // Une comparaison de chaînes aurait refusé « 0.27 » ≠ « 0.275 ».
     ['order' => $o, 'coil' => $c] = ccContext(['thickness' => 0.275], ['thickness' => 0.27]);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 });
 
@@ -197,6 +202,7 @@ it('refuse une largeur hors tolérance', function () {
 it('accepte une largeur au millimètre près', function () {
     ['order' => $o, 'coil' => $c] = ccContext(['width' => 1000.5], ['largeur_totale' => 1000]);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 });
 
@@ -218,6 +224,7 @@ it('autorise quand une caractéristique manque d’un seul côté, et le journal
     $journal = Log::spy();
     $journal->shouldReceive('channel')->andReturnSelf();
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 
     $warnings = app(CoilCompatibilityService::class)->warnings($o, $c->fresh());
@@ -229,6 +236,7 @@ it('autorise quand une caractéristique manque d’un seul côté, et le journal
 it('autorise quand la caractéristique manque des deux côtés, sans la déclarer conforme', function () {
     ['order' => $o, 'coil' => $c] = ccContext(['color' => null], ['color' => null]);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 
     $warnings = app(CoilCompatibilityService::class)->warnings($o, $c->fresh());
@@ -243,6 +251,7 @@ it('signale l’absence de nomenclature comme non vérifiable plutôt que confor
     ]);
     $c = ccCoil($co, $mp, $wh);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue()
         ->and(array_column(app(CoilCompatibilityService::class)->warnings($o, $c->fresh()), 'critere'))
         ->toContain('nomenclature');
@@ -331,6 +340,7 @@ it('laisse consommer quand la réservation d’un autre OF ne couvre pas tout le
         'quantity' => 500, 'status' => 'reserved', 'reserved_at' => now(),
     ]);
 
+    p1dAllocate($o, $c, 10);
     expect(ccConsume($o, $c)->exists)->toBeTrue();
 });
 
@@ -349,6 +359,7 @@ it('deux consommations concurrentes ne peuvent pas dépasser le restant', functi
     // parallèle vraie est couverte par ConcurrencyGuardsTest.
     ['order' => $o, 'coil' => $c] = ccContext(['remaining_weight' => 100]);
 
+    p1dAllocate($o, $c, 100);
     expect(ccConsume($o, $c, 70)->exists)->toBeTrue();
     expect(fn () => ccConsume($o, $c->fresh(), 70))
         ->toThrow(ValidationException::class, 'supérieur au restant');
@@ -366,6 +377,7 @@ it('rejoue le contrôle de compatibilité SOUS VERROU, pas seulement à l’entr
     $partiel->shouldReceive('assertCompatible')->twice()->passthru();
     app()->instance(CoilCompatibilityService::class, $partiel);
 
+    p1dAllocate($o, $c, 10);
     expect(app(CoilConsumptionService::class)->consume($o, $c, 10)->exists)->toBeTrue();
 });
 
