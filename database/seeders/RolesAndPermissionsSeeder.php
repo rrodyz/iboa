@@ -370,6 +370,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'payments.view', 'reports.view',
             'stocks.view',
             'sales.create', 'sales.submit', 'sales.transform', 'sales_below_floor.request', 'sales.validate', 'sales.view_all',
+            // [P1-A — MTO Fiacre SANKARA] « Administrateur des ventes » = ce rôle
+            // (le seul palier de responsabilité commerciale au-dessus du
+            // commercial simple) : peut désormais accorder la dérogation
+            // financière exceptionnelle de production, au même titre que le DG
+            // et le DAF. N'accorde QUE cette permission précise — pas d'accès
+            // compta/paiement/admin supplémentaire (§13 : pas de super-permission).
+            'production.approve_financial',
         ]);
 
         // Responsable stock — gestion stock + inventaire + réceptions
