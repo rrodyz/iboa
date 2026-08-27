@@ -222,9 +222,13 @@ class CoilCompatibilityService
      * ou nomenclature sans ligne active). null ≠ liste vide : l'un veut dire
      * « rien à opposer », l'autre « rien n'est autorisé ».
      *
+     * [P1-D] Public : réutilisée par ReservationService::allocateMaterialLot()
+     * pour vérifier qu'un lot alloué correspond bien à un composant de la
+     * nomenclature — même source, pas de seconde liste divergente.
+     *
      * @return list<int>|null
      */
-    private function authorizedComponentIds(ProductionOrder $order): ?array
+    public function authorizedComponentIds(ProductionOrder $order): ?array
     {
         if (! $order->bill_of_material_id) {
             return null;

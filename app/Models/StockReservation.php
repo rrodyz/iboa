@@ -18,11 +18,13 @@ class StockReservation extends Model
 
     protected $fillable = [
         'company_id', 'order_id', 'production_order_id', 'product_id', 'warehouse_id',
-        'quantity', 'status', 'reserved_at', 'released_at', 'created_by',
+        'stock_lot_id', 'coil_id', 'quantity', 'consumed_quantity',
+        'status', 'reserved_at', 'released_at', 'created_by',
     ];
 
     protected $casts = [
-        'quantity'    => 'decimal:2',
+        'quantity'           => 'decimal:2',
+        'consumed_quantity'  => 'decimal:2',
         'reserved_at' => 'date',
         'released_at' => 'date',
     ];
@@ -32,6 +34,18 @@ class StockReservation extends Model
     public function productionOrder(): BelongsTo { return $this->belongsTo(\App\Modules\Production\Models\ProductionOrder::class); }
     public function product(): BelongsTo { return $this->belongsTo(Product::class); }
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
+    public function stockLot(): BelongsTo { return $this->belongsTo(StockLot::class); }
+    public function coil(): BelongsTo { return $this->belongsTo(\App\Modules\Production\Models\Coil::class); }
+
+    /**
+     * [P1-D] Source unique du reste réservé : quantity − consumed_quantity,
+     * jamais négatif. Une allocation « reserved » avec remainingReserved()==0
+     * est intégralement consommée (voir StockReservation::status='consumed').
+     */
+    public function remainingReserved(): float
+    {
+        return max(0.0, (float) $this->quantity - (float) $this->consumed_quantity);
+    }
 
     public function statusLabel(): string
     {

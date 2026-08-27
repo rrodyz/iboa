@@ -4,8 +4,10 @@ namespace App\Modules\Production\Services;
 
 use App\Models\Order;
 use App\Models\ProductStock;
+use App\Models\StockLot;
 use App\Models\StockReservation;
 use App\Models\Warehouse;
+use App\Modules\Production\Models\Coil;
 use App\Modules\Production\Models\ProductionOrder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +21,10 @@ use Illuminate\Validation\ValidationException;
  */
 class ReservationService
 {
+    public function __construct(
+        private CoilCompatibilityService $compatibility,
+    ) {}
+
     /** Réserve le produit fini de l'OF terminé pour son client. */
     public function reserveForOrder(ProductionOrder $order): StockReservation
     {
@@ -189,6 +195,16 @@ class ReservationService
                     continue;
                 }
 
+                // [P1-D] Une matière suivie par lot ou bobine EXIGE une allocation
+                // formelle (ReservationService::allocateMaterialLot(), sélection
+                // explicite du lot/bobine) — jamais la réservation générique
+                // produit+dépôt ci-dessous, qui créerait un double niveau de
+                // réservation pour le même besoin (ex. 1200 générique + 1000+200
+                // par lot = 2400 réservé pour 1200 de besoin réel).
+                if ($product->isCoilManaged() || (bool) $product->has_lot_number) {
+                    continue;
+                }
+
                 // Idempotence : matière déjà réservée pour ce produit sur cet OF.
                 if (StockReservation::where('production_order_id', $order->id)
                     ->where('product_id', $product->id)
@@ -230,6 +246,167 @@ class ReservationService
         });
 
         return $totalReserved;
+    }
+
+    /**
+     * [P1-D1] Allocation FORMELLE d'un lot (ou d'une bobine précise) de matière
+     * première à un OF — sélection EXPLICITE par l'appelant (pas de FIFO/FEFO
+     * automatique dans cette passe : à clarifier métier). Une seule réservation
+     * ÉCONOMIQUE peut se ventiler en plusieurs lignes physiques (plusieurs appels
+     * = plusieurs lots/bobines pour le même besoin) — jamais de réservation
+     * générique produit+dépôt en parallèle pour la même matière (voir le garde
+     * ajouté dans reserveMaterialsForOrder()).
+     *
+     * Verrouillage : bobine PUIS lot, même ordre que CoilConsumptionService::
+     * consume() — cohérence indispensable entre allocate() et consume() pour
+     * éviter tout risque d'interblocage entre les deux chemins.
+     *
+     * @throws ValidationException
+     */
+    public function allocateMaterialLot(ProductionOrder $order, StockLot $stockLot, float $quantity, ?Coil $coil = null): StockReservation
+    {
+        if ($quantity <= 0) {
+            throw ValidationException::withMessages(['quantity' => 'La quantité à allouer doit être positive.']);
+        }
+
+        return DB::transaction(function () use ($order, $stockLot, $quantity, $coil) {
+            // Verrous : bobine (si fournie) puis lot — ordre stable, cf. docblock.
+            if ($coil) {
+                $coil = Coil::lockForUpdate()->findOrFail($coil->id);
+            }
+            $stockLot = StockLot::lockForUpdate()->findOrFail($stockLot->id);
+
+            $product = $stockLot->product;
+            if (! $product) {
+                throw ValidationException::withMessages(['stock_lot_id' => 'Lot sans article rattaché.']);
+            }
+
+            // Le lot doit correspondre à un composant de la nomenclature de l'OF.
+            $authorized = $this->compatibility->authorizedComponentIds($order);
+            if ($authorized !== null && ! in_array((int) $product->id, $authorized, true)) {
+                throw ValidationException::withMessages([
+                    'product_id' => sprintf('L’article #%d du lot ne figure pas parmi les composants de la nomenclature de l’OF.', $product->id),
+                ]);
+            }
+
+            // Dépôt : le lot doit être au dépôt matière attendu par l'OF (sinon un
+            // transfert P1-F est requis avant allocation — on ne le déclenche jamais
+            // ici implicitement, cf. périmètre P1-D).
+            if ($order->depot_matiere_id && (int) $stockLot->warehouse_id !== (int) $order->depot_matiere_id) {
+                throw ValidationException::withMessages([
+                    'warehouse_id' => sprintf('Le lot est au dépôt #%d, l’OF attend le dépôt matière #%d — effectuez un transfert avant allocation.', $stockLot->warehouse_id, $order->depot_matiere_id),
+                ]);
+            }
+
+            if ($coil) {
+                if ((int) $coil->product_id !== (int) $product->id) {
+                    throw ValidationException::withMessages(['coil_id' => 'La bobine ne porte pas le même article que le lot.']);
+                }
+                if ((int) $coil->stock_lot_id !== (int) $stockLot->id) {
+                    throw ValidationException::withMessages(['coil_id' => 'La bobine n’appartient pas au lot indiqué.']);
+                }
+                if ($order->depot_matiere_id && $coil->warehouse_id && (int) $coil->warehouse_id !== (int) $order->depot_matiere_id) {
+                    throw ValidationException::withMessages(['coil_id' => 'La bobine n’est pas au dépôt matière attendu par l’OF.']);
+                }
+                if ($coil->isQualityBlocked()) {
+                    throw ValidationException::withMessages([
+                        'quality' => sprintf('Bobine %s : statut qualité « %s » — allocation interdite (même règle que la consommation).', $coil->reference, $coil->quality_status),
+                    ]);
+                }
+            } elseif ($product->isCoilManaged()) {
+                // [§12] Une matière coil-managed exige une bobine précise : le
+                // niveau lot seul ne désigne pas une unité physique consommable.
+                throw ValidationException::withMessages(['coil_id' => 'Cet article est géré par bobine — indiquez la bobine à allouer, pas seulement le lot.']);
+            }
+
+            // Disponibilité SOUS VERROU : bobine si fournie (granularité physique
+            // la plus précise), sinon lot. Jamais les deux niveaux indépendamment.
+            if ($coil) {
+                $reservedOnCoil = (float) StockReservation::where('coil_id', $coil->id)
+                    ->where('status', 'reserved')->get()->sum(fn ($r) => $r->remainingReserved());
+                $available = (float) $coil->remaining_weight - $reservedOnCoil;
+                if ($quantity > $available + 0.0001) {
+                    throw ValidationException::withMessages([
+                        'quantity' => sprintf('Bobine %s : disponible %s, demandé %s.', $coil->reference, number_format($available, 2, ',', ' '), number_format($quantity, 2, ',', ' ')),
+                    ]);
+                }
+            } else {
+                $reservedOnLot = (float) StockReservation::where('stock_lot_id', $stockLot->id)
+                    ->where('status', 'reserved')->get()->sum(fn ($r) => $r->remainingReserved());
+                $available = (float) $stockLot->quantity - $reservedOnLot;
+                if ($quantity > $available + 0.0001) {
+                    throw ValidationException::withMessages([
+                        'quantity' => sprintf('Lot %s : disponible %s, demandé %s.', $stockLot->lot_number, number_format($available, 2, ',', ' '), number_format($quantity, 2, ',', ' ')),
+                    ]);
+                }
+            }
+
+            $reservation = StockReservation::create([
+                'company_id' => $order->company_id,
+                'production_order_id' => $order->id,
+                'product_id' => $product->id,
+                'warehouse_id' => $stockLot->warehouse_id,
+                'stock_lot_id' => $stockLot->id,
+                'coil_id' => $coil?->id,
+                'quantity' => $quantity,
+                'consumed_quantity' => 0,
+                'status' => 'reserved',
+                'reserved_at' => now(),
+                'created_by' => Auth::id(),
+            ]);
+
+            $this->adjustReserved($product->id, $stockLot->warehouse_id, $quantity);
+
+            return $reservation;
+        });
+    }
+
+    /**
+     * [P1-D2] Appelée par CoilConsumptionService::consume() à chaque
+     * consommation réelle : réduit le reste réservé de l'allocation
+     * correspondante (jamais toute la ligne d'un coup si consommation
+     * partielle) et répercute la baisse sur product_stocks.reserved_quantity
+     * via le même adjustReserved() que tout le reste du service — propriétaire
+     * unique de l'écriture, aucun second chemin.
+     *
+     * @throws ValidationException si aucune allocation active ne couvre cette
+     *                              consommation (fail-closed — §20 : jamais de
+     *                              repli silencieux sur une réservation générique)
+     */
+    public function recordAllocationConsumption(ProductionOrder $order, Coil $coil, float $weight): StockReservation
+    {
+        return DB::transaction(function () use ($order, $coil, $weight) {
+            $reservation = StockReservation::where('production_order_id', $order->id)
+                ->where('coil_id', $coil->id)
+                ->where('status', 'reserved')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $reservation) {
+                throw ValidationException::withMessages([
+                    'coil_id' => sprintf('Aucune allocation active de la bobine %s à l’OF %s — consommation refusée.', $coil->reference, $order->number),
+                ]);
+            }
+
+            $remaining = $reservation->remainingReserved();
+            if ($weight > $remaining + 0.0001) {
+                throw ValidationException::withMessages([
+                    'weight' => sprintf('Allocation bobine %s : reste réservé %s, consommation demandée %s.', $coil->reference, number_format($remaining, 2, ',', ' '), number_format($weight, 2, ',', ' ')),
+                ]);
+            }
+
+            $newConsumed = (float) $reservation->consumed_quantity + $weight;
+            $stillReserved = max(0.0, (float) $reservation->quantity - $newConsumed);
+
+            $reservation->update([
+                'consumed_quantity' => $newConsumed,
+                'status' => $stillReserved <= 0.0001 ? 'consumed' : 'reserved',
+            ]);
+
+            $this->adjustReserved($reservation->product_id, $reservation->warehouse_id, -$weight);
+
+            return $reservation->fresh();
+        });
     }
 
     /**
@@ -284,7 +461,13 @@ class ReservationService
         }
 
         DB::transaction(function () use ($reservation) {
-            $this->adjustReserved($reservation->product_id, $reservation->warehouse_id, -(float) $reservation->quantity);
+            // [P1-D2 — §9] Ne jamais libérer plus que le reste réellement réservé :
+            // une allocation partiellement consommée (recordAllocationConsumption())
+            // a déjà réduit product_stocks.reserved_quantity pour la part consommée.
+            // Pour toute réservation SANS consommation partielle (vente, produit fini,
+            // matière non lotée — consumed_quantity=0 par défaut), remainingReserved()
+            // == quantity : comportement strictement inchangé.
+            $this->adjustReserved($reservation->product_id, $reservation->warehouse_id, -$reservation->remainingReserved());
             $reservation->update(['status' => 'released', 'released_at' => now()]);
         });
     }
