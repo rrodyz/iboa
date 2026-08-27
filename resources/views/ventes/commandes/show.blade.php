@@ -173,8 +173,12 @@
                     @endcan
                     @endif
 
-                    {{-- [Flux tôle bac §3] Gérant : approuver une commande NON réglée pour production --}}
-                    @if($order->production_approved)
+                    {{-- [Flux tôle bac §3 / P1-B] Gérant : approuver une commande NON réglée pour
+                         production. hasValidProductionApproval() (pas le seul booléen brut) tranche
+                         l'affichage : une approbation posée mais rendue « stale » par une modification
+                         commerciale depuis (client, prix, quantité, remise, mode de règlement…) ne doit
+                         plus se présenter comme pleinement valide. --}}
+                    @if($order->hasValidProductionApproval())
                         <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-[4px] text-sm font-semibold bg-blue-50 text-blue-800 border border-blue-200"
                               title="{{ $order->production_approval_reason }}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
@@ -189,7 +193,22 @@
                         </form>
                         @endif
                         @endcan
-                    @elseif(!$order->hasBonPreparation())
+                    @else
+                        @if($order->production_approved)
+                        <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-[4px] text-sm font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                              title="Le contrat financier de la commande a changé depuis cette approbation du {{ optional($order->production_approved_at)->format('d/m/Y') }}.">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                            Autorisation obsolète — nouvelle validation requise
+                        </span>
+                        @can('production.approve_financial')
+                        <form action="{{ route('ventes.commandes.revoke-production', $order) }}" method="POST"
+                              data-confirm="Révoquer l'approbation de production de cette commande ?">
+                            @csrf
+                            <button type="submit" class="inline-flex items-center px-2.5 py-2 border border-gray-300 text-gray-600 bg-white rounded-[4px] text-sm font-medium hover:bg-gray-50">Révoquer</button>
+                        </form>
+                        @endcan
+                        @endif
+                    @if(!$order->hasBonPreparation())
                     @can('production.approve_financial')
                     <div x-data="{ open: false }">
                         <button type="button" @click="open = true" class="inline-flex items-center gap-2 px-3 py-2 border border-blue-300 text-blue-700 bg-white rounded-[4px] text-sm font-semibold hover:bg-blue-50 transition-colors">
@@ -222,6 +241,7 @@
                         </div>
                     </div>
                     @endcan
+                    @endif
                     @endif
 
                     @php $activeBp = $order->activeBonPreparation(); @endphp

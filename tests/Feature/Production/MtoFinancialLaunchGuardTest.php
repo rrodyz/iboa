@@ -430,6 +430,11 @@ it('20. autorise le lancement sur approbation gérant portée par la commande', 
         'production_approved_by' => $daf->id,
         'production_approval_reason' => 'Client historique, accord DG.',
         'production_approval_expires_at' => today()->addDays(7),
+        // [P1-B] hasValidProductionApproval() exige désormais une empreinte du
+        // contrat financier correspondant à l'état ACTUEL de la commande (sinon
+        // « stale » par construction, fail-closed) — calculée ici comme le
+        // ferait OrderController::approveProduction() en conditions réelles.
+        'production_approval_fingerprint' => $commande->productionFinancialFingerprint(),
     ]);
 
     guardLancer($of->fresh());
@@ -446,6 +451,9 @@ it('21. ne retient pas une approbation gérant expirée', function () {
         'production_approved_by' => $daf->id,
         'production_approval_reason' => 'Accord ponctuel du mois dernier.',
         'production_approval_expires_at' => today()->subDay(),
+        // [P1-B] Empreinte valide fournie pour isoler la cause du refus :
+        // l'expiration seule, pas une empreinte manquante/désynchronisée.
+        'production_approval_fingerprint' => $commande->productionFinancialFingerprint(),
     ]);
 
     expect(fn () => guardLancer($of->fresh()))->toThrow(ValidationException::class);

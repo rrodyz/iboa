@@ -35,6 +35,7 @@ class Order extends Model
         'production_approval_reason',
         'production_approval_unpaid',
         'production_approval_expires_at',
+        'production_approval_fingerprint',
         'issued_at',
         'expires_at',
         'delivery_date',
@@ -282,12 +283,76 @@ class Order extends Model
         return $this->productionFinancialRequirement($productionOrder)->satisfied;
     }
 
-    /** [MTO §1.3] Approbation gérant valide (posée et non expirée). */
+    /**
+     * [P1-B — anti-dérogation périmée] Empreinte du CONTRAT FINANCIER pertinent
+     * pour l'exigence de production — jamais tout le JSON de la commande.
+     * Champs retenus parce qu'ils influencent directement l'exposition/le
+     * montant à couvrir dans {@see \App\Services\Production\
+     * ProductionFinancialEligibilityService} : client (et son mode de
+     * règlement, qui bascule cash↔crédit), price_mode/payment_method/
+     * payment_terms (conditions de règlement de LA commande), et par ligne
+     * product_id/quantity/unit_price/discount_percent/tax_rate_value — jamais
+     * les notes, adresses de livraison ou autres champs non financiers.
+     *
+     * Déterministe : lignes triées par id (ordre stable, indépendant de
+     * l'ordre de récupération SQL), valeurs décimales lues via les casts
+     * Eloquent existants (déjà des chaînes normalisées, ex. "12.6700" —
+     * aucune re-formatage flottant source de non-déterminisme), aucun
+     * timestamp ni identifiant sans rapport avec le contrat.
+     */
+    public function productionFinancialFingerprint(): string
+    {
+        $lines = $this->items->sortBy('id')->values()->map(fn (OrderItem $item) => [
+            'product_id' => $item->product_id,
+            'quantity' => (string) $item->quantity,
+            'unit_price' => $item->unit_price,
+            'discount_percent' => (string) $item->discount_percent,
+            'tax_rate_value' => (string) $item->tax_rate_value,
+        ])->all();
+
+        // [Déterminisme] `price_mode`/`subtotal_ht`/`total_discount`/`total_tax`
+        // portent un DEFAULT SQL ('ttc', 0, 0, 0 — migrations orders). Un modèle
+        // fraîchement ::create()-é sans ces clés explicites les garde NULL en
+        // mémoire tant qu'il n'a pas été relu (fresh()/find()) : sans ce ??,
+        // l'empreinte calculée juste après la création diffère de celle
+        // recalculée sur une instance relue plus tard pour le MÊME contrat —
+        // exactement le non-déterminisme que ce fingerprint doit exclure.
+        return hash('sha256', json_encode([
+            'client_id' => $this->client_id,
+            'client_payment_mode' => $this->client?->payment_mode,
+            'price_mode' => $this->price_mode ?? 'ttc',
+            'payment_method' => $this->payment_method,
+            'payment_terms' => $this->payment_terms,
+            'subtotal_ht' => $this->subtotal_ht ?? 0,
+            'total_discount' => $this->total_discount ?? 0,
+            'total_tax' => $this->total_tax ?? 0,
+            'total_ttc' => $this->total_ttc,
+            'lines' => $lines,
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * [MTO §1.3] Approbation gérant valide : posée, non expirée, ET dont le
+     * contrat financier n'a pas changé depuis (P1-B). Une commande modifiée
+     * après approbation (client, prix, quantité, remise, mode de règlement…)
+     * rend l'ancienne dérogation « stale » — elle reste en base pour l'audit
+     * (approved_by/at/reason inchangés) mais ne couvre plus la production.
+     * `production_approval_fingerprint` NULL (approbation posée avant ce
+     * correctif) est fail-closed : jamais vérifiable, jamais valide.
+     */
     public function hasValidProductionApproval(): bool
     {
-        return (bool) $this->production_approved
-            && ($this->production_approval_expires_at === null
-                || $this->production_approval_expires_at->gte(today()));
+        if (! $this->production_approved) {
+            return false;
+        }
+        if ($this->production_approval_expires_at !== null && $this->production_approval_expires_at->lt(today())) {
+            return false;
+        }
+        if ($this->production_approval_fingerprint === null) {
+            return false;
+        }
+
+        return hash_equals($this->production_approval_fingerprint, $this->productionFinancialFingerprint());
     }
 
     /**

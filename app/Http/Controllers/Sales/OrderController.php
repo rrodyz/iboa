@@ -345,7 +345,13 @@ class OrderController extends Controller
         if (! in_array($commande->status, ['confirme', 'en_preparation'], true)) {
             return back()->with('error', 'La commande doit être confirmée pour être approuvée en production.');
         }
-        if ($commande->production_approved) {
+        // [P1-B] Le drapeau brut ne suffit plus : une approbation OBSOLÈTE
+        // (contrat financier changé depuis, cf. hasValidProductionApproval())
+        // doit pouvoir être remplacée directement par une nouvelle approbation,
+        // sans exiger une révocation préalable — laquelle est de toute façon
+        // refusée dès qu'un OF actif existe (cf. revokeProduction()). Seule une
+        // approbation ENCORE VALIDE bloque une nouvelle demande.
+        if ($commande->hasValidProductionApproval()) {
             return back()->with('error', 'Cette commande est déjà approuvée pour la production.');
         }
 
@@ -366,6 +372,9 @@ class OrderController extends Controller
             'production_approval_expires_at' => $request->filled('valide_jours')
                 ? today()->addDays((int) $request->input('valide_jours'))
                 : null,
+            // [P1-B] Empreinte du contrat financier au moment T de l'approbation —
+            // voir Order::productionFinancialFingerprint()/hasValidProductionApproval().
+            'production_approval_fingerprint' => $commande->productionFinancialFingerprint(),
         ]);
 
         \App\Notifications\ValidationStepNotification::sendToRoles(
@@ -404,6 +413,7 @@ class OrderController extends Controller
             'production_approval_reason'     => null,
             'production_approval_unpaid'     => null,
             'production_approval_expires_at' => null,
+            'production_approval_fingerprint' => null,
         ]);
 
         \App\Notifications\ValidationStepNotification::sendToRoles(
