@@ -16,7 +16,12 @@ it('persiste les champs Sage X3 du client (mass assignment autorisé)', function
         'is_active'            => true,
         // juridique / fiscal
         'forme_juridique'      => 'SARL',
-        'regime_imposition'    => 'Régime normal',
+        // [P2] `regime_imposition` faisait doublon avec `tax_regime` (le
+        // formulaire l'écrivait, rien ne le lisait) — supprimé par la
+        // migration 2026_07_28_140000_drop_client_regime_imposition_
+        // duplicate.php, qui a d'abord migré toute valeur existante vers
+        // tax_regime. `tax_regime` est désormais le seul champ réel.
+        'tax_regime'           => 'Régime normal',
         'no_agrement'          => 'AGR-2026-01',
         // risque crédit
         'code_risque'          => 'Bon',
@@ -34,7 +39,7 @@ it('persiste les champs Sage X3 du client (mass assignment autorisé)', function
     $fresh = $client->fresh();
 
     expect($fresh->forme_juridique)->toBe('SARL')
-        ->and($fresh->regime_imposition)->toBe('Régime normal')
+        ->and($fresh->tax_regime)->toBe('Régime normal')
         ->and($fresh->no_agrement)->toBe('AGR-2026-01')
         ->and($fresh->code_risque)->toBe('Bon')
         ->and((float) $fresh->garantie_montant)->toBe(5000000.0)
