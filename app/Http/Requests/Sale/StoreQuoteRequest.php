@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Sale;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreQuoteRequest extends FormRequest
 {
@@ -24,7 +25,9 @@ class StoreQuoteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client_id'                    => 'required|exists:clients,id',
+            // [P3 — UAT] cf. StoreOrderRequest — un client désactivé ne doit
+            // jamais être un tiers exploitable pour un NOUVEAU devis.
+            'client_id'                    => ['required', Rule::exists('clients', 'id')->where('is_active', true)],
             'issued_at'                    => 'required|date',
             'expires_at'                   => 'nullable|date|after:issued_at',
             'reference'                    => 'nullable|string|max:50',

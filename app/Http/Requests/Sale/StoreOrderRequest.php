@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Sale;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreOrderRequest extends FormRequest
 {
@@ -24,7 +25,12 @@ class StoreOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client_id'                    => 'required|exists:clients,id',
+            // [P3 — UAT] Un client inactif (désactivé au référentiel) ne créait
+            // aucune commande, seulement 'exists:clients,id' — un client
+            // désactivé restant "trouvable" en base. Un client inactif ne doit
+            // jamais être un tiers commercial exploitable pour une NOUVELLE
+            // commande.
+            'client_id'                    => ['required', Rule::exists('clients', 'id')->where('is_active', true)],
             'issued_at'                    => 'required|date',
             'expires_at'                   => 'nullable|date',
             'currency_code'                => 'nullable|string|max:3',
