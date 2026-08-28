@@ -65,7 +65,10 @@ class StoreQuoteRequest extends FormRequest
             'documents.*'                  => 'file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:5120',
 
             'items'                        => 'required|array|min:1',
-            'items.*.product_id'           => ['nullable', 'exists:products,id', new \App\Rules\ProductFlux('vendu')],
+            // [P4] cf. StoreOrderRequest — jamais reporté sur UpdateQuoteRequest,
+            // pour laisser un ancien devis contenant un article depuis désactivé
+            // rester éditable (accès historique).
+            'items.*.product_id'           => ['nullable', Rule::exists('products', 'id')->where('is_active', true), new \App\Rules\ProductFlux('vendu')],
             'items.*.description'          => 'required|string|max:255',
             'items.*.unit_id'              => 'nullable|exists:units,id',
             'items.*.quantity'             => 'required|numeric|min:0.0001',

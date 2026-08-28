@@ -68,7 +68,13 @@ class StoreOrderRequest extends FormRequest
             'total_weight_kg'              => 'nullable|numeric|min:0',
 
             'items'                        => 'required|array|min:1',
-            'items.*.product_id'           => ['nullable', 'exists:products,id', new \App\Rules\ProductFlux('vendu')],
+            // [P4 — même famille que le fix client P3] Un article désactivé au
+            // référentiel ne doit pas être vendable sur une NOUVELLE ligne. Ne
+            // JAMAIS reporter cette règle sur UpdateOrderRequest : une commande
+            // existante contenant déjà une ligne dont l'article a été désactivé
+            // depuis doit rester éditable (accès historique) sans que cette
+            // ligne, non touchée par l'utilisateur, ne bloque toute la sauvegarde.
+            'items.*.product_id'           => ['nullable', Rule::exists('products', 'id')->where('is_active', true), new \App\Rules\ProductFlux('vendu')],
             'items.*.description'          => 'required|string|max:255',
             'items.*.unit_id'              => 'nullable|exists:units,id',
             'items.*.quantity'             => 'required|numeric|min:0.0001',
