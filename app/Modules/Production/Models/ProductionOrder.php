@@ -85,6 +85,23 @@ class ProductionOrder extends Model
     /** [BUG-A3-MTO-FIN-001] Auteur de la dérogation financière — obligatoire pour qu'elle compte. */
     public function financialAuthorizedBy(): BelongsTo { return $this->belongsTo(User::class, 'financial_authorized_by'); }
     public function createdBy(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+
+    /**
+     * [P2] Valeurs valides de `origin` — méthode manquante, jamais committée,
+     * référencée par ProductionOrderController (Rule::in(ProductionOrder::
+     * origins())) mais absente du modèle : toute création d'OF passant par la
+     * validation HTTP échouait (BadMethodCallException) plutôt que d'accepter
+     * ou refuser proprement la valeur soumise. Liste reprise du commentaire
+     * de la migration d'origine (2026_07_10_120000_extend_production_orders_
+     * header.php) : manuel|commande_client|stock_minimum|mrp — seule source
+     * faisant foi, MrpService écrit déjà 'mrp' en pratique.
+     *
+     * @return array<int,string>
+     */
+    public static function origins(): array
+    {
+        return ['manuel', 'commande_client', 'stock_minimum', 'mrp'];
+    }
     public function lines(): HasMany { return $this->hasMany(ProductionOrderLine::class); }
     public function consumptions(): HasMany { return $this->hasMany(ProductionConsumption::class); }
     public function outputs(): HasMany { return $this->hasMany(ProductionOutput::class); }
