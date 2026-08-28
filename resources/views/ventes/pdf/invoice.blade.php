@@ -174,7 +174,7 @@
         .tot-table .val { text-align:right; color:#111827; font-weight:600; }
         .tot-table tr { border-bottom:1px solid #e5e7eb; }
         .tot-table .grand { background:{{ $color }} !important; }
-        .tot-table .grand td { color:#fff; font-size:12px; font-weight:bold; padding:7px 10px; }
+        .tot-table .grand td { color:#fff !important; font-size:12px; font-weight:bold; padding:7px 10px; }
         .tot-table .owed td { background:#fef2f2; color:#991b1b; font-weight:bold; }
         .tot-table .paid td { color:#065f46; }
 
