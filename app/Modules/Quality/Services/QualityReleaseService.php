@@ -60,10 +60,34 @@ class QualityReleaseService
                 if ($batch->status === 'conforme') {
                     $batch->update(['status' => 'en_cours']);
                 }
+
+                // [P4 — faille prouvée] Un refus qui suit une libération
+                // antérieure (revirement qualité) laissait quality_released_at/
+                // _by intacts sur les sorties déjà libérées : ProductionDeliveryGuard
+                // lit CE champ (pas le statut QualityRelease) pour juger un article
+                // livrable — une commande pouvait donc encore être livrée après un
+                // refus qualité explicite. On révoque ici la marque de libération
+                // au niveau des sorties, seule source lue par la garde de
+                // livraison. Le mouvement de stock déjà exécuté vers le dépôt de
+                // libération n'est PAS inversé automatiquement — un refus après
+                // libération est un événement rare (revirement qualité) qui
+                // implique une action physique (rappel de matière), hors
+                // périmètre d'une correction logicielle silencieuse.
+                $this->revokeRelease($batch);
             }
 
             return $release;
         });
+    }
+
+    /** [P4] Révoque la marque de libération qualité sur les sorties déjà libérées de l'OF du lot. */
+    private function revokeRelease(ProductionBatch $batch): void
+    {
+        $batch->productionOrder?->outputs()
+            ->whereNotNull('quality_released_at')
+            ->lockForUpdate()
+            ->get()
+            ->each(fn ($output) => $output->update(['quality_released_at' => null, 'quality_released_by' => null]));
     }
 
     private function releaseFinishedGoods(ProductionBatch $batch): void
