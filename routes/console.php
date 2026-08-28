@@ -42,13 +42,16 @@ Schedule::command('crm:notify-overdue-activities')->dailyAt('08:00');
 // configuré (config/validation.php — 24h production, 48h commercial/achats).
 Schedule::command('validations:remind')->dailyAt('08:15');
 
-// [CDC §14] Sauvegardes régulières quotidiennes — base de données seule.
-// La donnée critique (commandes, factures, écritures, stocks) vit en DB ;
-// les fichiers uploadés (logos, pièces jointes) changent rarement et
-// peuvent être sauvegardés à part (`php artisan backup:run` complet, à la
-// main ou via une tâche hebdomadaire séparée si le volume le justifie).
+// [CDC §14][P5 — Phase 3] Sauvegarde quotidienne complète (DB + fichiers).
+// Auparavant --only-db : les pièces jointes/documents archivés (factures,
+// BL, avoirs PDF sous storage/app/private/archives, uploads publics) ne
+// remontaient dans aucune sauvegarde automatique. Le volume observé en
+// exploitation réelle (documents commerciaux d'un pilote industriel) reste
+// modeste (PDF de quelques dizaines à centaines de Ko) — le coût d'un
+// backup complet quotidien est négligeable face au risque de perte
+// définitive d'une pièce justificative non re-générable à l'identique.
 Schedule::command('backup:clean')->dailyAt('01:30')->onOneServer();
-Schedule::command('backup:run --only-db')->dailyAt('02:00')->onOneServer();
+Schedule::command('backup:run')->dailyAt('02:00')->onOneServer();
 Schedule::command('backup:monitor')->dailyAt('07:00')->onOneServer();
 
 // [PIL-04] Évaluation horaire des alertes par seuil → notification des rôles cibles.
