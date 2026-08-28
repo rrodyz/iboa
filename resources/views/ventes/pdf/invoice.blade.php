@@ -68,10 +68,9 @@
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family: {{ $font }}, 'DejaVu Sans', sans-serif; font-size:11px; color:#1f2937; background:#fff; }
         .page { padding:4px 28px 4px; }
-        /* [Mise en page] Numérotation « Page X / Y » répétée sur chaque page
-           (n'apparaît que sur les documents multipages). */
-        .pagenum { position: fixed; bottom: 4px; right: 28px; font-size: 7.5px; color: #9ca3af; }
-        .pagenum:after { content: "Page " counter(page) " / " counter(pages); }
+        /* [P6 — Phase 15] Numérotation « Page X / Y » gravée par
+           App\Support\Pdf\PageNumberStamp (CSS counter(pages) non fiable
+           sous dompdf — voir la classe pour le détail). */
 
         /* ── Filigrane ── */
         .watermark { position:fixed; top:42%; left:50%; transform:translateX(-50%) translateY(-50%) rotate(-35deg);
@@ -244,7 +243,6 @@
     </style>
 </head>
 <body>
-<div class="pagenum"></div>
 <div class="page">
 
     {{-- Filigrane --}}

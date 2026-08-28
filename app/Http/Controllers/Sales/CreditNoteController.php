@@ -9,6 +9,7 @@ use App\Models\CreditNote;
 use App\Models\Invoice;
 use App\Services\CommercialWorkflowService;
 use App\Services\CreditNoteService;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
@@ -185,6 +186,7 @@ class CreditNoteController extends Controller
 
         $pdf = Pdf::loadView('ventes.pdf.credit-note', compact('creditNote', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+        PageNumberStamp::apply($pdf);
 
         $filename = 'Avoir_' . str_replace(['/', '\\', ' '], '-', $creditNote->number) . '.pdf';
 

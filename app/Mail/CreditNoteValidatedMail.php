@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\Company;
 use App\Models\CreditNote;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -38,6 +39,7 @@ class CreditNoteValidatedMail extends Mailable
         $settings   = currentCompany()?->documentSetting;
         $pdf        = Pdf::loadView('ventes.pdf.credit-note', compact('creditNote', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+        PageNumberStamp::apply($pdf);
         $filename = 'Avoir_' . str_replace(['/', '\\', ' '], '-', $creditNote->number) . '.pdf';
 
         return [

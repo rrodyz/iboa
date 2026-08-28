@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Storage;
  * Usage:
  *   GenerateDocumentPdfJob::dispatch('invoice', $invoice, 'ventes.pdf.invoice', ['invoice' => $invoice])
  *       ->afterResponse();
+ *
+ * [P6 — Phase 15] UNUSED / NOT IN ACTIVE FLOW : aucun ->dispatch() réel
+ * trouvé dans le code (seul l'exemple ci-dessus, en docblock). Si ce job
+ * est un jour câblé pour l'un des 7 templates à pagination
+ * (App\Support\Pdf\PageNumberStamp), appeler
+ * PageNumberStamp::apply($pdf) avant $pdf->output() dans handle().
  */
 class GenerateDocumentPdfJob implements ShouldQueue
 {

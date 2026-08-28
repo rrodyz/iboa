@@ -7,6 +7,7 @@ use App\Models\BonPreparation;
 use App\Models\DocumentSetting;
 use App\Models\Order;
 use App\Services\BonPreparationService;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,6 +61,7 @@ class BonPreparationController extends Controller
         $filename = 'BP-' . $bonPreparation->number . '.pdf';
         $pdf = Pdf::loadView('ventes.pdf.bon-preparation', compact('bonPreparation', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+        PageNumberStamp::apply($pdf);
 
         return $request->boolean('stream')
             ? $pdf->stream($filename)

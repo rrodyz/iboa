@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\DeliveryNote;
 use App\Services\CommercialWorkflowService;
 use App\Services\DeliveryNoteService;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
@@ -274,6 +275,7 @@ class DeliveryNoteController extends Controller
 
             $pdf = Pdf::loadView($viewPath, compact('deliveryNote', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            PageNumberStamp::apply($pdf);
 
             $filename = 'BL_' . str_replace(['/', '\\', ' '], '-', $deliveryNote->number) . '.pdf';
 

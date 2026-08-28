@@ -10,6 +10,7 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\DocumentSequenceService;
+use App\Support\Pdf\PageNumberStamp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -63,6 +64,7 @@ class CommercialContractController extends Controller
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('ventes.pdf.contract', [
                 'contract' => $contrat, 'company' => $company, 'settings' => $settings,
             ])->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            PageNumberStamp::apply($pdf);
 
             $filename = 'Contrat_' . str_replace(['/', '\\', ' '], '-', $contrat->number) . '.pdf';
 

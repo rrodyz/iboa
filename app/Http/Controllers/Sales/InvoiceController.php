@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\TaxRate;
 use App\Services\CommercialWorkflowService;
 use App\Services\InvoiceService;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -372,6 +373,7 @@ class InvoiceController extends Controller
 
             $pdf = Pdf::loadView($viewPath, compact('invoice', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            PageNumberStamp::apply($pdf);
 
             $filename = 'Facture_' . str_replace(['/', '\\', ' '], '-', $invoice->number) . '.pdf';
 

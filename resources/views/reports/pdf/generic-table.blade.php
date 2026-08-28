@@ -111,7 +111,7 @@ tfoot td.r { text-align: right; }
 </table>
 
 <div class="footer">
-    {{ $company?->name }} — {{ $title }} — Page <span class="pagenum"></span>
+    {{ $company?->name }} — {{ $title }}
 </div>
 </body>
 </html>

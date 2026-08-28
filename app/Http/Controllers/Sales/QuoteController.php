@@ -13,6 +13,7 @@ use App\Models\Quote;
 use App\Models\TaxRate;
 use App\Services\CommercialWorkflowService;
 use App\Services\QuoteService;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
@@ -280,6 +281,7 @@ class QuoteController extends Controller
 
             $pdf = Pdf::loadView('ventes.pdf.quote', compact('quote', 'settings'))
                 ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+            PageNumberStamp::apply($pdf);
 
             $filename = 'Devis_' . str_replace(['/', '\\', ' '], '-', $quote->number) . '.pdf';
 

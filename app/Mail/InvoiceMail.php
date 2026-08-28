@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\Company;
 use App\Models\Invoice;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -38,6 +39,7 @@ class InvoiceMail extends Mailable
         $settings = currentCompany()?->documentSetting;
         $pdf      = Pdf::loadView('ventes.pdf.invoice', compact('invoice', 'settings'))
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
+        PageNumberStamp::apply($pdf);
         $filename = 'Facture_' . str_replace(['/', '\\', ' '], '-', $invoice->number) . '.pdf';
 
         return [

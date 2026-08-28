@@ -11,6 +11,7 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Quote;
 use App\Models\SupplierInvoice;
+use App\Support\Pdf\PageNumberStamp;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -954,6 +955,7 @@ class EtatController extends Controller
             'rows'       => $rows,
             'totalsRow'  => $totalsRow,
         ])->setPaper('a4', 'landscape');
+        PageNumberStamp::apply($pdf);
 
         return $pdf->download($filename . '_' . now()->format('Ymd_His') . '.pdf');
     }
