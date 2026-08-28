@@ -172,8 +172,17 @@
         .tot-table .lbl { color:#374151; background:#f9fafb; }
         .tot-table .val { text-align:right; color:#111827; font-weight:600; }
         .tot-table tr { border-bottom:1px solid #e5e7eb; }
-        .tot-table .grand { background:{{ $color }} !important; }
-        .tot-table .grand td { color:#fff !important; font-size:12px; font-weight:bold; padding:7px 10px; }
+        /* [P6 — faille réelle] dompdf ne peint pas le fond d'un <tr> à
+           travers ses cellules de façon fiable (testé : même avec
+           background:transparent !important sur les td, le fond de ligne
+           n'apparaît pas — comportement propre à ce moteur, à ne pas
+           supposer conforme à un navigateur). Le fond de la ligne totale
+           doit donc être répété explicitement sur CHAQUE cellule, comme le
+           font déjà credit-note.blade.php / quote.blade.php (mêmes classes
+           .grand, motif déjà correct là-bas). .lbl a son propre
+           background:#f9fafb qui, sans cette règle plus spécifique,
+           peindrait par-dessus et masquerait le texte blanc. */
+        .tot-table .grand td { background:{{ $color }} !important; color:#fff !important; font-size:12px; font-weight:bold; padding:7px 10px; }
         .tot-table .owed td { background:#fef2f2; color:#991b1b; font-weight:bold; }
         .tot-table .paid td { color:#065f46; }
 
