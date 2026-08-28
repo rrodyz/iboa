@@ -68,7 +68,14 @@ it('parcourt Devis → Commande → Validation → OF → Réservation → Produ
     $company = chainCompany();
     $this->actingAs($user);
 
-    $client  = Client::factory()->create(['is_active' => true]);
+    // [P3 — flakiness corrigée] credit_limit non fixé = ClientFactory pioche
+    // aléatoirement dans [500k,1M,2M,5M] (faker, sans seed) ; le total de cette
+    // commande (590 000 FCFA) collisionnait avec la valeur basse ~25% du temps,
+    // faisant échouer CommercialWorkflowService::validateOrder() (garde
+    // d'exposition crédit) AVANT même la dérogation OF que ce test exerce plus
+    // bas — un blocage jamais voulu par ce scénario (le plafond crédit n'est
+    // pas ce qui est testé ici). Fixé large pour ne plus jamais collisionner.
+    $client  = Client::factory()->create(['is_active' => true, 'credit_limit' => 10_000_000]);
     $unit    = Unit::firstOrCreate(['name' => 'Pièce CH'], ['abbreviation' => 'pcch']);
     $taxRate = TaxRate::firstOrCreate(['name' => 'TVA 18% CH'], ['short_name' => 'TVA18CH', 'rate' => 18, 'is_active' => true]);
 
