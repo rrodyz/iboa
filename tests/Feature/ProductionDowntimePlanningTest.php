@@ -21,6 +21,7 @@ use App\Modules\Production\Models\ProductionOrderOperation;
 use App\Modules\Production\Models\WorkCenter;
 use App\Modules\Production\Services\PlanningService;
 use App\Modules\Production\Services\ProductionDowntimeService;
+use Carbon\Carbon;
 
 uses(\Tests\Concerns\RefreshDatabase::class);
 
@@ -108,7 +109,8 @@ it('calcule le plan de charge par machine avec capacité nette (brute − arrêt
         'started_at' => now()->subHours(2)->toDateTimeString(), 'ended_at' => now()->subHour()->toDateTimeString(),
     ]);
 
-    $plan = app(PlanningService::class)->loadByMachine(1);
+    // [PROD-01 Phase 6] horizon ancré un lundi : 1 jour ouvré garanti quel que soit le jour d'exécution du test.
+    $plan = app(PlanningService::class)->loadByMachine(1, Carbon::parse('2026-08-31'));
     $row  = collect($plan['rows'])->firstWhere('id', $ctx['machine']->id);
 
     expect($row)->not->toBeNull()
@@ -124,10 +126,106 @@ it('calcule le plan de charge par équipe', function () {
         'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-A', 'name' => 'Poste A',
         'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true, 'default_team' => 'Équipe A',
     ]);
-    $plan = app(PlanningService::class)->loadByTeam(1);
+    $plan = app(PlanningService::class)->loadByTeam(1, Carbon::parse('2026-08-31'));
 
     $row = collect($plan['rows'])->firstWhere('name', 'Équipe A');
     expect($row)->not->toBeNull()
         ->and($row['centers'])->toBe(1)
         ->and($row['capacity_h'])->toBe(8.0);
+});
+
+// [PROD-01 — Phase 7] Une machine en arrêt ne doit pas être comptée à 100%
+// de disponibilité — ni au niveau CENTRE, ni au niveau ÉQUIPE (jusqu'ici
+// seul loadByMachine() nettait les arrêts ; le centre et l'équipe affichaient
+// une occupation optimiste, capacité brute, en pleine panne machine).
+it('nette la capacité d’un CENTRE de la même machine en arrêt (pas seulement loadByMachine)', function () {
+    $ctx = pdtSetup();
+    $wc = WorkCenter::create([
+        'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-PDT2', 'name' => 'Poste PDT2',
+        'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true,
+    ]);
+    app(ProductionDowntimeService::class)->declare([
+        'machine_id' => $ctx['machine']->id, 'category' => 'non_planifie', 'reason' => 'panne',
+        'started_at' => now()->subHours(2)->toDateTimeString(), 'ended_at' => now()->subHour()->toDateTimeString(),
+    ]);
+
+    $plan = app(PlanningService::class)->loadByWorkCenter(1, Carbon::parse('2026-08-31'));
+    $row = collect($plan['rows'])->firstWhere('id', $wc->id);
+
+    expect($row['capacity_h'])->toBe(8.0)      // brute, affichée telle quelle
+        ->and($row['downtime_h'])->toBe(1.0)
+        ->and($row['net_capacity_h'])->toBe(7.0);
+});
+
+it('nette la capacité d’une ÉQUIPE quand une machine de ses centres est en arrêt', function () {
+    $ctx = pdtSetup();
+    WorkCenter::create([
+        'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-EQ', 'name' => 'Poste EQ',
+        'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true, 'default_team' => 'Équipe B',
+    ]);
+    app(ProductionDowntimeService::class)->declare([
+        'machine_id' => $ctx['machine']->id, 'category' => 'non_planifie', 'reason' => 'panne',
+        'started_at' => now()->subHours(2)->toDateTimeString(), 'ended_at' => now()->subHour()->toDateTimeString(),
+    ]);
+
+    $plan = app(PlanningService::class)->loadByTeam(1, Carbon::parse('2026-08-31'));
+    $row = collect($plan['rows'])->firstWhere('name', 'Équipe B');
+
+    expect($row['capacity_h'])->toBe(8.0)
+        ->and($row['downtime_h'])->toBe(1.0)
+        ->and($row['net_capacity_h'])->toBe(7.0);
+});
+
+// [Clôture PROD-01 — section 6] Exemple EXACT de la directive : M1 capacité
+// 8h, maintenance 4h -> capacité nette = 4h.
+it('M1 : capacité 8h, maintenance 4h -> capacité nette exacte = 4h', function () {
+    $ctx = pdtSetup();
+    WorkCenter::create([
+        'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-M1', 'name' => 'Poste M1',
+        'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true,
+    ]);
+    app(ProductionDowntimeService::class)->declare([
+        'machine_id' => $ctx['machine']->id, 'category' => 'planifie', 'reason' => 'maintenance',
+        'started_at' => now()->subHours(5)->toDateTimeString(), 'ended_at' => now()->subHour()->toDateTimeString(), // 4h
+    ]);
+
+    $plan = app(PlanningService::class)->loadByMachine(1, Carbon::parse('2026-08-31'));
+    $row = collect($plan['rows'])->firstWhere('id', $ctx['machine']->id);
+
+    expect($row['capacity_h'])->toBe(8.0)
+        ->and($row['downtime_h'])->toBe(4.0)
+        ->and($row['net_capacity_h'])->toBe(4.0);
+});
+
+// [Clôture PROD-01 — section 6] Propagation MACHINE -> CENTRE -> ÉQUIPE sans
+// double comptage : une équipe avec DEUX centres rattachés à LA MÊME machine
+// ne doit soustraire l'arrêt qu'UNE seule fois, pas une fois par centre.
+it('la même indisponibilité machine n’est jamais soustraite deux fois au niveau équipe', function () {
+    $ctx = pdtSetup();
+    $wcA = WorkCenter::create([
+        'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-DBL-A', 'name' => 'Poste DBL A',
+        'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true, 'default_team' => 'Équipe Unique',
+    ]);
+    $wcB = WorkCenter::create([
+        'company_id' => $ctx['co']->id, 'machine_id' => $ctx['machine']->id, 'code' => 'WC-DBL-B', 'name' => 'Poste DBL B',
+        'capacity_hours_per_day' => 8, 'efficiency_rate' => 100, 'is_active' => true, 'default_team' => 'Équipe Unique',
+    ]);
+    app(ProductionDowntimeService::class)->declare([
+        'machine_id' => $ctx['machine']->id, 'category' => 'planifie', 'reason' => 'maintenance',
+        'started_at' => now()->subHours(5)->toDateTimeString(), 'ended_at' => now()->subHour()->toDateTimeString(), // 4h
+    ]);
+
+    // Chaque CENTRE affiche bien 4h d'arrêt individuellement (même machine).
+    $planWc = app(PlanningService::class)->loadByWorkCenter(1, Carbon::parse('2026-08-31'));
+    expect(collect($planWc['rows'])->firstWhere('id', $wcA->id)['downtime_h'])->toBe(4.0);
+    expect(collect($planWc['rows'])->firstWhere('id', $wcB->id)['downtime_h'])->toBe(4.0);
+
+    // Mais l'ÉQUIPE (2 centres, MÊME machine) ne compte l'arrêt qu'UNE fois :
+    // capacité brute 16h (8+8), arrêt 4h (pas 8h), nette 12h (pas 8h).
+    $planTeam = app(PlanningService::class)->loadByTeam(1, Carbon::parse('2026-08-31'));
+    $team = collect($planTeam['rows'])->firstWhere('name', 'Équipe Unique');
+
+    expect($team['capacity_h'])->toBe(16.0)
+        ->and($team['downtime_h'])->toBe(4.0)      // jamais 8.0
+        ->and($team['net_capacity_h'])->toBe(12.0); // jamais 8.0
 });

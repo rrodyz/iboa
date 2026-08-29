@@ -2,6 +2,7 @@
 use App\Models\Company; use App\Models\FiscalYear; use App\Models\User;
 use App\Modules\Production\Models\WorkCenter; use App\Modules\Production\Models\ProductionOrder;
 use App\Modules\Production\Services\PlanningService;
+use Carbon\Carbon;
 use Spatie\Permission\Models\Role;
 uses(\Tests\Concerns\RefreshDatabase::class);
 function plAdmin(): User {
@@ -18,7 +19,8 @@ it('computes load vs capacity per work center', function(){
     $of=ProductionOrder::create(['company_id'=>$co->id,'fiscal_year_id'=>$co->current_fiscal_year_id,'number'=>'OF-PL','status'=>'en_cours','quantity_requested'=>10]);
     $of->operations()->create(['company_id'=>$co->id,'work_center_id'=>$wc->id,'sequence'=>10,'name'=>'A','planned_minutes'=>240,'status'=>'pending']);
     $of->operations()->create(['company_id'=>$co->id,'work_center_id'=>$wc->id,'sequence'=>20,'name'=>'B','planned_minutes'=>120,'status'=>'done']); // done -> exclu
-    $p=app(PlanningService::class)->loadByWorkCenter(1);
+    // [PROD-01 Phase 6] horizon ancré un lundi : 1 jour ouvré garanti quel que soit le jour d'exécution du test.
+    $p=app(PlanningService::class)->loadByWorkCenter(1, Carbon::parse('2026-08-31'));
     $row=collect($p['rows'])->firstWhere('id',$wc->id);
     expect($row['planned_h'])->toEqual(4.0);   // 240 min (B exclue car done)
     expect($row['capacity_h'])->toEqual(8.0);
@@ -30,7 +32,7 @@ it('flags overload', function(){
     $wc=WorkCenter::create(['company_id'=>$co->id,'code'=>'C2','name'=>'X','capacity_hours_per_day'=>1,'cost_per_hour'=>0,'efficiency_rate'=>100,'is_active'=>true]); // 60 min/j
     $of=ProductionOrder::create(['company_id'=>$co->id,'fiscal_year_id'=>$co->current_fiscal_year_id,'number'=>'OF-PL2','status'=>'lance','quantity_requested'=>1]);
     $of->operations()->create(['company_id'=>$co->id,'work_center_id'=>$wc->id,'sequence'=>10,'name'=>'A','planned_minutes'=>200,'status'=>'pending']); // 200>60
-    $p=app(PlanningService::class)->loadByWorkCenter(1);
+    $p=app(PlanningService::class)->loadByWorkCenter(1, Carbon::parse('2026-08-31'));
     expect(collect($p['rows'])->firstWhere('id',$wc->id)['status'])->toBe('surcharge');
     expect($p['overloaded'])->toBe(1);
 });
