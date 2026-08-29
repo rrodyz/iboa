@@ -47,7 +47,16 @@ class DeliveryNoteController extends Controller
         $this->authorize('view', $bonsLivraison);
         $deliveryNote = $this->service->repository->findWithDetails($bonsLivraison->id);
 
-        return view('ventes.bons-livraison.show', compact('deliveryNote'));
+        // [PROD-01 Phase 10] Navigation traçabilité amont : chaque ligne avec
+        // n° de lot renvoie vers lots.traceability — réutilise la généalogie
+        // déjà construite par StockController::lotTraceability(), n'en
+        // recrée jamais une seconde.
+        $lotIdsByProductAndNumber = \App\Models\StockLot::whereIn('product_id', $deliveryNote->items->pluck('product_id')->filter()->unique())
+            ->whereIn('lot_number', $deliveryNote->items->pluck('lot_number')->filter()->unique())
+            ->get(['id', 'product_id', 'lot_number'])
+            ->mapWithKeys(fn ($l) => [$l->product_id.'|'.$l->lot_number => $l->id]);
+
+        return view('ventes.bons-livraison.show', compact('deliveryNote', 'lotIdsByProductAndNumber'));
     }
 
     /**

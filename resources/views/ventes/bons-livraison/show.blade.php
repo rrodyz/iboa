@@ -270,7 +270,17 @@
                         </td>
                         <td class="px-3 py-1.5 text-gray-500 text-xs font-mono hidden md:table-cell">{{ $item->product?->reference ?? '—' }}</td>
                         <td class="px-3 py-1.5 text-right font-semibold tabular-nums text-gray-900">{{ number_format($item->quantity, 2, ',', ' ') }}</td>
-                        <td class="px-3 py-1.5 text-gray-500 text-xs hidden lg:table-cell">{{ $item->lot_number ?? '—' }}</td>
+                        <td class="px-3 py-1.5 text-gray-500 text-xs hidden lg:table-cell">
+                            @php
+                                $lotKey = $item->product_id.'|'.$item->lot_number;
+                                $lotId = $item->lot_number ? ($lotIdsByProductAndNumber[$lotKey] ?? null) : null;
+                            @endphp
+                            @if($lotId)
+                                <a href="{{ route('stocks.lots.traceability', $lotId) }}" class="text-emerald-700 hover:underline font-medium" title="Traçabilité amont du lot">{{ $item->lot_number }}</a>
+                            @else
+                                {{ $item->lot_number ?? '—' }}
+                            @endif
+                        </td>
                     </tr>
                     @empty
                     <tr>
