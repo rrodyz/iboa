@@ -55,30 +55,52 @@ class FinishedGoodsValuationService
                 $stock = ProductStock::where('product_id', $output->product_id)
                     ->where('warehouse_id', $warehouseId)->lockForUpdate()->first();
 
-                if (! $stock || (float) $stock->quantity + 0.001 < $quantity) {
-                    throw ValidationException::withMessages([
-                        'valuation' => 'Régularisation impossible : le produit fini a déjà été partiellement livré ou consommé.',
-                    ]);
-                }
+                // [P7.2 — clôture tardive après livraison] Un OF clôturé après que
+                // son PF a été partiellement ou totalement expédié ne doit ni
+                // bloquer la clôture, ni recréer du stock, ni toucher la sortie
+                // déjà passée. On ne régularise le CMP QUE sur la quantité
+                // physiquement encore en stock (« available ») — proportionnelle
+                // au delta total. La part déjà expédiée n'est structurellement
+                // plus valorisable en stock (rien à moyenner dedans) : son écart
+                // de coût reste tracé intégralement dans StockValuationAdjustment
+                // (audit/traçabilité — value_delta = écart complet calculé), sans
+                // jamais être appliqué une seconde fois au mouvement de sortie
+                // historique ni à un compte comptable qui n'existe pas dans ce
+                // modèle. Ancien comportement (ValidationException bloquante)
+                // retiré : le coût réel de l'OF reste de toute façon disponible
+                // dans production_costs, clôture non impactée.
+                $available = $stock ? min((float) $stock->quantity, $quantity) : 0.0;
+                $ratio = $available > 0 ? $available / $quantity : 0.0;
+                $stockDelta = round($delta * $ratio, 2);
 
-                $stockValue = (float) $stock->quantity * (float) $stock->avg_cost;
-                $newAverage = round(($stockValue + $delta) / (float) $stock->quantity, 2);
-                $stock->update(['avg_cost' => $newAverage]);
+                $newAverage = (float) ($stock?->avg_cost ?? 0);
+                if ($stock && $available > 0 && abs($stockDelta) > 0.001) {
+                    $stockValue = (float) $stock->quantity * (float) $stock->avg_cost;
+                    $newAverage = round(($stockValue + $stockDelta) / (float) $stock->quantity, 2);
+                    $stock->update(['avg_cost' => $newAverage]);
+                }
 
                 $adjustmentMovement = StockMovement::create([
                     'product_id' => $output->product_id,
                     'warehouse_id' => $warehouseId,
                     'type' => 'valuation_adjustment',
                     'quantity' => 0,
-                    'unit_cost' => round($delta / $quantity, 2),
-                    'total_cost' => $delta,
+                    'unit_cost' => $available > 0 ? round($stockDelta / $available, 2) : 0,
+                    'total_cost' => $stockDelta,
                     'valuation_method' => $order->product?->valuation_method ?? 'cmp',
                     'avg_cost_after' => $newAverage,
                     'occurred_at' => now(),
                     'reference_type' => ProductionOrder::class,
                     'reference_id' => $order->id,
                     'idempotency_key' => 'production-valuation-adjustment:'.$order->id.':'.$output->id,
-                    'notes' => 'Régularisation du coût provisoire vers le coût complet de l’OF '.$order->number,
+                    'notes' => $available >= $quantity
+                        ? 'Régularisation du coût provisoire vers le coût complet de l’OF '.$order->number
+                        : sprintf(
+                            'Régularisation partielle du coût provisoire de l’OF %s : %s/%s unité(s) encore en stock (le solde a déjà été livré/consommé — écart complet tracé en audit, non ré-appliqué à la sortie historique).',
+                            $order->number,
+                            rtrim(rtrim(number_format($available, 2, ',', ' '), '0'), ','),
+                            rtrim(rtrim(number_format($quantity, 2, ',', ' '), '0'), ',')
+                        ),
                     'created_by' => Auth::id(),
                 ]);
 
@@ -92,7 +114,9 @@ class FinishedGoodsValuationService
                     'old_unit_cost' => (float) $original->unit_cost,
                     'new_unit_cost' => $newUnitCost,
                     'value_delta' => $delta,
-                    'reason' => 'Passage du coût provisoire au coût complet à la clôture de l’OF',
+                    'reason' => $available >= $quantity
+                        ? 'Passage du coût provisoire au coût complet à la clôture de l’OF'
+                        : 'Passage du coût provisoire au coût complet à la clôture de l’OF (écart total tracé ici ; seule la quote-part encore en stock a été appliquée au CMP — voir mouvement de régularisation lié)',
                     'created_by' => Auth::id(),
                 ]);
             }
