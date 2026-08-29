@@ -156,10 +156,18 @@ return [
 
             /*
              * The disk names on which the backups will be stored.
+             *
+             * [PILOT-DEPLOY-02] Réutilise le support multi-disques natif de
+             * spatie/laravel-backup (aucun mécanisme parallèle) : quand
+             * BACKUP_REMOTE_ENABLED=true, la même sauvegarde est écrite en
+             * plus sur BACKUP_REMOTE_DISK (voir .env.production.example,
+             * section "Sauvegarde hors-serveur") — copie locale + copie
+             * distante systématiquement synchronisées, jamais l'inverse.
              */
-            'disks' => [
+            'disks' => array_values(array_filter([
                 'backups',
-            ],
+                env('BACKUP_REMOTE_ENABLED', false) ? env('BACKUP_REMOTE_DISK', 's3') : null,
+            ])),
         ],
 
         /*
@@ -267,7 +275,14 @@ return [
     'monitor_backups' => [
         [
             'name' => env('APP_NAME', 'laravel-backup'),
-            'disks' => ['backups'],
+            // [PILOT-DEPLOY-02] Même filtre que 'backup.destination.disks' —
+            // backup:monitor doit vérifier la fraîcheur de la copie distante
+            // aussi, sinon une défaillance du disque distant seul (copie
+            // locale OK) resterait invisible à backup:monitor.
+            'disks' => array_values(array_filter([
+                'backups',
+                env('BACKUP_REMOTE_ENABLED', false) ? env('BACKUP_REMOTE_DISK', 's3') : null,
+            ])),
             'health_checks' => [
                 \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays::class => 1,
                 \Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes::class => 5000,
