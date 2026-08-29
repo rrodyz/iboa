@@ -44,8 +44,11 @@ function lovAdmin(): User
     return $u;
 }
 
-/** Prépare un OF avec sortie PF (10 unités, coût provisoire 1000/u) et son ProductionCost (coût réel 15 000). */
-function lovSetup(): array
+/**
+ * Prépare un OF avec sortie PF (10 unités, coût provisoire 1000/u) et son
+ * ProductionCost (coût réel = $realTotal, 15 000 par défaut → delta positif).
+ */
+function lovSetup(int $realTotal = 15_000): array
 {
     $co = lovCompany();
     $wh = Warehouse::firstOrCreate(['code' => 'WH-LOV'], ['name' => 'Dépôt LOV', 'company_id' => $co->id, 'is_active' => true, 'is_default' => true]);
@@ -62,8 +65,8 @@ function lovSetup(): array
 
     ProductionCost::create([
         'production_order_id' => $of->id, 'company_id' => $co->id,
-        'material_cost' => 15_000, 'total_cost' => 15_000, 'standard_total' => 0,
-        'cost_per_unit' => 1_500, 'cost_per_meter' => 1_500,
+        'material_cost' => $realTotal, 'total_cost' => $realTotal, 'standard_total' => 0,
+        'cost_per_unit' => round($realTotal / 10, 2), 'cost_per_meter' => round($realTotal / 10, 2),
     ]);
 
     return [$of->fresh(['outputs']), $product, $wh, $output];
@@ -154,4 +157,37 @@ it('CAS D — clôture/régularisation répétée : idempotente, aucune double �
 
     expect(StockValuationAdjustment::where('production_order_id', $of->id)->count())->toBe(1);
     expect(StockMovement::where('type', 'valuation_adjustment')->where('reference_id', $of->id)->count())->toBe(1);
+});
+
+// [P7.3 — Phase 9] Delta négatif : le coût réel final est INFÉRIEUR au coût
+// provisoire (cas réel OF-2026-0002 : 142 626 réel vs 147 000 historique
+// facturé, delta = -4 374). La régularisation doit diminuer le CMP, jamais
+// lever d'erreur sur un delta négatif.
+it('delta négatif — coût réel inférieur au provisoire : CMP diminue proprement', function () {
+    $this->actingAs(lovAdmin());
+    [$of, $product, $wh] = lovSetup(realTotal: 8_000); // provisoire 10*1000=10000, réel 8000 → delta -2000
+
+    app(FinishedGoodsValuationService::class)->revalue($of);
+
+    $stock = ProductStock::where('product_id', $product->id)->where('warehouse_id', $wh->id)->first();
+    expect((float) $stock->avg_cost)->toBe(800.0); // (10*1000 - 2000)/10
+
+    $adj = StockValuationAdjustment::where('production_order_id', $of->id)->first();
+    expect((float) $adj->value_delta)->toBe(-2_000.0);
+});
+
+// [P7.3 — Phase 9] Delta nul : coût réel = coût provisoire exact. Aucune
+// écriture de régularisation ne doit être créée (le guard abs($delta)<=0.001
+// existant s'applique) — pas de bruit pour un écart qui n'existe pas.
+it('delta nul — coût réel égal au provisoire : aucune régularisation créée', function () {
+    $this->actingAs(lovAdmin());
+    [$of, $product, $wh] = lovSetup(realTotal: 10_000); // provisoire 10*1000=10000 = réel
+
+    app(FinishedGoodsValuationService::class)->revalue($of);
+
+    expect(StockValuationAdjustment::where('production_order_id', $of->id)->count())->toBe(0);
+    expect(StockMovement::where('type', 'valuation_adjustment')->where('reference_id', $of->id)->count())->toBe(0);
+
+    $stock = ProductStock::where('product_id', $product->id)->where('warehouse_id', $wh->id)->first();
+    expect((float) $stock->avg_cost)->toBe(1_000.0); // inchangé
 });
