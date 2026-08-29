@@ -28,7 +28,12 @@ class BomExplosionService
         $rows = [];
 
         foreach ($bom->lines as $line) {
-            $qty = (float) $line->quantity_per_meter * $quantity;
+            // [Phase 3 — cohérence allocation/MRP] Même formule que
+            // ReservationService::reserveMaterialsForOrder() : sans le taux de
+            // perte, l'explosion affichait/planifiait moins que ce que l'OF
+            // réserve réellement — deux implémentations d'un même besoin qui
+            // divergeaient dès qu'une ligne avait un waste_rate > 0.
+            $qty = round((float) $line->quantity_per_meter * $quantity * (1 + (float) ($line->waste_rate ?? 0) / 100), 4);
             $product = $line->product;
             $isSf = (bool) ($product?->is_semi_finished);
 
