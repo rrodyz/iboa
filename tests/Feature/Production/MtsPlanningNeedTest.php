@@ -289,3 +289,35 @@ it('ne propose rien quand le stock couvre déjà la cible', function () {
     expect($this->get(route('production.orders.mts'))->assertOk()->getContent())
         ->not->toContain('Créer OF MTS');
 });
+
+// [Clôture PROD-01 — section 9] Cohérence SERVICE vs ÉCRAN : valeur attendue
+// calculée à la main à partir de données connues (jamais en rappelant la
+// formule du service), puis vérifiée séparément sur NetRequirementService ET
+// sur le rendu HTML de l'écran MTS — les deux doivent donner exactement le
+// même nombre, preuve qu'aucune divergence n'existe entre le moteur et
+// l'affichage.
+it('cohérence service/écran : besoin net calculé à la main = NetRequirementService = écran MTS', function () {
+    mtsUser();
+    // cible=1000, sécurité=50, physique=200 (dispo=200), demande ferme=150,
+    // OF planifiés=0, réception attendue=80.
+    // Besoin net attendu (calcul manuel, indépendant du code) :
+    // 1000 + 50 + 150 − 200 − 0 − 80 = 920.
+    $p = mtsProduct(['stock_max' => 1000, 'stock_min' => 0, 'stock_securite' => 50, 'reorder_point' => 0], stock: 200);
+    mtsSalesOrder($p, commande: 150, livre: 0);
+    mtsPurchaseOrder($p, commande: 80, recu: 0);
+    $besoinAttendu = 920.0;
+
+    $rowService = app(\App\Modules\Production\Services\NetRequirementService::class)
+        ->forMtsProducts()->firstWhere(fn ($r) => $r['p']->id === $p->id);
+    expect($rowService['besoin'])->toBe($besoinAttendu)
+        ->and($rowService['cible'])->toBe(1000.0)
+        ->and($rowService['secu'])->toBe(50.0)
+        ->and($rowService['dispo'])->toBe(200.0)
+        ->and($rowService['client'])->toBe(150.0)
+        ->and($rowService['recu'])->toBe(80.0);
+
+    $html = $this->get(route('production.orders.mts'))->assertOk()->getContent();
+    // Formatage écran : number_format(920, 0, ',', ' ') = "920".
+    expect($html)->toContain('920')
+        ->and(mtsRow($p)['besoin'])->toBe($besoinAttendu); // écran (contrôleur) = service
+});
