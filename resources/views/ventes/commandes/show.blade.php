@@ -283,6 +283,8 @@
 
                 {{-- En préparation / Partiellement livré: Créer BL supplémentaire + Créer Facture --}}
                 @if(in_array($order->status, ['en_preparation', 'partiellement_livre']))
+                    @php $activeBpComplement = $order->activeBonPreparation(); @endphp
+                    @if($order->isReadyForDelivery())
                     <form action="{{ route('ventes.commandes.delivery-note', $order) }}" method="POST"
                           data-confirm="Créer un bon de livraison complémentaire ?">
                         @csrf
@@ -294,6 +296,20 @@
                             Nouveau BL
                         </button>
                     </form>
+                    @elseif($activeBpComplement)
+                    {{-- [P7.1] Même garde/traitement que le premier BL (§13.7) — un BL
+                         complémentaire peut être bloqué par un nouveau bon de préparation
+                         pas encore chargé, exactement comme le tout premier. Avant ce fix,
+                         seul un message flash après clic signalait le blocage ici. --}}
+                    <a href="{{ route('ventes.bons-preparation.show', $activeBpComplement) }}"
+                       class="inline-flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-[4px] text-sm font-semibold hover:bg-amber-100 transition-colors"
+                       title="Le bon de livraison complémentaire sera disponible une fois le chargement terminé (§13.7)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        BL verrouillé — {{ $activeBpComplement->number }} : {{ $activeBpComplement->status_label }}
+                    </a>
+                    @endif
                     <form action="{{ route('ventes.commandes.invoice', $order) }}" method="POST"
                           data-confirm="Créer une facture depuis cette commande ?">
                         @csrf
