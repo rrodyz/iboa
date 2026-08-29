@@ -99,18 +99,44 @@ class QualityReleaseService
             ->get() ?? collect();
 
         foreach ($outputs as $output) {
-            $this->stock->recordMovement([
-                'product_id' => $output->product_id,
-                'warehouse_id' => $output->warehouse_id,
-                'dest_warehouse_id' => $output->release_warehouse_id,
-                'type' => 'transfert',
-                'quantity' => (float) $output->quantity,
-                'unit_cost' => (float) ($output->stockMovement?->unit_cost ?? 0),
-                'idempotency_key' => 'quality-release-output:'.$output->id,
-                'reference_type' => ProductionBatch::class,
-                'reference_id' => $batch->id,
-                'notes' => 'Libération qualité lot '.$batch->batch_number,
-            ]);
+            // [P7.2 — libération tardive après expédition] Le PF peut avoir
+            // déjà quitté physiquement son entrepôt de production (transfert
+            // manuel, ou clôture d'OF menée sans attendre la libération
+            // formelle) avant que la décision qualité ne soit posée a
+            // posteriori. La décision qualité (le lot est bon/mauvais) est un
+            // fait indépendant de l'emplacement physique actuel du stock : on
+            // ne bloque plus la libération pour ça. On transfère seulement ce
+            // qui est physiquement encore disponible à la source (jamais plus
+            // — pas de stock recréé), et on marque quand même la libération
+            // sur la sortie de production, seule donnée lue par le garde de
+            // livraison et par la clôture d'OF.
+            $available = (float) (\App\Models\ProductStock::where('product_id', $output->product_id)
+                ->where('warehouse_id', $output->warehouse_id)
+                ->value('quantity') ?? 0);
+            $transferable = min($available, (float) $output->quantity);
+
+            if ($transferable > 0.0001) {
+                $this->stock->recordMovement([
+                    'product_id' => $output->product_id,
+                    'warehouse_id' => $output->warehouse_id,
+                    'dest_warehouse_id' => $output->release_warehouse_id,
+                    'type' => 'transfert',
+                    'quantity' => $transferable,
+                    'unit_cost' => (float) ($output->stockMovement?->unit_cost ?? 0),
+                    'idempotency_key' => 'quality-release-output:'.$output->id,
+                    'reference_type' => ProductionBatch::class,
+                    'reference_id' => $batch->id,
+                    'notes' => $transferable >= (float) $output->quantity
+                        ? 'Libération qualité lot '.$batch->batch_number
+                        : sprintf(
+                            'Libération qualité lot %s (partielle : %s/%s unité(s) encore en stock, le solde a déjà quitté l’entrepôt de production)',
+                            $batch->batch_number,
+                            number_format($transferable, 2, ',', ' '),
+                            number_format((float) $output->quantity, 2, ',', ' ')
+                        ),
+                ]);
+            }
+
             $output->update([
                 'quality_released_at' => now(),
                 'quality_released_by' => auth()->id(),
