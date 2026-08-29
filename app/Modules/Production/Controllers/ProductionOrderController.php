@@ -149,6 +149,78 @@ class ProductionOrderController extends Controller
     }
 
     /**
+     * [PROD-01 — Phase 11] Tableau de bord MTO : statut de production de
+     * CHAQUE ligne de commande fabriquée à la commande, avec ou sans OF —
+     * contrairement à eligible() qui ne montre que les commandes SANS OF
+     * encore. Colonnes : commande/client/article/quantité commandée/stock
+     * disponible/quantité déjà produite/quantité restant à produire/OF
+     * existant/statut financier/date requise/action.
+     *
+     * Réutilise Order::hasValidProductionApproval() /
+     * isFinanciallyEligibleForProduction() — même règle que la gate de
+     * lancement OF et que l'écran « Éligibles » ; jamais une seconde
+     * implémentation de l'éligibilité financière.
+     */
+    public function mtoDashboard(Request $request): View
+    {
+        $items = \App\Models\OrderItem::query()
+            ->whereHas('product', fn ($q) => $q->where('production_mode', 'mto'))
+            ->whereHas('order', fn ($q) => $q->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre']))
+            ->whereColumn('delivered_quantity', '<', 'quantity')
+            ->with([
+                'product:id,name,reference',
+                // [Fix vérification clôture PROD-01] total_ttc et
+                // production_approval_fingerprint sont lus par
+                // ProductionFinancialEligibilityService/hasValidProductionApproval() —
+                // un select tronqué les rendait NULL, faisant passer TOUTE commande
+                // pour "montant nul, aucune exigence" (éligible à tort). Idem pour
+                // payment_mode/credit_limit côté client. Jamais de select partiel sur
+                // un modèle dont une règle métier partagée va relire les colonnes.
+                'order:id,number,client_id,delivery_date,status,total_ttc,production_approved,production_approval_reason,production_approval_expires_at,production_approval_fingerprint',
+                'order.client:id,name,trade_name,payment_mode,credit_limit',
+            ])
+            ->orderByDesc('order_id')->limit(200)->get();
+
+        $productIds = $items->pluck('product_id')->unique()->filter();
+        $orderIds = $items->pluck('order_id')->unique()->filter();
+
+        $stocks = \App\Models\ProductStock::whereIn('product_id', $productIds)
+            ->selectRaw('product_id, SUM(quantity) qty, SUM(reserved_quantity) reserved')
+            ->groupBy('product_id')->get()->keyBy('product_id');
+
+        $ofsByKey = ProductionOrder::whereIn('order_id', $orderIds)->whereIn('product_id', $productIds)
+            ->get(['id', 'order_id', 'product_id', 'number', 'status', 'quantity_produced'])
+            ->groupBy(fn ($o) => $o->order_id.'-'.$o->product_id);
+
+        // Mémoïsé : confirmedReceipts()/requiredBeforeProduction() coûtent ~5
+        // requêtes chacun — une seule évaluation par commande, pas par ligne.
+        $eligibility = [];
+
+        $rows = $items->map(function ($item) use ($stocks, $ofsByKey, &$eligibility) {
+            $order = $item->order;
+            $eligibility[$order->id] ??= $order->hasValidProductionApproval() || $order->isFinanciallyEligibleForProduction();
+
+            $group = $ofsByKey[$item->order_id.'-'.$item->product_id] ?? collect();
+            $produite = (float) $group->sum('quantity_produced');
+            $stock = $stocks[$item->product_id] ?? null;
+
+            return [
+                'item' => $item,
+                'order' => $order,
+                'product' => $item->product,
+                'commandee' => (float) $item->quantity,
+                'produite' => $produite,
+                'restante' => max(0.0, (float) $item->quantity - $produite),
+                'dispo' => $stock ? (float) $stock->qty - (float) $stock->reserved : 0.0,
+                'of' => $group->sortByDesc('id')->first(),
+                'eligible' => $eligibility[$order->id],
+            ];
+        });
+
+        return view('production.orders.mto', ['rows' => $rows]);
+    }
+
+    /**
      * [MTS §2.2] Tableau de planification MTS : articles fabriqués pour le stock
      * (production_mode = mts), niveaux de stock, production déjà planifiée et
      * besoin net. Le coordinateur crée l'OF MTS (sans commande client) depuis ici.

@@ -20,6 +20,8 @@
                 <p class="text-[11.5px] text-gray-400">Commandes réglées (paiement caisse) ou approuvées par le gérant, sans ordre de fabrication — MTO tôle bac.</p>
             </div>
             <div class="flex items-center gap-1.5">
+                <a href="{{ route('production.orders.mto') }}"
+                   class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Tableau de bord MTO</a>
                 <a href="{{ route('production.orders.mts') }}"
                    class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Planification MTS</a>
                 <a href="{{ route('production.orders.index') }}"

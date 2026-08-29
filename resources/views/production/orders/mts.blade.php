@@ -20,6 +20,8 @@
                 <p class="text-[11.5px] text-gray-400">Articles fabriqués pour le stock (fer à béton…). Besoin net = cible + sécurité + demande client ferme − disponible − OF planifiés − réceptions attendues.</p>
             </div>
             <div class="flex items-center gap-1.5">
+                <a href="{{ route('production.orders.mto') }}"
+                   class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Tableau de bord MTO</a>
                 <a href="{{ route('production.orders.eligible') }}"
                    class="text-[14px] font-semibold text-emerald-700 border border-emerald-300 bg-white hover:bg-emerald-50 px-5 py-2 rounded-[4px] transition-colors">Éligibles MTO</a>
                 <a href="{{ route('production.orders.index') }}"
