@@ -54,6 +54,36 @@
         @endforeach
     </div>
 
+    {{-- [PROD-01 Phase 8] Conflits d'ordonnancement — détection, pas résolution --}}
+    @if($conflits->isNotEmpty())
+    <div class="bg-red-50 border border-red-300 rounded-[4px] overflow-hidden">
+        <div class="px-4 py-2 bg-red-100 border-b border-red-300 flex items-center gap-2">
+            <svg style="width:16px;height:16px" class="text-red-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <h2 class="text-[13px] font-bold text-red-800">{{ $conflits->count() }} conflit(s) d'ordonnancement détecté(s) — ligne partagée entre deux OF</h2>
+        </div>
+        <table class="min-w-full divide-y divide-red-200 text-sm">
+            <thead>
+                <tr>
+                    <th class="px-3 py-1.5 text-left text-[11px] font-bold text-red-700 uppercase">Ligne</th>
+                    <th class="px-3 py-1.5 text-left text-[11px] font-bold text-red-700 uppercase">OF concernés</th>
+                    <th class="px-3 py-1.5 text-left text-[11px] font-bold text-red-700 uppercase">Chevauchement</th>
+                    <th class="px-3 py-1.5 text-right text-[11px] font-bold text-red-700 uppercase">Surcharge</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-red-100 bg-white">
+                @foreach($conflits as $c)
+                <tr>
+                    <td class="px-3 py-1.5 font-medium text-gray-900">{{ $c['resource_label'] }}</td>
+                    <td class="px-3 py-1.5 text-gray-700">{{ $c['of_a']->number }} <span class="text-gray-400">×</span> {{ $c['of_b']->number }}</td>
+                    <td class="px-3 py-1.5 text-gray-700 tabular-nums">{{ $c['overlap_start']->format('d/m H:i') }} → {{ $c['overlap_end']->format('d/m H:i') }}</td>
+                    <td class="px-3 py-1.5 text-right font-bold text-red-700 tabular-nums">{{ $c['overlap_minutes'] }} min</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+    @endif
+
     {{-- Table — onglets Centre / Machine / Équipe --}}
     @php
         $barClass = fn ($s) => match($s){ 'surcharge'=>'bg-red-500','charge'=>'bg-amber-500','libre'=>'bg-gray-300',default=>'bg-emerald-500' };

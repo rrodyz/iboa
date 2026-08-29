@@ -6,14 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Modules\Production\Models\ProductionLine;
 use App\Modules\Production\Models\ProductionOrder;
 use App\Modules\Production\Services\PlanningService;
+use App\Modules\Production\Services\SchedulingConflictService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class ProductionPlanningController extends Controller
 {
-    public function __construct(private PlanningService $planning)
-    {
+    public function __construct(
+        private PlanningService $planning,
+        private SchedulingConflictService $conflicts,
+    ) {
         $this->middleware('permission:production.view');
         $this->middleware('permission:production.create')->only(['replan']);
     }
@@ -35,12 +38,17 @@ class ProductionPlanningController extends Controller
 
         $lignes = ProductionLine::where('is_active', true)->orderBy('name')->get(['id', 'name', 'status']);
 
-        return view('production.planning.index', compact('plan', 'planMachine', 'planTeam', 'horizon', 'ofActifs', 'lignes'));
+        // [PROD-01 Phase 8] Détection — pas résolution. Le planificateur décide.
+        $conflits = $this->conflicts->detect();
+
+        return view('production.planning.index', compact('plan', 'planMachine', 'planTeam', 'horizon', 'ofActifs', 'lignes', 'conflits'));
     }
 
     /**
      * [X3 §19] Déplacer un OF (dates prévues) et/ou le réaffecter à une autre ligne.
-     * Bloqué sur OF clôturé/annulé ; ligne indisponible refusée.
+     * Bloqué sur OF clôturé/annulé ; ligne indisponible refusée. [PROD-01 Phase 8]
+     * Un chevauchement résultant n'est jamais bloqué (pas un solveur) mais
+     * signalé dans le message de retour — le planificateur reste décisionnaire.
      */
     public function replan(Request $request, ProductionOrder $order): RedirectResponse
     {
@@ -60,6 +68,11 @@ class ProductionPlanningController extends Controller
         }
 
         $order->update(array_filter($data, fn ($v) => $v !== null && $v !== ''));
+
+        $conflitsOf = $this->conflicts->detectForOrder($order->fresh());
+        if ($conflitsOf->isNotEmpty()) {
+            return back()->with('warning', 'OF ' . $order->number . ' replanifié — attention, ' . $conflitsOf->count() . ' chevauchement(s) détecté(s) sur la même ligne.');
+        }
 
         return back()->with('success', 'OF ' . $order->number . ' replanifié.');
     }
