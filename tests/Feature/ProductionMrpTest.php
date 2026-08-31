@@ -37,7 +37,14 @@ it('generates a purchase request from MRP via route', function(){
     $u=mrpAdmin(); $this->actingAs($u); $co=Company::first();
     $matiere=Product::factory()->create(['stock_min'=>2000]);
     Coil::create(['company_id'=>$co->id,'product_id'=>$matiere->id,'reference'=>'B4','initial_weight'=>1000,'remaining_weight'=>400,'cost_per_kg'=>600,'purchase_price'=>600000,'status'=>'disponible']);
-    $this->get(route('production.mrp'))->assertOk()->assertSee('Réapprovisionnement');
+    // [REACT-01D] Écran MRP Inertia — plus de texte "Réapprovisionnement"
+    // rendu côté serveur (pas de SSR) ; le composant Inertia + la donnée
+    // remontant le déficit valent la même preuve que la page a bien chargé.
+    $this->get(route('production.mrp'))->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('Production/Mrp/Index')
+            ->where('shortfalls.0.productId', $matiere->id)
+        );
     $this->post(route('production.mrp.generate'), ['product_ids'=>[$matiere->id]])->assertRedirect();
     expect(PurchaseRequest::count())->toBe(1);
     expect(PurchaseRequest::first()->items()->count())->toBe(1);
