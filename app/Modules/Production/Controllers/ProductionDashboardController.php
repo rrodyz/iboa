@@ -21,7 +21,8 @@ use App\Modules\Quality\Models\QualityInspection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class ProductionDashboardController extends Controller
 {
@@ -30,7 +31,7 @@ class ProductionDashboardController extends Controller
         $this->middleware('permission:production.view');
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): Response
     {
         $from = $request->input('from', now()->startOfMonth()->format('Y-m-d'));
         $to   = $request->input('to', now()->format('Y-m-d'));
@@ -263,13 +264,56 @@ class ProductionDashboardController extends Controller
             ['label' => 'Encaissement',       'count' => (int) \App\Models\ClientPayment::whereBetween('payment_date', [$f, $t])->count(),      'url' => route('tresorerie.encaissements.index'), 'color' => 'emerald'],
         ];
 
-        return view('production.dashboard', compact(
-            'kpis', 'chartDaily', 'byStatus', 'topClients', 'avgCost',
-            'stockParDepot', 'from', 'to', 'trs', 'coutComparaison',
-            'toBacAutorisees', 'toBacEnAttente',
-            'pendingCount', 'prod7Days', 'ofEnCours', 'suiviJour', 'suiviUsers',
-            'alertes', 'consoMatieres', 'perfMachines', 'controlesQualite', 'chaine'
-        ));
+        // [REACT-01C Phase 6] Comme le Blade historique (voir matrice Phase 1),
+        // chartDaily/byStatus/topClients/avgCost/stockParDepot/coutComparaison/
+        // toBacAutorisees/toBacEnAttente sont calculés mais jamais rendus par
+        // cette page — non embarqués dans le payload Inertia. Requêtes non
+        // touchées : aucun comportement/calcul changé, seulement la sélection
+        // de ce qui part au client.
+        return Inertia::render('Production/Dashboard/Index', [
+            'kpis' => $kpis,
+            'trs' => $trs,
+            'meta' => ['from' => $from, 'to' => $to],
+            'pendingCount' => $pendingCount,
+            'prod7Days' => $prod7Days,
+            'chaine' => $chaine,
+            'ofEnCours' => $ofEnCours->map(fn ($of) => [
+                'number' => $of->number,
+                'productName' => $of->product?->name ?? $of->designation ?? null,
+                'quantityRequested' => (float) $of->quantity_requested,
+                'quantityProduced' => (float) $of->quantity_produced,
+                'status' => $of->status,
+                'showUrl' => route('production.orders.show', $of),
+            ])->values(),
+            'suiviJour' => $suiviJour->map(fn ($out) => [
+                'producedAt' => $out->produced_at?->format('d/m H:i'),
+                'ofNumber' => $out->productionOrder?->number,
+                'productName' => $out->product?->name,
+                'totalMeters' => (float) $out->total_meters,
+                'operatorName' => $suiviUsers[$out->created_by] ?? null,
+            ])->values(),
+            'alertes' => $alertes->values(),
+            'consoMatieres' => $consoMatieres->values(),
+            'perfMachines' => $perfMachines->values(),
+            'controlesQualite' => $controlesQualite->map(fn ($ci) => [
+                'inspectedAt' => $ci->inspected_at?->format('d/m H:i'),
+                'ofNumber' => $ci->productionOrder?->number,
+                'typeLabel' => $ci->typeLabel(),
+                'status' => $ci->status,
+                'controllerName' => $ci->controller?->full_name,
+            ])->values(),
+            'links' => [
+                'validationsUrl' => route('validations.index'),
+                'ofCreateUrl' => route('production.orders.create'),
+                'planningUrl' => route('production.planning'),
+                'ofIndexUrl' => route('production.orders.index'),
+                'reportsUrl' => route('production.reports'),
+                'maintenanceUrl' => route('production.maintenance.index'),
+                'machinesUrl' => route('production.machines.index'),
+                'productsUrl' => route('products.index'),
+                'qualiteUrl' => route('qualite.inspections.index'),
+            ],
+        ]);
     }
 
     /**
