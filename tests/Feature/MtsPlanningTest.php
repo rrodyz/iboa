@@ -50,10 +50,15 @@ it('calcule le besoin net : cible + sécurité − disponible − planifié', fu
         'number' => 'OF-MTS-' . uniqid(), 'status' => 'lance', 'quantity_requested' => 200, 'product_id' => $fer->id,
     ]);
 
-    $resp = $this->get(route('production.orders.mts'));
-    $resp->assertOk()
-        ->assertSee('Fer à béton HA 10')
-        ->assertSee('1 500'); // besoin net = 2000 + 0 − 300 − 200
+    // [REACT-01D] Écran Inertia — on vérifie la donnée transmise (besoin net
+    // numérique), pas le texte formaté "1 500" qui n'est rendu que côté
+    // client React (pas de SSR).
+    $rows = $this->get(route('production.orders.mts'))
+        ->assertOk()->inertiaProps('rows');
+    $row = collect($rows)->firstWhere(fn ($r) => $r['productName'] === 'Fer à béton HA 10');
+
+    expect($row)->not->toBeNull()
+        ->and($row['besoin'])->toEqual(1500.0); // besoin net = 2000 + 0 − 300 − 200
 });
 
 it('crée un OF MTS sans commande client ni client', function () {
@@ -84,8 +89,13 @@ it('sous le minimum : état affiché et OF proposé pour le besoin', function ()
     // désormais du POINT DE COMMANDE quand il est renseigné, et du minimum
     // seulement à défaut. Continuer à l'appeler « minimum » serait devenu faux.
     // Le comportement vérifié est identique : état sous-seuil, OF proposé.
-    $this->get(route('production.orders.mts'))
-        ->assertOk()
-        ->assertSee('Sous le seuil')     // dispo 100 < seuil 500 (repli sur stock_min)
-        ->assertSee('Créer OF MTS');     // besoin = 500 − 100 = 400 > 0
+    // [REACT-01D] Idem — etat/canCreateOf transmis tels quels par le
+    // contrôleur, les libellés "Sous le seuil"/"Créer OF MTS" n'existent que
+    // dans le rendu React côté client.
+    $rows = $this->get(route('production.orders.mts'))
+        ->assertOk()->inertiaProps('rows');
+    $row = collect($rows)->firstWhere(fn ($r) => $r['productName'] === 'Fer à béton HA 8');
+
+    expect($row['etat'])->toBe('sous_min')       // dispo 100 < seuil 500 (repli sur stock_min)
+        ->and($row['canCreateOf'])->toBeTrue();  // besoin = 500 − 100 = 400 > 0
 });

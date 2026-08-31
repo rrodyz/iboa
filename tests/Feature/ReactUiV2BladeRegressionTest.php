@@ -30,10 +30,11 @@ function bladeRegAdmin(): User
 // première page migrée vers Inertia/React (voir DashboardReactMigrationTest).
 // [REACT-01C] 'production.dashboard' et 'production.orders.mto' retirés à leur
 // tour — couverture déplacée vers ProductionDashboardReactMigrationTest et
-// MtoReactMigrationTest. MTS/MRP/Planning/OF restent Blade dans ce lot.
+// MtoReactMigrationTest.
+// [REACT-01D] 'production.orders.mts' et 'production.mrp' retirés à leur tour
+// — couverture déplacée vers MtsReactMigrationTest et MrpReactMigrationTest.
+// Planning/OF restent Blade dans ce lot.
 $pages = [
-    'production.orders.mts' => 'production.orders.mts',
-    'production.mrp' => 'production.mrp',
     'production.planning' => 'production.planning',
     'production.orders.index' => 'production.orders.index',
 ];

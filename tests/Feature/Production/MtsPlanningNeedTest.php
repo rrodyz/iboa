@@ -112,13 +112,23 @@ function mtsSalesOrder(Product $p, float $commande, float $livre = 0, string $st
     ]);
 }
 
-/** @return array<string,mixed> la ligne calculée pour cet article */
+/**
+ * [REACT-01D] La page est désormais Inertia — plus de vue Blade dont on peut
+ * lire ->original->getData(). On demande le payload JSON brut (en-tête
+ * X-Inertia, comme le fait un vrai client Inertia) et on y cherche la ligne.
+ * Les clés (seuil/cible/besoin/etat/dispo/client/recu/physique/reserve/plan)
+ * sont transmises telles quelles par ProductionOrderController::mts() —
+ * seule la clé d'identification change (productId au lieu de p->id).
+ *
+ * @return array<string,mixed> la ligne calculée pour cet article
+ */
 function mtsRow(Product $p): array
 {
-    $rows = test()->get(route('production.orders.mts'))->assertOk()
-        ->original->getData()['rows'];
+    $rows = test()->get(route('production.orders.mts'))
+        ->assertOk()
+        ->inertiaProps('rows');
 
-    return collect($rows)->firstWhere(fn ($r) => $r['p']->id === $p->id);
+    return collect($rows)->firstWhere(fn ($r) => $r['productId'] === $p->id);
 }
 
 // ── 1. Article non paramétré ─────────────────────────────────────────────────
@@ -131,25 +141,30 @@ it('ne déclare pas « en rupture » un article sans aucun seuil', function () {
 });
 
 it('affiche « Seuil non défini » et renvoie vers la fiche article', function () {
+    // [REACT-01D] Le composant React affiche "Seuil non défini" uniquement
+    // quand etat === 'non_parametre' (voir Mts/Index.jsx) ; on vérifie la
+    // donnée transmise (etat + editUrl), pas un texte rendu côté client (pas
+    // de SSR).
     mtsUser();
     $p = mtsProduct(['stock_min' => 0, 'stock_max' => null, 'stock_securite' => 0, 'reorder_point' => 0]);
+    $row = mtsRow($p);
 
-    $html = $this->get(route('production.orders.mts'))->assertOk()->getContent();
-
-    expect($html)->toContain('Seuil non défini')
-        ->and($html)->toContain(route('products.edit', $p));
+    expect($row['etat'])->toBe('non_parametre')
+        ->and($row['editUrl'])->toBe(route('products.edit', $p));
 });
 
 it('affiche « — » et non « 0 » pour un seuil et une cible absents', function () {
     // Le piège d'origine : « 0.00 » est une chaîne VRAIE en PHP. La colonne Min
     // rendait donc « 0 » quand la colonne Cible rendait « — », pour le même zéro.
+    // [REACT-01D] 'parametre' n'est pas transmis au frontend (jamais rendu par
+    // le Blade non plus) — 'etat' === 'non_parametre' porte la même preuve.
     mtsUser();
     $p = mtsProduct(['stock_min' => 0, 'stock_max' => null, 'stock_securite' => 0, 'reorder_point' => 0]);
     $row = mtsRow($p);
 
-    expect($row['seuil'])->toBe(0.0)
-        ->and($row['cible'])->toBe(0.0)
-        ->and($row['parametre'])->toBeFalse();
+    expect($row['seuil'])->toEqual(0.0)
+        ->and($row['cible'])->toEqual(0.0)
+        ->and($row['etat'])->toBe('non_parametre');
 });
 
 // ── 2. Résolution des seuils ─────────────────────────────────────────────────
@@ -158,7 +173,7 @@ it('retient le stock maximum comme cible quand il est défini', function () {
     mtsUser();
     $p = mtsProduct(['stock_max' => 500, 'reorder_point' => 200, 'stock_min' => 100]);
 
-    expect(mtsRow($p)['cible'])->toBe(500.0);
+    expect(mtsRow($p)['cible'])->toEqual(500.0);
 });
 
 it('fait du point de commande le seuil de déclenchement, devant le minimum', function () {
@@ -168,7 +183,7 @@ it('fait du point de commande le seuil de déclenchement, devant le minimum', fu
     $p = mtsProduct(['stock_max' => 500, 'reorder_point' => 200, 'stock_min' => 100], stock: 150);
     $row = mtsRow($p);
 
-    expect($row['seuil'])->toBe(200.0)
+    expect($row['seuil'])->toEqual(200.0)
         ->and($row['etat'])->toBe('sous_min'); // 150 < 200
 });
 
@@ -177,8 +192,8 @@ it('se rabat sur le point de commande puis le minimum à défaut de maximum', fu
     $surReorder = mtsProduct(['stock_max' => null, 'reorder_point' => 300, 'stock_min' => 100]);
     $surMin     = mtsProduct(['stock_max' => null, 'reorder_point' => 0, 'stock_min' => 120]);
 
-    expect(mtsRow($surReorder)['cible'])->toBe(300.0)
-        ->and(mtsRow($surMin)['cible'])->toBe(120.0);
+    expect(mtsRow($surReorder)['cible'])->toEqual(300.0)
+        ->and(mtsRow($surMin)['cible'])->toEqual(120.0);
 });
 
 // ── 3. Formule du besoin net ─────────────────────────────────────────────────
@@ -191,8 +206,8 @@ it('déduit les réceptions fournisseurs attendues du besoin', function () {
     mtsPurchaseOrder($p, commande: 200);
 
     $row = mtsRow($p);
-    expect($row['recu'])->toBe(200.0)
-        ->and($row['besoin'])->toBe(300.0);
+    expect($row['recu'])->toEqual(200.0)
+        ->and($row['besoin'])->toEqual(300.0);
 });
 
 it('ne déduit pas une commande fournisseur déjà entièrement reçue', function () {
@@ -200,7 +215,7 @@ it('ne déduit pas une commande fournisseur déjà entièrement reçue', functio
     $p = mtsProduct(['stock_max' => 500, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0]);
     mtsPurchaseOrder($p, commande: 200, recu: 200);
 
-    expect(mtsRow($p)['recu'])->toBe(0.0);
+    expect(mtsRow($p)['recu'])->toEqual(0.0);
 });
 
 it('ne déduit pas une commande fournisseur annulée ou encore en brouillon', function () {
@@ -209,7 +224,7 @@ it('ne déduit pas une commande fournisseur annulée ou encore en brouillon', fu
     mtsPurchaseOrder($p, commande: 200, status: 'annule');
     mtsPurchaseOrder($p, commande: 150, status: 'brouillon');
 
-    expect(mtsRow($p)['recu'])->toBe(0.0);
+    expect(mtsRow($p)['recu'])->toEqual(0.0);
 });
 
 it('compte une commande fournisseur « partiellement_recu » au masculin', function () {
@@ -221,7 +236,7 @@ it('compte une commande fournisseur « partiellement_recu » au masculin', funct
     $p = mtsProduct(['stock_max' => 500, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0]);
     mtsPurchaseOrder($p, commande: 200, recu: 50, status: 'partiellement_recu');
 
-    expect(mtsRow($p)['recu'])->toBe(150.0);
+    expect(mtsRow($p)['recu'])->toEqual(150.0);
 });
 
 it('ajoute la demande client ferme non encore livrée', function () {
@@ -230,8 +245,8 @@ it('ajoute la demande client ferme non encore livrée', function () {
     mtsSalesOrder($p, commande: 80);
 
     $row = mtsRow($p);
-    expect($row['client'])->toBe(80.0)
-        ->and($row['besoin'])->toBe(580.0);
+    expect($row['client'])->toEqual(80.0)
+        ->and($row['besoin'])->toEqual(580.0);
 });
 
 it('ne compte pas la part déjà livrée d’une commande client', function () {
@@ -239,14 +254,14 @@ it('ne compte pas la part déjà livrée d’une commande client', function () {
     $p = mtsProduct(['stock_max' => 500, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0]);
     mtsSalesOrder($p, commande: 80, livre: 30);
 
-    expect(mtsRow($p)['client'])->toBe(50.0);
+    expect(mtsRow($p)['client'])->toEqual(50.0);
 });
 
 it('ajoute le stock de sécurité à la cible', function () {
     mtsUser();
     $p = mtsProduct(['stock_max' => 500, 'stock_securite' => 50, 'stock_min' => 0, 'reorder_point' => 0]);
 
-    expect(mtsRow($p)['besoin'])->toBe(550.0);
+    expect(mtsRow($p)['besoin'])->toEqual(550.0);
 });
 
 it('combine tous les termes de la formule', function () {
@@ -256,38 +271,38 @@ it('combine tous les termes de la formule', function () {
     mtsSalesOrder($p, commande: 100);
     mtsPurchaseOrder($p, commande: 30);
 
-    expect(mtsRow($p)['besoin'])->toBe(400.0);
+    expect(mtsRow($p)['besoin'])->toEqual(400.0);
 });
 
 it('ne descend jamais sous zéro quand l’approvisionnement couvre la cible', function () {
     mtsUser();
     $p = mtsProduct(['stock_max' => 100, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0], stock: 500);
 
-    expect(mtsRow($p)['besoin'])->toBe(0.0);
+    expect(mtsRow($p)['besoin'])->toEqual(0.0);
 });
 
 // ── 4. Action proposée ───────────────────────────────────────────────────────
 
 it('propose la création d’un OF dès qu’un besoin est calculé', function () {
+    // [REACT-01D] canCreateOf est calculé côté serveur (permission.create ET
+    // besoin > 0, jamais recalculé côté React — voir ProductionOrderController
+    // ::mts()) ; le bouton "Créer OF MTS" du composant ne fait que lire ce
+    // booléen. On vérifie donc canCreateOf + createOfUrl, pas un texte rendu.
     mtsUser();
     $p = mtsProduct(['stock_max' => 500, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0]);
+    $row = mtsRow($p);
 
-    $html = $this->get(route('production.orders.mts'))->assertOk()->getContent();
-
-    expect(mtsRow($p)['besoin'])->toBe(500.0)
-        ->and($html)->toContain('Créer OF MTS')
-        // Blade échappe les « & » de l'URL en « &amp; » : on compare donc sur les
-        // paramètres, pas sur l'URL brute rendue par route().
-        ->and($html)->toContain('product_id='.$p->id)
-        ->and($html)->toContain('qty=500');
+    expect($row['besoin'])->toEqual(500.0)
+        ->and($row['canCreateOf'])->toBeTrue()
+        ->and($row['createOfUrl'])->toContain('product_id='.$p->id)
+        ->and($row['createOfUrl'])->toContain('qty=500');
 });
 
 it('ne propose rien quand le stock couvre déjà la cible', function () {
     mtsUser();
-    mtsProduct(['stock_max' => 100, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0], stock: 500);
+    $p = mtsProduct(['stock_max' => 100, 'stock_min' => 0, 'stock_securite' => 0, 'reorder_point' => 0], stock: 500);
 
-    expect($this->get(route('production.orders.mts'))->assertOk()->getContent())
-        ->not->toContain('Créer OF MTS');
+    expect(mtsRow($p)['canCreateOf'])->toBeFalse();
 });
 
 // [Clôture PROD-01 — section 9] Cohérence SERVICE vs ÉCRAN : valeur attendue
@@ -310,14 +325,14 @@ it('cohérence service/écran : besoin net calculé à la main = NetRequirementS
     $rowService = app(\App\Modules\Production\Services\NetRequirementService::class)
         ->forMtsProducts()->firstWhere(fn ($r) => $r['p']->id === $p->id);
     expect($rowService['besoin'])->toBe($besoinAttendu)
-        ->and($rowService['cible'])->toBe(1000.0)
-        ->and($rowService['secu'])->toBe(50.0)
-        ->and($rowService['dispo'])->toBe(200.0)
-        ->and($rowService['client'])->toBe(150.0)
-        ->and($rowService['recu'])->toBe(80.0);
+        ->and($rowService['cible'])->toEqual(1000.0)
+        ->and($rowService['secu'])->toEqual(50.0)
+        ->and($rowService['dispo'])->toEqual(200.0)
+        ->and($rowService['client'])->toEqual(150.0)
+        ->and($rowService['recu'])->toEqual(80.0);
 
-    $html = $this->get(route('production.orders.mts'))->assertOk()->getContent();
-    // Formatage écran : number_format(920, 0, ',', ' ') = "920".
-    expect($html)->toContain('920')
-        ->and(mtsRow($p)['besoin'])->toBe($besoinAttendu); // écran (contrôleur) = service
+    // [REACT-01D] Le contrôleur transmet la valeur numérique brute (920.0),
+    // le formatage "920" est fait côté React (fmt()) à partir de cette même
+    // valeur — la preuve de non-divergence se fait sur le nombre transmis.
+    expect(mtsRow($p)['besoin'])->toEqual($besoinAttendu); // écran (contrôleur) = service
 });

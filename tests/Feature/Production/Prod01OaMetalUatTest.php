@@ -67,11 +67,17 @@ it('UAT-1 — tôle bac MTO : commande client visible au tableau de bord MTO ave
     ]);
     $commande->update(['production_approved' => true, 'production_approval_fingerprint' => $commande->productionFinancialFingerprint()]);
 
-    $this->get(route('production.orders.mto'))->assertOk()
-        ->assertSee('CMD-UAT-TOLE')
-        ->assertSee('Tôle bac galvanisée')
-        ->assertSee('Éligible')
-        ->assertSee('Créer OF');
+    // [REACT-01C] Le tableau de bord MTO est Inertia depuis cette mission —
+    // plus de rendu Blade serveur des libellés "Éligible"/"Créer OF" (pas de
+    // SSR). On vérifie les données transmises dont ces libellés dérivent.
+    $rows = $this->get(route('production.orders.mto'))
+        ->assertOk()->inertiaProps('rows');
+    $row = collect($rows)->firstWhere(fn ($r) => $r['orderNumber'] === 'CMD-UAT-TOLE');
+
+    expect($row)->not->toBeNull()
+        ->and($row['productName'])->toBe('Tôle bac galvanisée')
+        ->and($row['eligible'])->toBeTrue()
+        ->and($row['canCreateOf'])->toBeTrue();
 });
 
 it('UAT-2 — fer à béton MTS : écran de planification propose et génère l’OF', function () {
@@ -84,7 +90,12 @@ it('UAT-2 — fer à béton MTS : écran de planification propose et génère l�
     BillOfMaterial::create(['company_id' => $co->id, 'product_id' => $fer->id, 'name' => 'BOM Fer à béton', 'is_active' => true])
         ->lines()->create(['label' => 'Billette acier', 'quantity_per_meter' => 1]);
 
-    $this->get(route('production.orders.mts'))->assertOk()->assertSee('Fer à béton HA12')->assertSee('400'); // besoin net
+    // [REACT-01D] Écran MTS Inertia — même principe qu'UAT-1 : on vérifie la
+    // donnée transmise (besoin net), pas un texte rendu côté client.
+    $rows = $this->get(route('production.orders.mts'))
+        ->assertOk()->inertiaProps('rows');
+    $row = collect($rows)->firstWhere(fn ($r) => $r['productName'] === 'Fer à béton HA12');
+    expect($row['besoin'])->toEqual(400.0); // besoin net (int côté JSON, float côté service — même valeur)
 
     $result = app(MrpService::class)->generateProductionOrders([$fer->id]);
     expect($result['created'])->toHaveCount(1)

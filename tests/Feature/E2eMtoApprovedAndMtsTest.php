@@ -154,7 +154,11 @@ it('C — MTS : OF sans client depuis le besoin, stock général, vente servie s
     ]);
 
     // Le tableau de planification MTS propose l'article en rupture.
-    $this->get(route('production.orders.mts'))->assertOk()->assertSee('Fer E2E C');
+    // [REACT-01D] Écran Inertia — on vérifie la donnée transmise, pas un
+    // texte rendu côté serveur (pas de SSR).
+    $mtsRows = $this->get(route('production.orders.mts'))
+        ->assertOk()->inertiaProps('rows');
+    expect(collect($mtsRows)->firstWhere(fn ($r) => $r['productName'] === 'Fer E2E C'))->not->toBeNull();
 
     // 2. OF SANS commande client (planification MTS) — aucune gate financière.
     $matiere = Product::factory()->create(['name' => 'Fil machine E2E C', 'is_stockable' => true]);
