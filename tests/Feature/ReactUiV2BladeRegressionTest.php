@@ -26,8 +26,9 @@ function bladeRegAdmin(): User
     return $u;
 }
 
+// [REACT-01B] 'dashboard' est retiré de cette liste — c'est désormais la
+// première page migrée vers Inertia/React (voir DashboardReactMigrationTest).
 $pages = [
-    'dashboard' => 'dashboard',
     'production.dashboard' => 'production.dashboard',
     'production.orders.mts' => 'production.orders.mts',
     'production.mrp' => 'production.mrp',
