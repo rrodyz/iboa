@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 use App\Modules\Production\Services\NetRequirementService;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 
 class ProductionOrderController extends Controller
 {
@@ -161,7 +162,7 @@ class ProductionOrderController extends Controller
      * lancement OF et que l'écran « Éligibles » ; jamais une seconde
      * implémentation de l'éligibilité financière.
      */
-    public function mtoDashboard(Request $request): View
+    public function mtoDashboard(Request $request): \Inertia\Response
     {
         $items = \App\Models\OrderItem::query()
             ->whereHas('product', fn ($q) => $q->where('production_mode', 'mto'))
@@ -196,28 +197,57 @@ class ProductionOrderController extends Controller
         // requêtes chacun — une seule évaluation par commande, pas par ligne.
         $eligibility = [];
 
-        $rows = $items->map(function ($item) use ($stocks, $ofsByKey, &$eligibility) {
+        // [REACT-01C Phase 4] Le frontend ne doit jamais recalculer l'éligibilité
+        // financière ni la permission — le backend transmet directement la
+        // décision finale (canCreateOf), combinant exactement les 3 conditions
+        // du Blade historique (@can('production.create') + restante > 0 +
+        // eligible), jamais recomposée côté React.
+        $canCreatePermission = $request->user()->can('production.create');
+
+        $rows = $items->map(function ($item) use ($stocks, $ofsByKey, &$eligibility, $canCreatePermission) {
             $order = $item->order;
             $eligibility[$order->id] ??= $order->hasValidProductionApproval() || $order->isFinanciallyEligibleForProduction();
 
             $group = $ofsByKey[$item->order_id.'-'.$item->product_id] ?? collect();
             $produite = (float) $group->sum('quantity_produced');
+            $restante = max(0.0, (float) $item->quantity - $produite);
             $stock = $stocks[$item->product_id] ?? null;
+            $of = $group->sortByDesc('id')->first();
+            $eligible = $eligibility[$order->id];
 
             return [
-                'item' => $item,
-                'order' => $order,
-                'product' => $item->product,
+                'orderId' => $order->id,
+                'orderNumber' => $order->number,
+                'orderShowUrl' => route('ventes.commandes.show', $order->id),
+                'clientName' => $order->client?->trade_name ?? $order->client?->name,
+                'productName' => $item->product->name,
+                'productReference' => $item->product->reference,
                 'commandee' => (float) $item->quantity,
-                'produite' => $produite,
-                'restante' => max(0.0, (float) $item->quantity - $produite),
                 'dispo' => $stock ? (float) $stock->qty - (float) $stock->reserved : 0.0,
-                'of' => $group->sortByDesc('id')->first(),
-                'eligible' => $eligibility[$order->id],
+                'produite' => $produite,
+                'restante' => $restante,
+                'of' => $of ? [
+                    'number' => $of->number,
+                    'status' => $of->status,
+                    'showUrl' => route('production.orders.show', $of->id),
+                ] : null,
+                'eligible' => $eligible,
+                'deliveryDate' => $order->delivery_date?->format('d/m/Y'),
+                'canCreateOf' => $canCreatePermission && $restante > 0 && $eligible,
+                'createOfUrl' => route('production.orders.create', [
+                    'order_id' => $order->id, 'product_id' => $item->product->id, 'qty' => $restante,
+                ]),
             ];
-        });
+        })->values();
 
-        return view('production.orders.mto', ['rows' => $rows]);
+        return Inertia::render('Production/Mto/Index', [
+            'rows' => $rows,
+            'links' => [
+                'eligibleUrl' => route('production.orders.eligible'),
+                'mtsUrl' => route('production.orders.mts'),
+                'dashboardUrl' => route('production.dashboard'),
+            ],
+        ]);
     }
 
     /**
