@@ -10,6 +10,7 @@ use App\Modules\Production\Services\SchedulingConflictService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Inertia\Inertia;
 
 class ProductionPlanningController extends Controller
 {
@@ -21,7 +22,7 @@ class ProductionPlanningController extends Controller
         $this->middleware('permission:production.create')->only(['replan']);
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): \Inertia\Response
     {
         $horizon = (int) $request->input('horizon', 7);
         $horizon = max(1, min(60, $horizon));
@@ -41,7 +42,66 @@ class ProductionPlanningController extends Controller
         // [PROD-01 Phase 8] Détection — pas résolution. Le planificateur décide.
         $conflits = $this->conflicts->detect();
 
-        return view('production.planning.index', compact('plan', 'planMachine', 'planTeam', 'horizon', 'ofActifs', 'lignes', 'conflits'));
+        // [REACT-01E] Seul calcul fait ici : un ratio de présentation combinant
+        // deux totaux DÉJÀ calculés par PlanningService (total_planned_h /
+        // total_capacity_h) — c'est exactement ce que faisait le Blade
+        // historique en tête de vue ($tauxGlobal), simplement déplacé du
+        // template vers le contrôleur pour que React n'ait aucun calcul à
+        // faire. Aucun terme de charge/capacité/occupation n'est recalculé.
+        $tauxGlobal = $plan['total_capacity_h'] > 0
+            ? round($plan['total_planned_h'] / $plan['total_capacity_h'] * 100)
+            : 0;
+
+        return Inertia::render('Production/Planning/Index', [
+            'horizon' => $horizon,
+            'tauxGlobal' => $tauxGlobal,
+            'plan' => $this->wrapPlan($plan),
+            'planMachine' => $this->wrapPlan($planMachine),
+            'planTeam' => $this->wrapPlan($planTeam),
+            'conflicts' => $conflits->map(fn ($c) => [
+                'resourceLabel' => $c['resource_label'],
+                'ofANumber' => $c['of_a']->number,
+                'ofBNumber' => $c['of_b']->number,
+                'overlapStart' => $c['overlap_start']->format('d/m H:i'),
+                'overlapEnd' => $c['overlap_end']->format('d/m H:i'),
+                'overlapMinutes' => $c['overlap_minutes'],
+            ])->values(),
+            'canReplan' => $request->user()->can('production.create'),
+            'lignes' => $lignes->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'status' => $l->status])->values(),
+            'ofActifs' => $ofActifs->map(fn ($of) => [
+                'id' => $of->id,
+                'number' => $of->number,
+                'productName' => $of->product?->name,
+                'clientName' => $of->client?->trade_name ?? $of->client?->name,
+                'status' => $of->status,
+                'statusLabel' => $of->statusLabel(),
+                'productionLineId' => $of->production_line_id,
+                'dateFabricationPrevue' => $of->date_fabrication_prevue?->format('Y-m-d'),
+                'dateFinPrevue' => $of->date_fin_prevue?->format('Y-m-d'),
+                // Comparaison de date pure présentation (comme le Blade
+                // historique), calculée ici plutôt qu'avec l'horloge du
+                // navigateur — jamais recalculée côté React.
+                'enRetard' => (bool) ($of->date_fin_prevue && $of->date_fin_prevue->isPast()
+                    && in_array($of->status, ['lance', 'en_cours', 'suspendu'], true)),
+                'showUrl' => route('production.orders.show', $of),
+                'replanUrl' => route('production.planning.replan', $of),
+            ])->values(),
+            'links' => [
+                'downtimesUrl' => route('production.downtimes'),
+                'planningUrl' => route('production.planning'),
+            ],
+        ]);
+    }
+
+    /** @param array{horizon:int,rows:\Illuminate\Support\Collection,overloaded:int,total_planned_h:float,total_capacity_h:float} $plan */
+    private function wrapPlan(array $plan): array
+    {
+        return [
+            'rows' => $plan['rows']->values(),
+            'overloaded' => $plan['overloaded'],
+            'totalPlannedH' => $plan['total_planned_h'],
+            'totalCapacityH' => $plan['total_capacity_h'],
+        ];
     }
 
     /**

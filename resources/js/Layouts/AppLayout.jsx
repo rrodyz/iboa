@@ -20,8 +20,8 @@ export default function AppLayout({ children }) {
                         {nav.mtoUrl && <Link href={nav.mtoUrl} className="hover:text-emerald-700">MTO</Link>}
                         {nav.mtsUrl && <Link href={nav.mtsUrl} className="hover:text-emerald-700">MTS</Link>}
                         {nav.mrpUrl && <Link href={nav.mrpUrl} className="hover:text-emerald-700">MRP</Link>}
+                        {nav.planningUrl && <Link href={nav.planningUrl} className="hover:text-emerald-700">Planning</Link>}
                         {nav.ofUrl && <a href={nav.ofUrl} className="hover:text-emerald-700">OF</a>}
-                        {nav.planningUrl && <a href={nav.planningUrl} className="hover:text-emerald-700">Planning</a>}
                     </nav>
                 </div>
                 <span className="text-sm text-gray-600">{auth?.user?.name ?? '—'}</span>
