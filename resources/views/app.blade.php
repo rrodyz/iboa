@@ -12,6 +12,7 @@
         UNIQUEMENT react.jsx (CSS inclus par l'entrypoint) — jamais app.js,
         donc jamais Turbo ni Alpine. Voir REACT-01A pour la preuve d'isolation.
     --}}
+    @viteReactRefresh
     @vite('resources/js/react.jsx')
     @inertiaHead
 </head>

@@ -9,6 +9,15 @@ export default defineConfig(({ command }) => ({
     // résolvent depuis le fichier CSS lui-même, quel que soit le point de
     // montage. Le helper @vite PHP continue de préfixer via asset().
     base: '',
+    // [REACT-01B Phase 2 — CSP] Sans host explicite, Vite peut se lier à ::1
+    // (IPv6) sur cette machine et écrire public/hot en conséquence — la CSP
+    // (SecurityHeaders.php, non modifié ici) contient des sources [::1]:*
+    // invalides pour Chrome (warnings console), donc jamais fiable. Fixé en
+    // IPv4 explicite plutôt que d'élargir la CSP — même correctif déjà
+    // validé sur le dépôt principal.
+    server: {
+        host: '127.0.0.1',
+    },
     plugins: [
         laravel({
             // [A3-UI-V2] react.jsx est un entrypoint SÉPARÉ de app.js, jamais
