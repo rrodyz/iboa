@@ -259,13 +259,40 @@ class ProductionOrderController extends Controller
      *              − stock disponible − production déjà planifiée.
      * (Demande prévisionnelle = 0 : pas de module de prévision à ce jour.)
      */
-    public function mts(Request $request): View
+    public function mts(Request $request): \Inertia\Response
     {
         // [MTS §2] Le calcul du besoin net vit dans NetRequirementService : les
         // propositions d'OF du MRP appliquent la MEME regle, et deux
         // implementations d'une meme regle de gestion finissent par diverger.
-        return view('production.orders.mts', [
-            'rows' => app(NetRequirementService::class)->forMtsProducts(),
+        // [REACT-01D] Résultat transmis tel quel — aucun terme (cible, seuil,
+        // sécurité, disponible, plan, reçu, besoin, état) n'est recalculé côté
+        // React ; seule la mise en forme change.
+        $rows = app(NetRequirementService::class)->forMtsProducts();
+
+        return Inertia::render('Production/Mts/Index', [
+            'rows' => $rows->map(fn ($r) => [
+                'productId' => $r['p']->id,
+                'productName' => $r['p']->name,
+                'productReference' => $r['p']->reference,
+                'editUrl' => route('products.edit', $r['p']),
+                'physique' => $r['physique'],
+                'reserve' => $r['reserve'],
+                'dispo' => $r['dispo'],
+                'client' => $r['client'],
+                'recu' => $r['recu'],
+                'seuil' => $r['seuil'],
+                'cible' => $r['cible'],
+                'plan' => $r['plan'],
+                'besoin' => $r['besoin'],
+                'etat' => $r['etat'],
+                'canCreateOf' => $request->user()->can('production.create') && $r['besoin'] > 0,
+                'createOfUrl' => route('production.orders.create', ['product_id' => $r['p']->id, 'qty' => $r['besoin']]),
+            ])->values(),
+            'links' => [
+                'mtoUrl' => route('production.orders.mto'),
+                'eligibleUrl' => route('production.orders.eligible'),
+                'ofIndexUrl' => route('production.orders.index'),
+            ],
         ]);
     }
 

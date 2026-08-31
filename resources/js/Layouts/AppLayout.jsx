@@ -1,8 +1,8 @@
-// [A3-UI-V2 — REACT-01A/C] Layout minimal de validation. Pas la vraie sidebar
-// ERP (1045 lignes Blade) — juste de quoi prouver utilisateur/nav/contenu/
-// flash/permissions/CSS fonctionnent, plus une nav minimale (Phase 17
-// REACT-01C) vers les pages déjà migrées + les modules Blade majeurs.
-// La vraie sidebar complète arrive en lot ultérieur.
+// [A3-UI-V2 — REACT-01A/C/D] Layout minimal de validation. Pas la vraie
+// sidebar ERP (1045 lignes Blade) — juste de quoi prouver utilisateur/nav/
+// contenu/flash/permissions/CSS fonctionnent, plus une nav minimale (Phase 17
+// REACT-01C, étendue Phase 23 REACT-01D) vers les pages déjà migrées + les
+// modules Blade restants. La vraie sidebar complète arrive en lot ultérieur.
 import { usePage, Link } from '@inertiajs/react';
 
 export default function AppLayout({ children }) {
@@ -18,8 +18,8 @@ export default function AppLayout({ children }) {
                         {nav.dashboardUrl && <Link href={nav.dashboardUrl} className="hover:text-emerald-700">Dashboard</Link>}
                         {nav.productionDashboardUrl && <Link href={nav.productionDashboardUrl} className="hover:text-emerald-700">Production</Link>}
                         {nav.mtoUrl && <Link href={nav.mtoUrl} className="hover:text-emerald-700">MTO</Link>}
-                        {nav.mtsUrl && <a href={nav.mtsUrl} className="hover:text-emerald-700">MTS</a>}
-                        {nav.mrpUrl && <a href={nav.mrpUrl} className="hover:text-emerald-700">MRP</a>}
+                        {nav.mtsUrl && <Link href={nav.mtsUrl} className="hover:text-emerald-700">MTS</Link>}
+                        {nav.mrpUrl && <Link href={nav.mrpUrl} className="hover:text-emerald-700">MRP</Link>}
                         {nav.ofUrl && <a href={nav.ofUrl} className="hover:text-emerald-700">OF</a>}
                         {nav.planningUrl && <a href={nav.planningUrl} className="hover:text-emerald-700">Planning</a>}
                     </nav>
