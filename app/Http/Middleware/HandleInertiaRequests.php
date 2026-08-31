@@ -46,6 +46,15 @@ class HandleInertiaRequests extends Middleware
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
                 ] : null,
+                // [REACT-01B — fix Phase 1] super_admin autorise via
+                // Gate::before() (AppServiceProvider), jamais via des
+                // permissions Spatie explicitement assignées au rôle — donc
+                // getAllPermissions() renvoie [] pour lui. Sans is_super_admin,
+                // le frontend croirait ce rôle sans aucun droit alors que le
+                // serveur l'autorise partout. Le mécanisme d'autorisation
+                // serveur (Gate/middleware permission:*) n'est pas touché ;
+                // ceci n'est qu'un signal UX pour le helper can() côté React.
+                'is_super_admin' => fn () => $request->user()?->hasRole('super_admin') ?? false,
                 'permissions' => fn () => $request->user()
                     ? $request->user()->getAllPermissions()->pluck('name')->values()
                     : [],
