@@ -1778,3 +1778,23 @@ if (app()->environment('local')) {
         return redirect('/dashboard');
     })->name('dev.login');
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// [A3-UI-V2 — REACT-01A] Route de validation infra Inertia/React. Temporaire,
+// isolée, ne remplace AUCUNE route métier existante. Aucune donnée métier.
+// ═══════════════════════════════════════════════════════════════════════════
+Route::middleware('auth')->prefix('ui-v2')->name('ui-v2.')->group(function () {
+    Route::get('smoke', function (\Illuminate\Http\Request $request) {
+        return \Inertia\Inertia::render('ReactSmoke/Index', [
+            'examplePermission' => 'production.view',
+            'hasExamplePermission' => $request->user()->can('production.view'),
+            'dashboardUrl' => route('dashboard'),
+            'smokeUrl' => route('ui-v2.smoke'),
+            'flashActionUrl' => route('ui-v2.smoke.flash'),
+        ]);
+    })->name('smoke');
+
+    Route::post('smoke/flash', function () {
+        return back()->with('success', 'Flash déclenché depuis React-01A — pont Laravel -> Inertia -> React confirmé.');
+    })->name('smoke.flash');
+});

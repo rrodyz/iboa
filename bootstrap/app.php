@@ -30,6 +30,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // [CONCURRENCE-MULTI-USER] Anti-double-soumission sur tous les POST
             // (s'active uniquement si le champ _idempotency_key est présent)
             \App\Http\Middleware\IdempotencyMiddleware::class,
+            // [A3-UI-V2] Sans effet sur les routes Blade non migrées (elles ne
+            // rendent jamais Inertia::render()) — pas une bascule globale.
+            \App\Http\Middleware\HandleInertiaRequests::class,
         ]);
         // [SEC-PHASE2 §7] Canal API : un compte désactivé est refusé à chaque
         // requête, indépendamment de l'existence de son token.
