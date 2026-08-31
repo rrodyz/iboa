@@ -28,20 +28,30 @@ function dashAdmin(): User
 it('affiche les KPIs X3 rangée 2 sur le dashboard production', function () {
     $this->actingAs(dashAdmin());
 
+    // [REACT-01C] Page Inertia — les libellés "OF à lancer"/"Tonnage
+    // produit"/... n'existent que dans le composant React (pas de SSR) ; on
+    // vérifie les données qu'ils affichent : les clés kpis correspondantes.
     $this->get(route('production.dashboard'))
         ->assertOk()
-        ->assertSee('OF à lancer')->assertSee('Tonnage produit')
-        ->assertSee('Bobines')->assertSee('Machines')
-        ->assertSee('NC ouvertes')->assertSee('Marge estimée');
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->has('kpis.of_a_lancer')->has('kpis.tonnage')
+            ->has('kpis.coils_dispo')->has('kpis.machines_dispo')
+            ->has('kpis.nc_ouvertes')->has('kpis.marge_estimee')
+            ->etc()
+        );
 });
 
 it('affiche la chaîne de production visuelle avec ses étapes', function () {
     $this->actingAs(dashAdmin());
 
-    $this->get(route('production.dashboard'))
-        ->assertOk()
-        ->assertSee('Chaîne de production')
-        ->assertSee('Commande client')->assertSee('Réservation matière')
-        ->assertSee('Contrôle qualité')->assertSee('Stock PF')
-        ->assertSee('Livraison')->assertSee('Encaissement');
+    // [REACT-01C] Idem — la chaîne de production est transmise dans
+    // "chaine", chaque étape avec son libellé exact, rendue côté React.
+    $labels = collect($this->get(route('production.dashboard'))->assertOk()->inertiaProps('chaine'))->pluck('label');
+
+    expect($labels)->toContain('Commande client')
+        ->and($labels)->toContain('Réservation matière')
+        ->and($labels)->toContain('Contrôle qualité')
+        ->and($labels)->toContain('Stock PF')
+        ->and($labels)->toContain('Livraison')
+        ->and($labels)->toContain('Encaissement');
 });

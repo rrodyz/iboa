@@ -55,7 +55,10 @@ it('renders the production dashboard', function () {
     $this->actingAs(rpAdmin());
     rpSeed();
 
-    $this->get(route('production.dashboard'))->assertOk()->assertSee('Tableau de bord production');
+    // [REACT-01C] Page Inertia — plus de rendu serveur du titre (pas de SSR),
+    // on vérifie le composant rendu.
+    $this->get(route('production.dashboard'))->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->component('Production/Dashboard/Index'));
 });
 
 it('renders each report type', function () {

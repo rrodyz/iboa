@@ -181,7 +181,12 @@ it('UAT-5 — deux OF planifiés sur la même machine profileuse : conflit déte
         ->and($conflits->first()['resource_label'])->toBe('Ligne profilage M1')
         ->and($conflits->first()['overlap_minutes'])->toBe(120.0);
 
+    // [REACT-01E] Page Inertia — on vérifie le conflit transmis dans props,
+    // pas un texte "conflit(s) d'ordonnancement détecté(s)" rendu serveur.
     $this->get(route('production.planning'))->assertOk()
-        ->assertSee('conflit(s) d\'ordonnancement détecté(s)', false)
-        ->assertSee('OF-UAT-TOLE-1');
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('conflicts.0.resourceLabel', 'Ligne profilage M1')
+            ->where('conflicts.0.overlapMinutes', 120)
+            ->etc()
+        );
 });

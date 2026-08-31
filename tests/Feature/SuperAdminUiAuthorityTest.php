@@ -15,7 +15,7 @@ use Spatie\Permission\Models\Role;
 
 uses(\Tests\Concerns\RefreshDatabase::class);
 
-function saCompany(): Company
+function suaCompany(): Company
 {
     $fy = FiscalYear::firstOrCreate(['label' => 'SA-2026'], ['starts_at' => '2026-01-01', 'ends_at' => '2026-12-31', 'status' => 'ouvert', 'is_current' => true]);
     $co = Company::firstOrCreate(['name' => 'SA Co'], ['email' => 'sa@oa-metal.test', 'current_fiscal_year_id' => $fy->id]);
@@ -25,7 +25,7 @@ function saCompany(): Company
 }
 
 it('un utilisateur régulier a des permissions effectives normales, is_super_admin=false', function () {
-    $co = saCompany();
+    $co = suaCompany();
     $role = Role::firstOrCreate(['name' => 'sa_regular', 'guard_name' => 'web']);
     $role->givePermissionTo(Permission::firstOrCreate(['name' => 'production.view', 'guard_name' => 'web']));
     $u = User::factory()->create(['company_id' => $co->id, 'email_verified_at' => now()]);
@@ -40,7 +40,7 @@ it('un utilisateur régulier a des permissions effectives normales, is_super_adm
 });
 
 it('super_admin a is_super_admin=true même si getAllPermissions() est vide', function () {
-    $co = saCompany();
+    $co = suaCompany();
     $role = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
     $u = User::factory()->create(['company_id' => $co->id, 'email_verified_at' => now()]);
     $u->assignRole($role);
@@ -54,7 +54,7 @@ it('super_admin a is_super_admin=true même si getAllPermissions() est vide', fu
 });
 
 it('le serveur reste protégé pour super_admin comme pour tout rôle — Gate::before(), pas la donnée frontend', function () {
-    $co = saCompany();
+    $co = suaCompany();
     $role = Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
     $u = User::factory()->create(['company_id' => $co->id, 'email_verified_at' => now()]);
     $u->assignRole($role);

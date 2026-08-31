@@ -33,10 +33,12 @@ function bladeRegAdmin(): User
 // MtoReactMigrationTest.
 // [REACT-01D] 'production.orders.mts' et 'production.mrp' retirés à leur tour
 // — couverture déplacée vers MtsReactMigrationTest et MrpReactMigrationTest.
-// Planning/OF restent Blade dans ce lot.
+// [REACT-01E] 'production.planning' retiré à son tour — couverture déplacée
+// vers PlanningReactMigrationTest. OF/BOM/Routings restent Blade.
 $pages = [
-    'production.planning' => 'production.planning',
     'production.orders.index' => 'production.orders.index',
+    'production.bom.index' => 'production.bom.index',
+    'production.routings.index' => 'production.routings.index',
 ];
 
 foreach ($pages as $label => $routeName) {
