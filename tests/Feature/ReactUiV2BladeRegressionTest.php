@@ -28,12 +28,14 @@ function bladeRegAdmin(): User
 
 // [REACT-01B] 'dashboard' est retiré de cette liste — c'est désormais la
 // première page migrée vers Inertia/React (voir DashboardReactMigrationTest).
+// [REACT-01C] 'production.dashboard' et 'production.orders.mto' retirés à leur
+// tour — couverture déplacée vers ProductionDashboardReactMigrationTest et
+// MtoReactMigrationTest. MTS/MRP/Planning/OF restent Blade dans ce lot.
 $pages = [
-    'production.dashboard' => 'production.dashboard',
     'production.orders.mts' => 'production.orders.mts',
     'production.mrp' => 'production.mrp',
     'production.planning' => 'production.planning',
-    'production.orders.mto' => 'production.orders.mto',
+    'production.orders.index' => 'production.orders.index',
 ];
 
 foreach ($pages as $label => $routeName) {
