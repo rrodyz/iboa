@@ -14,6 +14,7 @@ use App\Models\SupplierPayment;
 use App\Services\UserHomeRoute;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
@@ -34,7 +35,14 @@ class DashboardController extends Controller
         // [SEC §15] Profils sans reports.view : accueil neutre (bandeau
         // validations + message) — aucun KPI financier calculé ni transmis.
         if (! auth()->user()->can('reports.view')) {
-            return view('dashboard', compact('pendingCount', 'mesValidations'));
+            return Inertia::render('Dashboard/Index', [
+                'hasReportsView' => false,
+                'pendingCount' => $pendingCount,
+                'company' => $this->companyProp(),
+                'links' => [
+                    'validationsUrl' => route('validations.index'),
+                ],
+            ]);
         }
 
         $now       = now();
@@ -411,26 +419,75 @@ class DashboardController extends Controller
             ->groupBy('products.id', 'products.name')
             ->orderByDesc('ca_ht')->limit(5)->get();
 
-        return view('dashboard', compact(
-            'revenueJour', 'revenuePrevJour', 'revenueMois', 'revenueAnnee',
-            'nbFacturesMois', 'nbClients', 'nbCommandesEnCours',
-            'encaissementsMois',
-            'facturesEnRetard', 'montantEnRetard',
-            'ruptureStock', 'soldeTresorerie',
-            'trendRevenue', 'trendEncaissements', 'trendJour',
-            'caParMois', 'encVsDec',
-            'ca30Days', 'ca30Labels', 'ca7Days', 'ca7Labels',
-            'caDaily', 'encDaily',
-            'topClients', 'topProduits', 'paymentsByMethod',
-            'cashAccounts', 'facturesAEncaisser',
-            'derniersEncaissements', 'dernieresCommandes',
-            'recentActivity',
-            'pendingCount', 'mesValidations', 'dernieresFactures', 'alertesStock',
-            'decaissementsMois', 'trendDecaissements',
-            'ofEnCours', 'ofEnRetard', 'stockCritique', 'alertesQualite',
-            'caAnnuel', 'treso30', 'treso30Labels', 'caParFamille', 'alertesVigilance',
-            'caHtMois', 'trendCaHt', 'montantCommandesEnCours',
-        ));
+        // [REACT-01B Phase 5] Le Blade « dashboard » historique ne rend qu'un
+        // sous-ensemble des variables ci-dessus (reliquat d'une maquette
+        // antérieure — voir matrice Phase 3) ; on n'embarque dans le payload
+        // Inertia QUE ce qui est effectivement affiché. Aucune requête/valeur
+        // n'est modifiée : uniquement la sélection de ce qui part au client.
+        return Inertia::render('Dashboard/Index', [
+            'hasReportsView' => true,
+            'pendingCount' => $pendingCount,
+            'company' => $this->companyProp(),
+            'kpis' => [
+                'caHtMois' => $caHtMois, 'trendCaHt' => $trendCaHt,
+                'soldeTresorerie' => $soldeTresorerie,
+                'encaissementsMois' => $encaissementsMois, 'trendEncaissements' => $trendEncaissements,
+                'decaissementsMois' => $decaissementsMois, 'trendDecaissements' => $trendDecaissements,
+            ],
+            'counters' => [
+                'nbCommandesEnCours' => $nbCommandesEnCours,
+                'montantCommandesEnCours' => $montantCommandesEnCours,
+                'commandesUrl' => route('ventes.commandes.index'),
+                'ofEnCours' => $ofEnCours,
+                'ofEnRetard' => $ofEnRetard,
+                'ofUrl' => route('production.orders.index'),
+                'stockCritique' => $stockCritique,
+                'stockUrl' => route('stocks.index'),
+                'alertesQualite' => $alertesQualite,
+                'qualiteUrl' => route('production.orders.index'),
+            ],
+            'charts' => [
+                'caAnnuel' => $caAnnuel,
+                'treso30' => $treso30,
+                'treso30Labels' => $treso30Labels,
+                'caParFamille' => $caParFamille,
+            ],
+            'recentActivity' => $recentActivity->map(fn ($a) => [
+                'createdAt' => $a->created_at->format('d/m H:i'),
+                'modelType' => class_basename($a->model_type ?? ''),
+                'action' => $a->action,
+                'docRef' => $a->doc_ref,
+                'tiers' => $a->tiers,
+                'userName' => $a->user_name,
+            ])->values(),
+            'alertesVigilance' => $alertesVigilance->values(),
+            'links' => [
+                'auditUrl' => route('audit.index'),
+                'validationsUrl' => route('validations.index'),
+                'directionDashboardUrl' => route('direction.dashboard'),
+                'newInvoiceUrl' => route('ventes.factures.create'),
+            ],
+        ]);
+    }
+
+    /**
+     * [REACT-01B] Société/exercice courant — helpers globaux, pas de props
+     * contrôleur avant migration Inertia (le Blade les lisait via currentCompany()
+     * directement dans la vue).
+     */
+    private function companyProp(): array
+    {
+        $company = currentCompany();
+        $fy = $company?->currentFiscalYear;
+
+        return [
+            'name' => $company?->name,
+            'fiscalYear' => $fy ? [
+                'year' => $fy->starts_at?->year,
+                'startsAt' => $fy->starts_at?->format('d/m/Y'),
+                'endsAt' => $fy->ends_at?->format('d/m/Y'),
+            ] : null,
+        ];
     }
 
     /**
