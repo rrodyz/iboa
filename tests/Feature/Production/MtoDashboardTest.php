@@ -56,10 +56,16 @@ it('affiche une ligne MTO sans OF, quantité produite nulle, non éligible par d
     ProductStock::create(['product_id' => $p->id, 'warehouse_id' => Warehouse::where('code', 'WMTOD')->value('id'), 'quantity' => 15, 'reserved_quantity' => 5, 'avg_cost' => 1000]);
     $order = mtoDashOrder($co, $p, 100);
 
+    // [REACT-01C] Page migrée Inertia/React : le HTML initial ne contient plus
+    // de texte rendu (pas de SSR) — on vérifie le payload de props transmis,
+    // équivalent exact de ce que le Blade historique affichait.
     $this->get(route('production.orders.mto'))->assertOk()
-        ->assertSee($order->number)
-        ->assertSee('Tôle bac A')
-        ->assertSee('Aucun'); // OF existant
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('rows.0.orderNumber', $order->number)
+            ->where('rows.0.productName', 'Tôle bac A')
+            ->where('rows.0.of', null)
+            ->etc()
+        );
 });
 
 it('calcule produite/restante depuis les OF réels liés à la commande et à l’article', function () {
@@ -99,9 +105,15 @@ it('marque une commande approuvée gérant comme éligible et affiche le lien Cr
     $order = mtoDashOrder($co, $p, 30);
     $order->update(['production_approved' => true, 'production_approval_fingerprint' => $order->productionFinancialFingerprint()]);
 
+    // [REACT-01C] Idem — plus de SSR, on vérifie eligible/canCreateOf (la
+    // décision transmise par le backend), pas les libellés React "Éligible"/
+    // "Créer OF" qui n'existent que dans le rendu client.
     $this->get(route('production.orders.mto'))->assertOk()
-        ->assertSee('Éligible')
-        ->assertSee('Créer OF');
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('rows.0.eligible', true)
+            ->where('rows.0.canCreateOf', true)
+            ->etc()
+        );
 });
 
 // [Clôture PROD-01 — section 8] Commande ENTIÈREMENT produite (quantity_produced
@@ -138,10 +150,16 @@ it('blocage financier : commande MTO ni approuvée ni réglée -> « Non couvert
     $client = \App\Models\Client::factory()->create(['payment_mode' => 'cash']);
     $order = mtoDashOrder($co, $p, 25, over: ['client_id' => $client->id]); // aucune approbation, aucun règlement
 
-    $response = $this->get(route('production.orders.mto'))->assertOk();
-    $response->assertSee($order->number)
-        ->assertSee('Non couverte');
-    $response->assertDontSee('Créer OF');
+    // [REACT-01C] Idem — le payload transmet eligible=false/canCreateOf=false ;
+    // "Non couverte" et le masquage de "Créer OF" sont un rendu client dérivé
+    // de ces deux booléens, jamais recalculés dans le composant.
+    $this->get(route('production.orders.mto'))->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('rows.0.orderNumber', $order->number)
+            ->where('rows.0.eligible', false)
+            ->where('rows.0.canCreateOf', false)
+            ->etc()
+        );
 });
 
 // Quantité en stock disponible affichée : dispo = quantity − reserved_quantity,
