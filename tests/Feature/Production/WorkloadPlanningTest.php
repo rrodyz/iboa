@@ -45,10 +45,16 @@ it('affiche la section de replanification sur le plan de charge', function () {
     $this->actingAs(planAdmin());
     $of = planOf();
 
+    // [REACT-01E] Page Inertia — on vérifie que l'OF actif est bien transmis
+    // dans ofActifs, pas un texte "Replanification des OF actifs" rendu côté
+    // serveur (le titre de section n'existe que dans le composant React).
     $this->get(route('production.planning'))
         ->assertOk()
-        ->assertSee('Replanification des OF actifs')
-        ->assertSee($of->number);
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('Production/Planning/Index')
+            ->where('ofActifs.0.number', $of->number)
+            ->etc()
+        );
 });
 
 it('déplace les dates prévues et réaffecte la ligne d\'un OF', function () {

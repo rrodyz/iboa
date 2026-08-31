@@ -38,5 +38,7 @@ it('flags overload', function(){
 });
 it('renders planning page', function(){
     $this->actingAs(plAdmin());
-    $this->get(route('production.planning'))->assertOk()->assertSee('Plan de charge');
+    // [REACT-01E] Page Inertia — plus de SSR, on vérifie le composant rendu.
+    $this->get(route('production.planning'))->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->component('Production/Planning/Index'));
 });
