@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ command }) => ({
     // [Typo globale] base relative : les url() du CSS bundlé (fontes Inter
@@ -10,9 +11,14 @@ export default defineConfig(({ command }) => ({
     base: '',
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/css/erp-theme.css', 'resources/js/app.js'],
+            // [A3-UI-V2] react.jsx est un entrypoint SÉPARÉ de app.js, jamais
+            // co-chargé sur la même page : app.js (Turbo/Alpine) reste seul
+            // sur les vues Blade historiques, react.jsx (Inertia/React) seul
+            // sur le root Inertia. Voir resources/views/app.blade.php.
+            input: ['resources/css/app.css', 'resources/css/erp-theme.css', 'resources/js/app.js', 'resources/js/react.jsx'],
             refresh: true,
         }),
+        react(),
     ],
     build: {
         // Cible ES2020 : navigateurs modernes = bundle 5-8% plus léger (no legacy polyfills)
