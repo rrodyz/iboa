@@ -1,15 +1,29 @@
-// [A3-UI-V2 — REACT-01A] Layout minimal de validation. Pas la vraie sidebar
+// [A3-UI-V2 — REACT-01A/C] Layout minimal de validation. Pas la vraie sidebar
 // ERP (1045 lignes Blade) — juste de quoi prouver utilisateur/nav/contenu/
-// flash/permissions/CSS fonctionnent. La vraie sidebar arrive en lot ultérieur.
-import { usePage } from '@inertiajs/react';
+// flash/permissions/CSS fonctionnent, plus une nav minimale (Phase 17
+// REACT-01C) vers les pages déjà migrées + les modules Blade majeurs.
+// La vraie sidebar complète arrive en lot ultérieur.
+import { usePage, Link } from '@inertiajs/react';
 
 export default function AppLayout({ children }) {
     const { auth, flash } = usePage().props;
+    const nav = usePage().props.nav ?? {};
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <header className="bg-white border-b border-gray-300 px-4 py-2.5 flex items-center justify-between">
-                <span className="text-[17px] font-bold text-gray-900">A3 ERP — UI V2</span>
+            <header className="bg-white border-b border-gray-300 px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-4 flex-wrap">
+                    <span className="text-[17px] font-bold text-gray-900">A3 ERP — UI V2</span>
+                    <nav className="flex items-center gap-3 text-[12.5px] font-medium text-gray-600">
+                        {nav.dashboardUrl && <Link href={nav.dashboardUrl} className="hover:text-emerald-700">Dashboard</Link>}
+                        {nav.productionDashboardUrl && <Link href={nav.productionDashboardUrl} className="hover:text-emerald-700">Production</Link>}
+                        {nav.mtoUrl && <Link href={nav.mtoUrl} className="hover:text-emerald-700">MTO</Link>}
+                        {nav.mtsUrl && <a href={nav.mtsUrl} className="hover:text-emerald-700">MTS</a>}
+                        {nav.mrpUrl && <a href={nav.mrpUrl} className="hover:text-emerald-700">MRP</a>}
+                        {nav.ofUrl && <a href={nav.ofUrl} className="hover:text-emerald-700">OF</a>}
+                        {nav.planningUrl && <a href={nav.planningUrl} className="hover:text-emerald-700">Planning</a>}
+                    </nav>
+                </div>
                 <span className="text-sm text-gray-600">{auth?.user?.name ?? '—'}</span>
             </header>
 

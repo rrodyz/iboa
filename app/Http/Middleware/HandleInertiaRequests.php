@@ -65,6 +65,18 @@ class HandleInertiaRequests extends Middleware
                 'warning' => fn () => $request->session()->get('warning'),
                 'info' => fn () => $request->session()->get('info'),
             ],
+            // [REACT-01C Phase 17] Nav minimale partagée par AppLayout — UX
+            // uniquement (masque un lien qu'on n'a pas le droit de voir) ; les
+            // routes elles-mêmes restent protégées indépendamment de ceci.
+            'nav' => fn () => $request->user() ? [
+                'dashboardUrl' => route('dashboard'),
+                'productionDashboardUrl' => $request->user()->can('production.view') ? route('production.dashboard') : null,
+                'mtoUrl' => $request->user()->can('production.view') ? route('production.orders.mto') : null,
+                'mtsUrl' => $request->user()->can('production.view') ? route('production.orders.mts') : null,
+                'mrpUrl' => $request->user()->can('production.view') ? route('production.mrp') : null,
+                'ofUrl' => $request->user()->can('production.view') ? route('production.orders.index') : null,
+                'planningUrl' => $request->user()->can('production.view') ? route('production.planning') : null,
+            ] : [],
         ];
     }
 }

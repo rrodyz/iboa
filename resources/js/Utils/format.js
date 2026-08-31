@@ -20,3 +20,18 @@ export function trendLabel(trend, inverse = false) {
         className: good ? 'text-emerald-600' : 'text-red-600',
     };
 }
+
+// [REACT-01C] Portage 1:1 du helper $spark() de production/dashboard.blade.php
+// — normalise une série (ex: prod7Days) en points SVG polyline 100x28.
+// Pure présentation, aucune donnée métier recalculée.
+export function sparklinePoints(serie) {
+    if (!serie || serie.length === 0) return '';
+    const max = Math.max(...serie, 1);
+    return serie
+        .map((v, i) => {
+            const x = Math.round(i * (100 / Math.max(serie.length - 1, 1)) * 10) / 10;
+            const y = Math.round((26 - (v / max) * 22) * 10) / 10;
+            return `${x},${y}`;
+        })
+        .join(' ');
+}
