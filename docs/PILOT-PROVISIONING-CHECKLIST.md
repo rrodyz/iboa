@@ -46,9 +46,11 @@ chaque exigence. Aucune valeur secrète dans ce document.
       strict nécessaire (pas root applicatif)
 - [ ] `mysqldump` et `mysql` (client CLI) installés — requis par
       `spatie/laravel-backup` et par la procédure de restauration manuelle
-- [ ] Stratégie de données pilote tranchée par le commanditaire (base vide /
-      copie assainie / copie réelle — voir PILOT-SERVER-SPEC.md, section
-      "Stratégie de données pilote")
+- [x] Stratégie de données pilote tranchée par le commanditaire — **A : base
+      vide + référentiels** (décidé 2026-09-03, voir PILOT-SERVER-SPEC.md,
+      section "Stratégie de données pilote") — base créée vide, seuls les
+      référentiels (catalogue articles, plan comptable, etc.) sont seedés,
+      aucune donnée client/commande réelle
 
 ## 6 — Redis
 

@@ -94,14 +94,23 @@ TO PROVISION
 
 ## Stratégie de données pilote
 
-Décision métier non prise dans cette mission :
+Décidé par le commanditaire le 2026-09-03 :
 
 ```
 PILOT DATA STRATEGY:
-TO DECIDE
+A — Base vide + référentiels
 ```
 
-Options : base vide, copie assainie du dev, copie opérationnelle réelle.
-Chaque option change le profil de risque (RGPD/confidentialité pour une
-copie réelle, réalisme réduit pour une base vide) — à trancher par le
-commanditaire, pas par ce script ni cette mission.
+Justification : serveur pilote non provisionné, HTTPS non prêt, sauvegarde
+jamais répétée en conditions réelles — exposer des données réelles (option
+C) est prématuré vu l'état d'infrastructure actuel. `iboa_erp` (dev) est
+déjà quasi vide depuis le reset transactionnel du 2026-08-04 (aucun tiers
+réel restant), ce qui réduit l'intérêt d'une copie assainie (option B) par
+rapport à son coût (procédure de sanitization à écrire, inexistante à ce
+jour). Option A retenue : valide la mécanique/les workflows/les
+permissions sans aucun risque RGPD/confidentialité pour ce premier pilote.
+
+Options écartées : B — copie assainie du dev/QA (à réévaluer si un
+scénario réaliste est requis avant saisie utilisateur réelle) ; C — copie
+opérationnelle réelle (à écarter tant que HTTPS + répétition de sauvegarde
++ serveur réel ne sont pas en place).
