@@ -197,6 +197,12 @@ document.addEventListener('turbo:before-cache', function () {
     // Exécuter tous les cleanups de page (charts ApexCharts, etc.)
     window.__turboCleanups.forEach(fn => { try { fn(); } catch (e) {} });
     window.__turboCleanups = [];
+
+    // Alpine (en dernier) : retirer les clones x-for/x-if AVANT que Turbo clone le
+    // DOM. Sinon ils sont figés dans le snapshot et, à la restauration (retour
+    // arrière), Alpine les ré-initialise hors de leur scope de boucle
+    // → "ReferenceError: fn is not defined" (A3-QA-014).
+    Alpine.destroyTree(document.body);
 });
 
 // ── Turbo : init au chargement de chaque page ─────────────────────────────────
