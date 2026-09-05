@@ -169,18 +169,52 @@ it('pas de conflit : ressources différentes ou fenêtres non chevauchantes → 
         ->assertInertia(fn (Assert $page) => $page->where('conflicts', [])->etc());
 });
 
-it('downtime machine réduit la capacité nette, jamais un double-nettage côté frontend', function () {
+/**
+ * La capacité brute vaut capacity_hours_per_day × jours OUVRÉS de l'horizon
+ * (CapacityCalendarService exclut samedi/dimanche et les jours fériés déclarés).
+ * La date d'exécution doit donc être figée : lancé un samedi, un horizon d'un
+ * jour vaut 0 jour ouvré, la capacité brute vaut 0 et la relation
+ * « nette = brute − arrêts » n'est pas observable, la capacité nette étant
+ * plancherée à 0 (PlanningService : max(0, capacité − arrêts), jamais négative).
+ * Les deux règles sont donc vérifiées séparément, chacune sur une date connue.
+ */
+function planReactDowntimeRow(string $frozenDate): array
+{
+    test()->travelTo(\Illuminate\Support\Carbon::parse($frozenDate.' 09:00:00'));
+
     $co = planReactCo();
     planReactUser();
     $machine = ProductionMachine::create(['company_id' => $co->id, 'code' => 'PLR-M4', 'name' => 'M4', 'type' => 'profilage', 'hourly_cost' => 0, 'status' => 'active', 'is_active' => true]);
-    $wc = WorkCenter::create(['company_id' => $co->id, 'code' => 'PLR-C3', 'name' => 'Centre M4', 'machine_id' => $machine->id, 'capacity_hours_per_day' => 8, 'cost_per_hour' => 5000, 'efficiency_rate' => 100, 'is_active' => true]);
+    WorkCenter::create(['company_id' => $co->id, 'code' => 'PLR-C3', 'name' => 'Centre M4', 'machine_id' => $machine->id, 'capacity_hours_per_day' => 8, 'cost_per_hour' => 5000, 'efficiency_rate' => 100, 'is_active' => true]);
     \App\Modules\Production\Models\ProductionDowntime::create(['company_id' => $co->id, 'machine_id' => $machine->id, 'started_at' => now(), 'duration_minutes' => 240, 'reason' => 'panne']);
 
-    $rows = $this->get(route('production.planning', ['horizon' => 1]))->assertOk()->inertiaProps('planMachine')['rows'];
-    $row = collect($rows)->firstWhere('id', $machine->id);
+    $rows = test()->get(route('production.planning', ['horizon' => 1]))->assertOk()->inertiaProps('planMachine')['rows'];
 
-    expect($row['downtime_h'])->toEqual(4.0)
-        ->and($row['net_capacity_h'])->toEqual($row['capacity_h'] - 4.0);
+    return collect($rows)->firstWhere('id', $machine->id);
+}
+
+it('downtime machine réduit la capacité nette un jour ouvré, jamais un double-nettage côté frontend', function () {
+    // Lundi 2026-09-07 : 1 jour ouvré dans l'horizon → capacité brute 8 h.
+    $row = planReactDowntimeRow('2026-09-07');
+
+    expect($row['capacity_h'])->toEqual(8.0)
+        ->and($row['downtime_h'])->toEqual(4.0)
+        ->and($row['net_capacity_h'])->toEqual($row['capacity_h'] - 4.0)
+        ->and($row['net_capacity_h'])->toEqual(4.0);
+
+    test()->travelBack();
+});
+
+it('un week-end ne produit aucune capacité et la capacité nette reste plancherée à 0, jamais négative', function () {
+    // Samedi 2026-09-05 : 0 jour ouvré → capacité brute 0 ; l'arrêt déclaré est
+    // toujours remonté tel quel mais ne peut pas rendre la capacité nette négative.
+    $row = planReactDowntimeRow('2026-09-05');
+
+    expect($row['capacity_h'])->toEqual(0.0)
+        ->and($row['downtime_h'])->toEqual(4.0)
+        ->and($row['net_capacity_h'])->toEqual(0.0);
+
+    test()->travelBack();
 });
 
 it('super_admin voit le planning malgré getAllPermissions() vide', function () {
