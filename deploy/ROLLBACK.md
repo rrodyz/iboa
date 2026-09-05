@@ -58,6 +58,20 @@ php artisan backup:list
 #    documents créés entre le backup et l'incident).
 ```
 
+**Après TOUTE restauration / reseed de la base** (rollback ou non), enchaîner
+OBLIGATOIREMENT, dans cet ordre, avant `php artisan up` :
+
+```bash
+php artisan cache:clear
+php artisan permission:cache-reset   # [R1] cache Spatie rôles↔permissions (par identifiant) — un restore
+                                     # le laisse obsolète : les utilisateurs héritent des droits d'un autre rôle
+sudo supervisorctl restart "a3erp:*" # les workers gardent le registre en mémoire
+php artisan a3:audit-security        # vérification des rôles/permissions (lecture seule) — doit sortir sans anomalie
+```
+
+Si `permission:cache-reset` échoue, la base restaurée n'est PAS remise en
+service (`php artisan up` interdit) tant que la cause n'est pas corrigée.
+
 ## 3 — Storage
 
 Restaurer uniquement si nécessaire (voir ci-dessus), depuis la même
@@ -67,12 +81,14 @@ archive de sauvegarde.
 
 ```bash
 php artisan cache:clear
+php artisan permission:cache-reset   # [R1] obligatoire après tout restore/reseed (voir §2)
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 sudo systemctl reload php8.2-fpm
 sudo supervisorctl restart "a3erp:*"
+php artisan a3:audit-security        # [R1] vérification permissions avant réouverture
 php artisan up
 ```
 

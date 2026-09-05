@@ -66,3 +66,8 @@ signalée par `backup:monitor` (email), à traiter séparément.
 
 Aucune restauration automatique n'est scriptée ici (risque). Procédure
 manuelle documentée dans `deploy/ROLLBACK.md`.
+
+Toute restauration (y compris un test de restauration sur un serveur qui
+sera remis en service) se termine par la séquence `cache:clear` →
+`permission:cache-reset` → restart des workers → `a3:audit-security` avant
+`php artisan up` (voir ROLLBACK.md §2 — [R1] cache Spatie obsolète après restore).

@@ -365,6 +365,11 @@ fi
 # ── 13/16. Caches Laravel ─────────────────────────────────────────────────────
 info "13/16 Reconstruction des caches Laravel..."
 php artisan cache:clear || error "cache:clear a échoué"
+# [R1] Le cache Spatie (rôles ↔ permissions, par identifiant) survit sinon à un
+# restore/reseed et fait résoudre les permissions d'un autre rôle. cache:clear
+# évince la clé du store ; permission:cache-reset vide aussi le registre en
+# mémoire. Fail-closed : sans reset prouvé, pas de remise en service.
+php artisan permission:cache-reset || error "permission:cache-reset a échoué — ne pas remettre l'application en service avec un cache d'autorisations potentiellement obsolète"
 php artisan config:cache || error "config:cache a échoué"
 php artisan route:cache || error "route:cache a échoué"
 php artisan view:cache || error "view:cache a échoué"
