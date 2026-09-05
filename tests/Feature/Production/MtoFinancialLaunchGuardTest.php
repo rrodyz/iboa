@@ -268,22 +268,31 @@ it('8. refuse une commande dont le client n\'est plus résoluble', function () {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 9 à 12 · ACOMPTE — le mode n'existe pas, et cette suite le prouve
+// 9 à 12 · ACOMPTE — le mode existe depuis R3, la liste reste CLOSE
 //
-// Ces quatre cas ne testent pas un mode « acompte » : ils établissent qu'il n'y
-// en a pas. Les tests précédents de l'application créaient des clients
-// `payment_mode => 'acompte'` et concluaient au bon fonctionnement du seuil ;
-// aucune fiche client ne pouvait porter cette valeur. C'est cette couverture
-// fictive qui a laissé BUG-A3-MTO-FIN-001 survivre. Voir BUG-A3-SALES-DEPOSIT-004.
+// Historiquement, ces cas établissaient qu'aucun mode « acompte » n'existait :
+// l'application créait des clients `payment_mode => 'acompte'` et concluait au
+// bon fonctionnement d'un seuil que rien n'appliquait — couverture fictive qui a
+// laissé BUG-A3-MTO-FIN-001 survivre. R3 ferme BUG-A3-SALES-DEPOSIT-004 : le mode
+// canonique 'deposit' existe et son seuil est réellement appliqué (matrice
+// complète dans DepositPaymentModeTest). Ce qui reste vérifié ici : la liste des
+// modes est CLOSE — le littéral français 'acompte' n'en fait toujours pas partie
+// et reste refusé — et le taux global ne contamine ni le comptant ni le crédit.
 // ═════════════════════════════════════════════════════════════════════════════
 
-it('9. n\'expose que deux modes de règlement, et le formulaire ne valide qu\'eux', function () {
-    expect(Client::PAYMENT_MODES)->toBe(['cash', 'credit']);
+it('9. n\'expose que les trois modes canoniques, et le formulaire ne valide qu\'eux', function () {
+    expect(Client::PAYMENT_MODES)->toBe(['cash', 'deposit', 'credit']);
 
     // La contrainte de saisie est la preuve utile : un mode absent des règles de
     // validation ne peut entrer dans la base par le chemin applicatif.
     $regles = (new \App\Http\Requests\Client\StoreClientRequest)->rules()['payment_mode'];
-    expect($regles)->toContain('in:cash,credit');
+    $accepte = fn (string $mode) => validator(['payment_mode' => $mode], ['payment_mode' => $regles])->passes();
+
+    expect($accepte('cash'))->toBeTrue()
+        ->and($accepte('deposit'))->toBeTrue()
+        ->and($accepte('credit'))->toBeTrue()
+        ->and($accepte('acompte'))->toBeFalse()
+        ->and($accepte('leasing'))->toBeFalse();
 });
 
 it('10. refuse un « acompte » forcé en base au lieu de lui appliquer un seuil', function () {

@@ -254,10 +254,14 @@
                     <div>
                         <label class="{{ $lbl }}">Mode de règlement</label>
                         <div class="relative"><select name="payment_mode" class="{{ $lk }}">
-                            @php $pm = old('payment_mode', $c->payment_mode ?? 'credit'); @endphp
-                            <option value="cash" @selected($pm==='cash')>Comptant</option>
-                            <option value="credit" @selected($pm==='credit')>Virement / Crédit</option>
+                            @php $pm = old('payment_mode', $c->payment_mode ?? \App\Models\Client::PAYMENT_CREDIT); @endphp
+                            @foreach(\App\Models\Client::PAYMENT_MODES as $mode)
+                                <option value="{{ $mode }}" @selected($pm === $mode)>{{ \App\Models\Client::PAYMENT_MODE_LABELS[$mode] }}</option>
+                            @endforeach
                         </select>{!! $caret !!}</div>
+                        @if($pm === \App\Models\Client::PAYMENT_DEPOSIT)
+                            <p class="mt-1 text-[11px] text-gray-500">Acompte minimum exigé avant lancement production — taux défini dans Paramétrage Vente.</p>
+                        @endif
                     </div>
                     <div><label class="{{ $lbl }}">Délai de règlement (jours)</label><input type="number" min="0" max="365" name="payment_days" value="{{ old('payment_days', $c->payment_days ?? 0) }}" class="{{ $inpR }}"></div>
                     <div><label class="{{ $lbl }}">Plafond crédit</label><input type="number" min="0" step="1" name="credit_limit" x-model="creditLimit" class="{{ $inpR }}"></div>

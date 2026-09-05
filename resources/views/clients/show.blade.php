@@ -176,7 +176,10 @@
                 {!! $row('Limite de crédit', $client->credit_limit ? $f($client->credit_limit).' FCFA' : null) !!}
                 {!! $row('Encours autorisé', $client->encours_autorise ? $f($client->encours_autorise).' FCFA' : null) !!}
                 {!! $row('Compte collectif', $client->compte_collectif) !!}
-                {!! $row('Mode de règlement', $client->payment_mode) !!}
+                {!! $row('Mode de règlement', $client->paymentModeLabel()) !!}
+                @if($client->isDeposit())
+                    {!! $row('Acompte minimum requis', rtrim(rtrim(number_format((float) (\App\Models\SalesSetting::current()->deposit_required_rate ?? 0), 2, ',', ' '), '0'), ',').' % du TTC') !!}
+                @endif
                 {!! $row('Délai paiement (j)', $client->payment_days) !!}
                 {!! $row('Conditions', $client->payment_terms ?? $client->condition_paiement) !!}
                 {!! $row('Régime fiscal', $client->tax_regime) !!}

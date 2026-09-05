@@ -31,22 +31,34 @@ class Client extends Model
     // lancement d'OF comparaient à « comptant » et « acompte », valeurs qu'aucun
     // client ne porte. Le comptant échappait donc au contrôle de paiement.
     //
-    // La liste est CLOSE, et ces deux valeurs sont les seules exploitables :
-    //   - `StoreClientRequest` / `UpdateClientRequest` valident `in:cash,credit` ;
-    //   - la liste déroulante de `clients/_form.blade.php` n'offre que ces deux
-    //     options ; `bon_preparations.payment_mode` est un ENUM('cash','credit') ;
-    //   - la colonne `clients.payment_mode` était elle-même un ENUM('cash','credit')
-    //     avant sa relaxation en varchar, faite pour la seule parité de tests
-    //     (migration 2026_07_24_170000, dont le `down()` restaure l'ENUM).
+    // La liste est CLOSE : validations, liste déroulante et garde financière
+    // dérivent toutes de PAYMENT_MODES — aucune chaîne « cash »/« deposit »/
+    // « credit » n'est écrite en dur ailleurs.
     //
-    // Aucun mode « acompte » n'existe donc, et il ne faut pas en déclarer un : le
-    // taux d'acompte exigible n'a aucun support structuré rattaché au client.
-    // Voir BUG-A3-SALES-DEPOSIT-004 et ProductionFinancialRequirement::TYPE_DEPOSIT.
-    const PAYMENT_CASH   = 'cash';
-    const PAYMENT_CREDIT = 'credit';
+    // [R3 — BUG-A3-SALES-DEPOSIT-004 fermé] Le mode ACOMPTE existe désormais :
+    // OA METAL exige les trois modes. Son seuil a UNE source canonique —
+    // `sales_settings.deposit_required_rate`, pourcentage 0-100 rattaché à la
+    // société et déjà validé par SalesConfigController. Les autres supports
+    // historiques (payment_terms.deposit_rate, item_categories.deposit_required,
+    // clients.condition_paiement en texte libre) ne pilotent PAS la garde : une
+    // chaîne libre ne décide pas d'une règle financière. Sans taux exploitable
+    // (absent, ≤ 0 ou > 100), la garde REFUSE — jamais de repli silencieux vers
+    // comptant ou crédit. `bon_preparations.payment_mode` reste un
+    // ENUM('cash','credit') : c'est le règlement d'un bon, pas le mode client,
+    // et il n'est jamais recopié depuis la fiche client.
+    const PAYMENT_CASH    = 'cash';
+    const PAYMENT_DEPOSIT = 'deposit';
+    const PAYMENT_CREDIT  = 'credit';
 
     /** Modes reconnus. Un mode absent de cette liste n'ouvre AUCUN droit. */
-    public const PAYMENT_MODES = [self::PAYMENT_CASH, self::PAYMENT_CREDIT];
+    public const PAYMENT_MODES = [self::PAYMENT_CASH, self::PAYMENT_DEPOSIT, self::PAYMENT_CREDIT];
+
+    /** Libellés métier — source unique pour les écrans et les éditions. */
+    public const PAYMENT_MODE_LABELS = [
+        self::PAYMENT_CASH    => 'Comptant',
+        self::PAYMENT_DEPOSIT => 'Acompte',
+        self::PAYMENT_CREDIT  => 'Crédit',
+    ];
 
     protected $fillable = [
         'site_id',
@@ -267,9 +279,22 @@ class Client extends Model
         return $this->payment_mode === self::PAYMENT_CASH;
     }
 
+    /** [R3] Client soumis à un acompte minimum avant lancement production. */
+    public function isDeposit(): bool
+    {
+        return $this->payment_mode === self::PAYMENT_DEPOSIT;
+    }
+
     public function isCredit(): bool
     {
         return $this->payment_mode === self::PAYMENT_CREDIT || !$this->payment_mode;
+    }
+
+    /** Libellé métier du mode de règlement (valeur brute si mode inconnu). */
+    public function paymentModeLabel(): string
+    {
+        return self::PAYMENT_MODE_LABELS[$this->payment_mode]
+            ?? ($this->payment_mode ?: '—');
     }
 
     public static function typeLabel(string $type): string

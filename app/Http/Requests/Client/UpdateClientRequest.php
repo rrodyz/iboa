@@ -20,7 +20,7 @@ class UpdateClientRequest extends FormRequest
             // [ANTI-DUPLICATE] Ignore l'enregistrement courant pour l'update.
             'code'             => 'nullable|string|max:30|unique:clients,code,' . $clientId,
             'type'             => 'required|in:particulier,entreprise,distributeur,minier',
-            'payment_mode'     => 'nullable|in:cash,credit',
+            'payment_mode'     => ['nullable', \Illuminate\Validation\Rule::in(\App\Models\Client::PAYMENT_MODES)],
             'email'            => 'nullable|email|max:150|unique:clients,email,' . $clientId,
             'phone'            => 'nullable|string|max:20',
             'mobile'           => 'nullable|string|max:20',

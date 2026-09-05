@@ -109,9 +109,10 @@ class ProductionFinancialEligibilityService
 
         // ─── 3. Règle dictée par le mode de règlement ────────────────────────
         return match ($client->payment_mode) {
-            Client::PAYMENT_CASH   => $this->exigenceComptant($order, $covered),
-            Client::PAYMENT_CREDIT => $this->exigenceCredit($order, $client, $covered, $lock),
-            default                => $this->refusConfiguration(
+            Client::PAYMENT_CASH    => $this->exigenceComptant($order, $covered),
+            Client::PAYMENT_DEPOSIT => $this->exigenceAcompte($order, $covered),
+            Client::PAYMENT_CREDIT  => $this->exigenceCredit($order, $client, $covered, $lock),
+            default                 => $this->refusConfiguration(
                 $covered,
                 'clients.payment_mode',
                 sprintf(
@@ -144,11 +145,58 @@ class ProductionFinancialEligibilityService
     {
         $client = $order->client;
 
-        if (! $client || $client->payment_mode !== Client::PAYMENT_CASH) {
+        if (! $client) {
             return null;
         }
 
-        return (int) $order->total_ttc;
+        if ($client->payment_mode === Client::PAYMENT_CASH) {
+            return (int) $order->total_ttc;
+        }
+
+        // [R3] Acompte : part du TTC exigée avant production. `null` quand le
+        // taux est inexploitable — la commande n'a alors AUCUN chemin par le
+        // paiement et `evaluate()` refuse explicitement (fail-closed).
+        if ($client->payment_mode === Client::PAYMENT_DEPOSIT) {
+            $taux = $this->tauxAcompte();
+
+            return $taux === null ? null : $this->montantAcompte((int) $order->total_ttc, $taux);
+        }
+
+        return null;
+    }
+
+    /**
+     * [R3] Taux d'acompte exigible, en pourcentage (70.00 = 70 %).
+     *
+     * Source canonique UNIQUE : `sales_settings.deposit_required_rate`, déjà
+     * rattaché à la société et validé 0-100 par SalesConfigController. Retourne
+     * `null` — donc refus — si le taux est absent, nul/négatif ou supérieur à
+     * 100 : un paramétrage incohérent ne doit jamais dégrader silencieusement
+     * l'exigence (un taux à 0 rendrait éligible un client acompte n'ayant rien
+     * versé, c'est-à-dire un crédit accordé sans plafond ni contrôle).
+     */
+    private function tauxAcompte(): ?float
+    {
+        $rate = \App\Models\SalesSetting::current()->deposit_required_rate;
+
+        if ($rate === null || ! is_numeric($rate)) {
+            return null;
+        }
+
+        $rate = (float) $rate;
+
+        return ($rate > 0 && $rate <= 100) ? $rate : null;
+    }
+
+    /**
+     * Montant d'acompte pour un TTC et un taux donnés, arrondi à l'unité FCFA
+     * (les montants sont des entiers dans toute la chaîne). 236 000 × 30 %
+     * = 70 800. `round()` et non troncature : ne jamais exiger moins que le
+     * taux annoncé.
+     */
+    private function montantAcompte(int $totalTtc, float $taux): int
+    {
+        return (int) round($totalTtc * $taux / 100);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -208,6 +256,55 @@ class ProductionFinancialEligibilityService
                 : sprintf(
                     'Couverture insuffisante : %s FCFA encaissés sur %s requis. Manque %s FCFA.',
                     $this->fcfa($covered), $this->fcfa($totalTtc), $this->fcfa($totalTtc - $covered),
+                ),
+        );
+    }
+
+    /**
+     * [R3] Acompte : une PART du TTC doit être encaissée avant production, le
+     * solde restant dû après lancement (créance client ordinaire — la facture
+     * n'est pas soldée pour autant).
+     *
+     * Un taux à 100 % est mathématiquement équivalent au comptant tout en
+     * conservant le type ACOMPTE : l'écran doit continuer d'annoncer le mode
+     * réel du client. Un taux inexploitable refuse — voir `tauxAcompte()`.
+     */
+    private function exigenceAcompte(Order $order, int $covered): ProductionFinancialRequirement
+    {
+        $taux = $this->tauxAcompte();
+
+        if ($taux === null) {
+            return $this->refusConfiguration(
+                $covered,
+                'sales_settings.deposit_required_rate',
+                'Mode acompte sans taux exploitable (absent, nul ou supérieur à 100 %) : '
+                .'aucun seuil ne peut être exigé. Renseigner le taux dans Paramétrage Vente '
+                .'ou changer le mode de règlement du client.',
+            );
+        }
+
+        $totalTtc = (int) $order->total_ttc;
+        $requis   = $this->montantAcompte($totalTtc, $taux);
+        $satisfait = $covered >= $requis;
+
+        return new ProductionFinancialRequirement(
+            type: ProductionFinancialRequirement::TYPE_DEPOSIT,
+            requiredAmount: $requis,
+            coveredAmount: $covered,
+            source: sprintf('clients.payment_mode = deposit ; sales_settings.deposit_required_rate = %s %%', rtrim(rtrim(number_format($taux, 2, ',', ' '), '0'), ',')),
+            satisfied: $satisfait,
+            reason: $satisfait
+                ? sprintf(
+                    'Acompte confirmé : %s FCFA encaissés sur %s requis (%s %% de %s). Solde restant dû : %s FCFA.',
+                    $this->fcfa($covered), $this->fcfa($requis),
+                    rtrim(rtrim(number_format($taux, 2, ',', ' '), '0'), ','), $this->fcfa($totalTtc),
+                    $this->fcfa(max(0, $totalTtc - $covered)),
+                )
+                : sprintf(
+                    'Acompte insuffisant : %s FCFA encaissés sur %s requis (%s %% de %s). Manque %s FCFA avant lancement.',
+                    $this->fcfa($covered), $this->fcfa($requis),
+                    rtrim(rtrim(number_format($taux, 2, ',', ' '), '0'), ','), $this->fcfa($totalTtc),
+                    $this->fcfa($requis - $covered),
                 ),
         );
     }

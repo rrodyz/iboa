@@ -197,13 +197,14 @@ it('QA-CLI-CREDIT — plafond = 0 : refus explicite, pas un plafond illimité (g
 
 // ═══════════════ Mode inconnu — fail-closed (preuve directe de la doc de tête) ═══════════════
 
-it('mode de règlement inconnu → TYPE_UNSUPPORTED, fail-closed (confirme le FINDING acompte)', function () {
+it('mode de règlement inconnu → TYPE_UNSUPPORTED, fail-closed', function () {
     $co = qaFinCompany();
     $this->actingAs(qaFinAdmin($co));
     // Force une valeur hors énum applicative pour prouver le comportement réel
-    // du `match` par défaut — c'est EXACTEMENT ce qui arriverait si un futur
-    // "acompte" était ajouté en base sans toucher ProductionFinancialEligibilityService.
-    $client = Client::factory()->create(['code' => 'QA-CLI-UNKNOWN-MODE', 'payment_mode' => 'deposit', 'credit_limit' => 10_000_000, 'is_active' => true]);
+    // du `match` par défaut — c'est EXACTEMENT ce qui arriverait si un futur mode
+    // était ajouté en base sans toucher ProductionFinancialEligibilityService.
+    // 'deposit' ne peut plus servir d'exemple : c'est un mode réel depuis R3.
+    $client = Client::factory()->create(['code' => 'QA-CLI-UNKNOWN-MODE', 'payment_mode' => 'leasing', 'credit_limit' => 10_000_000, 'is_active' => true]);
     $order = qaFinOrder($co, $client, 10_000);
     app(CommercialWorkflowService::class)->submit($order);
     app(CommercialWorkflowService::class)->validateOrder($order->fresh());
