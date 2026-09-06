@@ -30,8 +30,16 @@
         'livraison'    => 'Livraison',
         'contacts'     => 'Contacts',
         'comptabilite' => 'Comptabilité',
+        'dossier'      => 'Dossier commercial',
         'documents'    => 'Documents',
     ];
+
+    // [R4.13] Rien n'est recalculé ici : le service d'exposition est la seule
+    // source. Un client hors crédit n'a pas de plafond opposable — on l'écrit,
+    // plutôt que d'afficher un zéro qui se lirait comme « rien de disponible ».
+    $expo = fn (string $cle) => ($exposition === null || ! ($exposition['limited'] ?? false))
+        ? 'N/A'
+        : number_format((float) ($exposition[$cle] ?? 0), 0, ',', ' ').' FCFA';
 @endphp
 
 <div x-data="{ tab: 'general' }" class="space-y-3">
@@ -120,6 +128,13 @@
             {!! $row('Langue', $client->language) !!}
             {!! $row('Site web', $client->website) !!}
             {!! $row('Actif', $oui($client->is_active)) !!}
+            {{-- [R4.14/R4.15] Qui a ouvert la fiche, et quand elle a bougé.
+                 « Modifié par » n'est pas affiché : aucune trace fiable de
+                 l'auteur d'une modification de fiche client n'existe
+                 aujourd'hui, et inventer un nom serait pire que se taire. --}}
+            {!! $row('Créé le', $client->created_at?->format('d/m/Y H:i')) !!}
+            {!! $row('Créé par', $client->createdBy?->name) !!}
+            {!! $row('Modifié le', $client->updated_at?->format('d/m/Y H:i')) !!}
             <div class="col-span-2 md:col-span-3"><span class="{{ $lbl }}">Notes</span><span class="{{ $val }}">{{ $client->notes ?: '—' }}</span></div>
         </div>
 
@@ -174,6 +189,11 @@
         <div x-show="tab === 'finance'" x-cloak>
             <div class="p-4 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3">
                 {!! $row('Limite de crédit', $client->credit_limit ? $f($client->credit_limit).' FCFA' : null) !!}
+                {{-- [R4.13] Plafond, consommé, disponible — trio indissociable :
+                     un plafond seul ne dit pas s'il reste de la marge. --}}
+                {!! $row('Crédit autorisé', $expo('limit')) !!}
+                {!! $row('Encours actuel', $expo('projected')) !!}
+                {!! $row('Crédit disponible', $expo('available')) !!}
                 {!! $row('Encours autorisé', $client->encours_autorise ? $f($client->encours_autorise).' FCFA' : null) !!}
                 {!! $row('Compte collectif', $client->compte_collectif) !!}
                 {!! $row('Mode de règlement', $client->paymentModeLabel()) !!}
@@ -277,6 +297,177 @@
             {!! $row('N° de compte', $client->numero_compte) !!}
             {!! $row('SWIFT / BIC', $client->swift) !!}
             {!! $row('Solde comptable', $client->balance !== null ? $f($client->balance).' FCFA' : null) !!}
+        </div>
+
+        {{-- ── Dossier commercial (R4.16/R4.17) ────────────────────────────────
+             Vue consolidée de tout ce que le client a produit : devis,
+             commandes, bons de préparation, bons de livraison, factures,
+             règlements, avoirs. Les listes sont bornées aux dix derniers
+             documents — le compteur donne le volume réel. --}}
+        <div x-show="tab === 'dossier'" x-cloak>
+            @php
+                $vide = '<div class="px-4 py-4 text-center text-gray-400 text-[12.5px]">Aucun document</div>';
+                $th   = 'px-4 py-1.5 text-left';
+                $td   = 'px-4 py-1.5 text-gray-700';
+                $tdN  = 'px-4 py-1.5 text-right font-medium tabular-nums';
+                $thN  = 'px-4 py-1.5 text-right';
+                $d    = fn ($date) => $date ? \Illuminate\Support\Carbon::parse($date)->format('d/m/Y') : '—';
+            @endphp
+
+            {{-- Devis --}}
+            <div class="{{ $secH }}">Devis <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['quotes'] }})</span></div>
+            @if($documents['quotes']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Date</th>
+                        <th class="{{ $thN }}">Montant TTC</th><th class="{{ $th }}">Statut</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['quotes'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->issued_at) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->total_ttc) }} FCFA</td>
+                            <td class="{{ $td }}">{{ $doc->status }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Commandes --}}
+            <div class="{{ $secH }}">Commandes <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['orders'] }})</span></div>
+            @if($documents['orders']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Date</th>
+                        <th class="{{ $thN }}">Montant TTC</th><th class="{{ $th }}">Statut</th>
+                        <th class="{{ $th }}">Règlement</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['orders'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->issued_at) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->total_ttc) }} FCFA</td>
+                            <td class="{{ $td }}">{{ $doc->status }}</td>
+                            <td class="{{ $td }}">{{ $client->paymentModeLabel() }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Bons de préparation --}}
+            <div class="{{ $secH }}">Bons de préparation <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['bonPreparations'] }})</span></div>
+            @if($documents['bonPreparations']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Commande</th>
+                        <th class="{{ $th }}">Date</th><th class="{{ $th }}">Statut</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['bonPreparations'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">#{{ $doc->order_id }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->created_at) }}</td>
+                            <td class="{{ $td }}">{{ $doc->status }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Bons de livraison --}}
+            <div class="{{ $secH }}">Bons de livraison <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['deliveryNotes'] }})</span></div>
+            @if($documents['deliveryNotes']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Date</th><th class="{{ $th }}">Statut</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['deliveryNotes'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->issued_at) }}</td>
+                            <td class="{{ $td }}">{{ $doc->status }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Factures --}}
+            <div class="{{ $secH }} flex items-center justify-between">
+                <span>Factures <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['invoices'] }})</span></span>
+                <a href="{{ route('ventes.factures.index', ['client_id' => $client->id]) }}" class="text-emerald-700 hover:text-emerald-800 normal-case tracking-normal text-[11px]">Voir toutes →</a>
+            </div>
+            @if($documents['invoices']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Date</th>
+                        <th class="{{ $thN }}">TTC</th>
+                        <th class="{{ $thN }}">Réglé</th>
+                        <th class="{{ $thN }}">Reste dû</th>
+                        <th class="{{ $th }}">Statut</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['invoices'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->issued_at) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->total_ttc) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->paid_amount) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->remaining_amount) }}</td>
+                            <td class="{{ $td }}">{{ $doc->status }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Règlements --}}
+            <div class="{{ $secH }}">Règlements <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['payments'] }})</span></div>
+            @if($documents['payments']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Date</th><th class="{{ $thN }}">Montant</th>
+                        <th class="{{ $th }}">Mode</th><th class="{{ $th }}">Référence</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['payments'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $d($doc->payment_date) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->amount) }} FCFA</td>
+                            <td class="{{ $td }}">{{ $doc->paymentMethod?->name ?? '—' }}</td>
+                            <td class="{{ $td }}">{{ $doc->reference ?: $doc->number }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
+
+            {{-- Avoirs --}}
+            <div class="{{ $secH }}">Avoirs <span class="normal-case tracking-normal text-gray-500">({{ $compteurs['creditNotes'] }})</span></div>
+            @if($documents['creditNotes']->isNotEmpty())
+                <table class="w-full text-[12.5px]">
+                    <thead><tr class="text-[10px] font-bold text-gray-500 uppercase">
+                        <th class="{{ $th }}">Numéro</th><th class="{{ $th }}">Date</th>
+                        <th class="{{ $thN }}">Montant</th><th class="{{ $th }}">Facture liée</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                    @foreach($documents['creditNotes'] as $doc)
+                        <tr>
+                            <td class="{{ $td }}">{{ $doc->number }}</td>
+                            <td class="{{ $td }}">{{ $d($doc->issued_at) }}</td>
+                            <td class="{{ $tdN }}">{{ $f($doc->total_ttc) }} FCFA</td>
+                            <td class="{{ $td }}">{{ $doc->invoice_id ? '#'.$doc->invoice_id : '—' }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @else {!! $vide !!} @endif
         </div>
 
         {{-- ── Documents ── --}}

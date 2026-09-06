@@ -10,6 +10,7 @@ use App\Models\TaxRate;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Builder;
 use App\Models\CreditNote;
 use App\Models\SalesRep;
@@ -258,6 +259,28 @@ class Client extends Model
     public function creditNotes(): HasMany
     {
         return $this->hasMany(CreditNote::class);
+    }
+
+    /** [R4.17] Bons de livraison — le client est porté par la table. */
+    public function deliveryNotes(): HasMany
+    {
+        return $this->hasMany(DeliveryNote::class);
+    }
+
+    /**
+     * [R4.17] Bons de préparation — rattachés à la commande, jamais au client
+     * directement : la traversée passe donc par `orders`.
+     */
+    public function bonPreparations(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            BonPreparation::class,
+            Order::class,
+            'client_id', // orders.client_id
+            'order_id',  // bon_preparations.order_id
+            'id',
+            'id',
+        );
     }
 
     // -------------------------------------------------------------------------

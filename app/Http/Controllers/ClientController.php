@@ -87,7 +87,58 @@ class ClientController extends Controller
         $totalPaid     = (float) ($stats->total_paid     ?? 0);
         $balance       = $totalInvoiced - $totalPaid;
 
-        return view('clients.show', compact('client', 'totalInvoiced', 'totalPaid', 'balance'));
+        // [R4.13] Encours et disponible viennent du service canonique — jamais
+        // d'un calcul refait en vue. Un client dont le mode n'est pas le crédit
+        // n'a pas de plafond opposable : `limited` le dit, et la vue affiche
+        // « N/A » plutôt qu'un zéro trompeur. Une indisponibilité du calcul ne
+        // doit pas transformer une fiche client en erreur 500.
+        try {
+            $exposition = app(\App\Services\CustomerCreditExposureService::class)->assessClient($client);
+        } catch (\Throwable $e) {
+            report($e);
+            $exposition = null;
+        }
+
+        // [R4.16/R4.17] Vue 360° : les derniers documents de chaque type, jamais
+        // l'historique intégral. Les compteurs donnent le volume réel ; les
+        // listes restent bornées pour qu'une fiche de gros client ne dégénère
+        // pas en requête sans fin.
+        $limite = 10;
+        $documents = [
+            'quotes' => $client->quotes()->latest('id')
+                ->take($limite)->get(['id', 'number', 'issued_at', 'total_ttc', 'status']),
+            'orders' => $client->orders()->latest('id')
+                ->take($limite)->get(['id', 'number', 'issued_at', 'total_ttc', 'status', 'client_id']),
+            'bonPreparations' => $client->bonPreparations()
+                ->latest('bon_preparations.id')->take($limite)
+                ->get(['bon_preparations.id', 'bon_preparations.number', 'bon_preparations.order_id',
+                       'bon_preparations.created_at', 'bon_preparations.status']),
+            'deliveryNotes' => $client->deliveryNotes()->latest('id')
+                ->take($limite)->get(['id', 'number', 'issued_at', 'status']),
+            'invoices' => $client->invoices()->latest('id')
+                ->take($limite)->get(['id', 'number', 'issued_at', 'total_ttc', 'paid_amount', 'remaining_amount', 'status']),
+            'payments' => $client->payments()->with('paymentMethod:id,name')->latest('id')
+                ->take($limite)->get(['id', 'number', 'payment_date', 'amount', 'payment_method_id', 'reference']),
+            'creditNotes' => $client->creditNotes()->latest('id')
+                ->take($limite)->get(['id', 'number', 'issued_at', 'total_ttc', 'invoice_id']),
+        ];
+
+        $compteurs = [
+            'quotes'          => $client->quotes()->count(),
+            'orders'          => $client->orders()->count(),
+            'bonPreparations' => $client->bonPreparations()->count(),
+            'deliveryNotes'   => $client->deliveryNotes()->count(),
+            'invoices'        => $client->invoices()->count(),
+            'payments'        => $client->payments()->count(),
+            'creditNotes'     => $client->creditNotes()->count(),
+        ];
+
+        $client->loadMissing('createdBy');
+
+        return view('clients.show', compact(
+            'client', 'totalInvoiced', 'totalPaid', 'balance',
+            'exposition', 'documents', 'compteurs',
+        ));
     }
 
     /**
