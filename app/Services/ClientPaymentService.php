@@ -443,6 +443,17 @@ class ClientPaymentService
 
             // [ECHEANCIER] Mettre à jour les lignes d'échéancier
             $this->applyPaymentToSchedule($invoice->id, $amount);
+
+            // [BUG-SOLDE-LISTE] Le solde client est une colonne PERSISTÉE
+            // (`clients.balance`) que la liste affiche telle quelle, sans rien
+            // recalculer. Les deux autres chemins la rafraîchissaient déjà —
+            // create() par l'événement PaymentReceived, cancel() par un appel
+            // direct — mais pas le lettrage a posteriori, qui est justement le
+            // chemin du comptant : l'argent est encaissé au comptoir avant la
+            // facture, puis imputé quand elle est émise. La facture passait à
+            // « payée », le reste dû à zéro, et la liste continuait d'afficher
+            // l'ancien montant : un client soldé y figurait débiteur.
+            $invoice->client?->recalculateBalance();
         });
     }
 
