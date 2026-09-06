@@ -389,6 +389,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::middleware('permission:payments.create')->group(function () {
             Route::post('commandes/{commande}/register-payment', [\App\Http\Controllers\Sales\OrderController::class, 'registerPayment'])->name('commandes.register-payment');
         });
+        // [R4.4/R4.5] Décision hiérarchique sur le passage en bon de préparation
+        // (commande à crédit, ou dépassement d'encours autorisé à titre exceptionnel).
+        Route::middleware('permission:bon_preparations.validate')->group(function () {
+            Route::post('commandes/{commande}/decide-preparation', [\App\Http\Controllers\Sales\OrderController::class, 'decidePreparation'])->name('commandes.decide-preparation');
+        });
+        // [R4.5] Arbitrage d'un dépassement de plafond d'encours : le blocage de
+        // soumission ouvre une demande, il n'est plus terminal.
+        Route::middleware('permission:sales_credit_overrun.approve')->group(function () {
+            Route::post('commandes/{commande}/decide-credit-overrun', [\App\Http\Controllers\Sales\OrderController::class, 'decideCreditOverrun'])->name('commandes.decide-credit-overrun');
+        });
         // [Flux tôle bac §3] Approbation gérant d'une commande non réglée pour production
         Route::middleware('permission:production.approve_financial')->group(function () {
             Route::post('commandes/{commande}/approve-production', [\App\Http\Controllers\Sales\OrderController::class, 'approveProduction'])->name('commandes.approve-production');

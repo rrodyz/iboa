@@ -36,6 +36,23 @@ class Order extends Model
         'production_approval_unpaid',
         'production_approval_expires_at',
         'production_approval_fingerprint',
+        // [R4.4/R4.5] Approbation hiérarchique du passage en bon de préparation.
+        'preparation_approval_status',
+        'preparation_requested_by',
+        'preparation_requested_at',
+        'preparation_approved_by',
+        'preparation_approved_at',
+        'preparation_approval_reason',
+        'preparation_approval_context',
+        // [R4.5] Dérogation exceptionnelle au plafond d'encours.
+        'credit_overrun_status',
+        'credit_overrun_requested_by',
+        'credit_overrun_requested_at',
+        'credit_overrun_approved_by',
+        'credit_overrun_approved_at',
+        'credit_overrun_reason',
+        'credit_overrun_context',
+        'credit_overrun_fingerprint',
         'issued_at',
         'expires_at',
         'delivery_date',
@@ -75,6 +92,12 @@ class Order extends Model
         'production_approved_at'  => 'datetime',
         'production_approval_expires_at' => 'date',
         'production_approval_unpaid'     => 'integer',
+        'preparation_requested_at'       => 'datetime',
+        'preparation_approved_at'        => 'datetime',
+        'preparation_approval_context'   => 'array',
+        'credit_overrun_requested_at'    => 'datetime',
+        'credit_overrun_approved_at'     => 'datetime',
+        'credit_overrun_context'         => 'array',
         'total_weight_kg'         => 'decimal:2',
         'issued_at'               => 'date',
         'expires_at'              => 'date',
@@ -353,6 +376,28 @@ class Order extends Model
         }
 
         return hash_equals($this->production_approval_fingerprint, $this->productionFinancialFingerprint());
+    }
+
+    /**
+     * [R4.5] Dérogation de dépassement d'encours valide : approuvée ET portant
+     * l'empreinte du contrat financier courant.
+     *
+     * La dérogation couvre UN montant sur UN client, pas la commande en
+     * général : si les lignes, la remise, le client ou son mode de règlement
+     * changent après l'approbation, l'exception ne couvre plus ce qui a été
+     * approuvé. Empreinte absente = jamais vérifiable = jamais valide, comme
+     * pour l'approbation production.
+     */
+    public function hasValidCreditOverrunApproval(): bool
+    {
+        if ($this->credit_overrun_status !== 'approved') {
+            return false;
+        }
+        if ($this->credit_overrun_fingerprint === null) {
+            return false;
+        }
+
+        return hash_equals($this->credit_overrun_fingerprint, $this->productionFinancialFingerprint());
     }
 
     /**

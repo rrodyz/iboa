@@ -283,10 +283,22 @@ class OrderController extends Controller
     public function reopen(Request $request, Order $commande)
     {
         $this->authorize('reopen', $commande);
-        if ($commande->status !== 'annule') {
-            return back()->with('error', 'Seules les commandes annulées peuvent être réouvertes.');
+
+        // [R4.1] Motif obligatoire : une commande annulée qui repart sans
+        // justification écrite ne se distingue pas d'une manipulation.
+        $request->validate([
+            'motif' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'motif.required' => 'Le motif de réouverture est obligatoire.',
+            'motif.min'      => 'Le motif doit contenir au moins 5 caractères.',
+        ]);
+
+        try {
+            $commande = $this->workflow->reopenOrder($commande, $request->string('motif')->toString());
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
         }
-        $commande->update(['status' => 'brouillon', 'rejection_reason' => null]);
+
         return back()->with('success', "Commande {$commande->number} réouverte — de retour en brouillon.");
     }
 
@@ -302,9 +314,13 @@ class OrderController extends Controller
             'cash_account_id'   => ['nullable', 'integer', 'exists:cash_accounts,id'],
         ]);
 
+        // [R4.3] Le règlement caisse sert aussi les clients ACOMPTE : c'est le
+        // même geste métier (encaissement au comptoir), seule l'exigence diffère
+        // — 100 % du TTC au comptant, le seuil d'acompte sinon. La couverture est
+        // contrôlée par PreparationEligibilityService à la création du bon.
         $client = $commande->client ?? \App\Models\Client::find($commande->client_id);
-        if (!$client || !$client->isCash()) {
-            return back()->with('error', 'Cette action est réservée aux commandes de clients au comptant.');
+        if (!$client || !($client->isCash() || $client->isDeposit())) {
+            return back()->with('error', 'Cette action est réservée aux commandes de clients au comptant ou à acompte.');
         }
         if (!in_array($commande->status, ['confirme', 'en_preparation'])) {
             return back()->with('error', 'La commande doit être confirmée avant d\'enregistrer un paiement.');
@@ -327,6 +343,73 @@ class OrderController extends Controller
             return back()->with('error', $e->getMessage());
         }
     }
+
+    /**
+     * [R4.4/R4.5/R4.18] POST ventes/commandes/{commande}/approve-preparation
+     *
+     * Décision du responsable sur la demande d'approbation ouverte à la
+     * validation d'une commande à crédit (ou d'un dépassement d'encours).
+     * L'approbation crée le bon de préparation ; le refus laisse la commande
+     * confirmée mais sans autorisation de chargement ni visibilité production.
+     */
+    public function decidePreparation(Request $request, Order $commande): RedirectResponse
+    {
+        $approuve = $request->boolean('approve');
+
+        // Un refus sans motif est inexploitable pour le commercial qui devra
+        // renégocier : le motif est donc obligatoire côté refus.
+        $request->validate([
+            'reason' => [$approuve ? 'nullable' : 'required', 'string', 'min:5', 'max:500'],
+        ], [], ['reason' => 'motif']);
+
+        try {
+            $commande = $this->workflow->decidePreparationApproval(
+                $commande,
+                $approuve,
+                $request->string('reason')->toString() ?: null,
+            );
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $approuve
+            ? "Commande {$commande->number} approuvée — bon de préparation émis."
+            : "Commande {$commande->number} refusée pour le passage en préparation.");
+    }
+
+    /**
+     * [R4.5] POST ventes/commandes/{commande}/decide-credit-overrun
+     *
+     * Arbitrage du dépassement de plafond d'encours ouvert par la soumission.
+     * L'approbation ne soumet pas la commande : elle lève l'obstacle, et le
+     * commercial resoumet — la soumission reste son geste et sa responsabilité.
+     */
+    public function decideCreditOverrun(Request $request, Order $commande): RedirectResponse
+    {
+        $approuve = $request->boolean('approve');
+
+        // Motif obligatoire dans les DEUX sens : accorder un dépassement de
+        // plafond sans justification écrite est précisément le geste que ce
+        // contrôle existe pour tracer.
+        $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [], ['reason' => 'motif']);
+
+        try {
+            $commande = $this->workflow->decideCreditOverrun(
+                $commande,
+                $approuve,
+                $request->string('reason')->toString(),
+            );
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $approuve
+            ? "Dépassement d'encours approuvé pour la commande {$commande->number} — elle peut être soumise."
+            : "Dépassement d'encours refusé pour la commande {$commande->number}.");
+    }
+
 
     /**
      * [Flux tôle bac §3] POST ventes/commandes/{commande}/approve-production
@@ -376,6 +459,11 @@ class OrderController extends Controller
             // voir Order::productionFinancialFingerprint()/hasValidProductionApproval().
             'production_approval_fingerprint' => $commande->productionFinancialFingerprint(),
         ]);
+
+        // [R4.7] La dérogation gérant est l'autre porte d'entrée légitime vers la
+        // production : elle ouvre l'OF automatique MTO au même titre qu'un bon
+        // de préparation, sans quoi une commande approuvée resterait sans OF.
+        \App\Events\ProductionAuthorized::dispatch($commande->fresh());
 
         \App\Notifications\ValidationStepNotification::sendToRoles(
             ['chef_production', 'chef_atelier'],

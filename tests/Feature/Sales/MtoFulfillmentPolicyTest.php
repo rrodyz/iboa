@@ -3,7 +3,7 @@
 /**
  * [D5] MTO strict : l'OF porte la quantité commandée COMPLÈTE.
  *
- * `TriggerMtoProductionOnOrderConfirmed` calculait :
+ * `TriggerMtoProductionOnAuthorization` calculait :
  *
  *     quantité à produire = quantité commandée − stock général disponible
  *
@@ -105,6 +105,15 @@ function mtofCommande(Product $produit, float $ml = 50): Order
         'line_total_ht' => (int) ($ml * 4000), 'line_tax' => 0, 'line_total_ttc' => (int) ($ml * 4000),
     ]);
 
+    // [R4.7] L'autorisation de produire est matérialisée par le bon de
+    // préparation : sans lui, la garde de ProductionService refuse tout OF et
+    // ces cas échoueraient sur un contrôle qui n'est pas leur objet.
+    \App\Models\BonPreparation::create([
+        'company_id' => $co->id, 'order_id' => $commande->id,
+        'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'BP-MTOF-'.uniqid(), 'payment_mode' => 'credit', 'status' => 'en_attente',
+    ]);
+
     return $commande->fresh();
 }
 
@@ -124,7 +133,7 @@ it('8. crée un OF de 50 ML pour une commande de 50 ML malgré 20 ML en stock', 
     mtofStock($produit, mtofDepot(), 20);
     $commande = mtofCommande($produit, 50);
 
-    event(new OrderConfirmed($commande));
+    event(new \App\Events\ProductionAuthorized($commande)); // [R4.7] déclencheur de l'OF
 
     $of = ProductionOrder::where('order_id', $commande->id)->first();
     expect($of)->not->toBeNull();
@@ -137,7 +146,7 @@ it('9. crée un OF de 50 ML même si le stock général couvre toute la commande
     mtofStock($produit, mtofDepot(), 50);
     $commande = mtofCommande($produit, 50);
 
-    event(new OrderConfirmed($commande));
+    event(new \App\Events\ProductionAuthorized($commande)); // [R4.7] déclencheur de l'OF
 
     // L'ancienne logique concluait « rien à produire » et ne créait aucun OF :
     // la commande partait sur un stock dont rien ne prouve la compatibilité.
@@ -156,7 +165,7 @@ it('10. ignore un stock du même article dans un autre dépôt', function () {
     mtofStock($produit, mtofDepot('WMTOF-AUTRE', 'produit_fini'), 50);
     $commande = mtofCommande($produit, 50);
 
-    event(new OrderConfirmed($commande));
+    event(new \App\Events\ProductionAuthorized($commande)); // [R4.7] déclencheur de l'OF
 
     expect((float) ProductionOrder::where('order_id', $commande->id)->value('quantity_requested'))->toBe(50.0);
     expect(StockReservation::where('order_id', $commande->id)->count())->toBe(0);
@@ -168,7 +177,7 @@ it('11. ignore un stock déjà réservé par une autre commande', function () {
     mtofStock($produit, mtofDepot(), 50, reserve: 50);
     $commande = mtofCommande($produit, 50);
 
-    event(new OrderConfirmed($commande));
+    event(new \App\Events\ProductionAuthorized($commande)); // [R4.7] déclencheur de l'OF
 
     expect((float) ProductionOrder::where('order_id', $commande->id)->value('quantity_requested'))->toBe(50.0);
 });
@@ -179,7 +188,7 @@ it('12. ignore un stock en quarantaine', function () {
     mtofStock($produit, mtofDepot('WMTOF-QUAR', 'quarantaine'), 50);
     $commande = mtofCommande($produit, 50);
 
-    event(new OrderConfirmed($commande));
+    event(new \App\Events\ProductionAuthorized($commande)); // [R4.7] déclencheur de l'OF
 
     expect((float) ProductionOrder::where('order_id', $commande->id)->value('quantity_requested'))->toBe(50.0);
     expect(StockReservation::where('order_id', $commande->id)->count())->toBe(0);

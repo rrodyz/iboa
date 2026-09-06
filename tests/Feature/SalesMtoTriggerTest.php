@@ -39,10 +39,19 @@ function mtoOrder(Product $product, int $qty): Order
         'unit_price' => 1000, 'line_total_ht' => $qty * 1000, 'line_tax' => 0, 'line_total_ttc' => $qty * 1000,
     ]);
 
+    // [R4.7] L'autorisation de produire est matérialisée par le bon de
+    // préparation : sans lui, la garde de ProductionService refuse tout OF et
+    // ces cas échoueraient sur un contrôle qui n'est pas leur objet.
+    \App\Models\BonPreparation::create([
+        'company_id' => $co->id, 'order_id' => $order->id,
+        'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'BP-MTOTRIG-'.uniqid(), 'payment_mode' => 'credit', 'status' => 'en_attente',
+    ]);
+
     return $order;
 }
 
-it('auto-creates a draft OF when confirming an order with an MTO product short on stock', function () {
+it('auto-creates a draft OF when production is authorized for an MTO product short on stock', function () {
     $this->actingAs(mtoAdmin());
     $co = Company::first();
     $product = Product::factory()->create(['production_mode' => 'mto', 'is_stockable' => true]);
@@ -51,6 +60,14 @@ it('auto-creates a draft OF when confirming an order with an MTO product short o
     $order = mtoOrder($product, 20); // aucun stock → manque 20
 
     app(OrderService::class)->confirm($order);
+
+    // [R4.7] La confirmation commerciale ne fabrique plus rien : une commande
+    // confirmée mais non couverte financièrement ne doit produire aucun OF.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+
+    // C'est l'autorisation de production — bon de préparation émis ou
+    // dérogation gérant — qui ouvre l'ordre de fabrication.
+    event(new \App\Events\ProductionAuthorized($order->fresh()));
 
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $product->id)->first();
     expect($of)->not->toBeNull();
@@ -69,6 +86,7 @@ it('[D5] OF = quantité commandée COMPLÈTE, jamais le manquant (80 en stock, c
 
     $order = mtoOrder($product, 100);
     app(OrderService::class)->confirm($order);
+    event(new \App\Events\ProductionAuthorized($order->fresh())); // [R4.7] déclencheur de l'OF
 
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $product->id)->first();
     expect($of)->not->toBeNull();
@@ -95,6 +113,8 @@ it('does not trigger an OF for an MTS product', function () {
 
     $order = mtoOrder($product, 20);
     app(OrderService::class)->confirm($order);
+    // Autorisée ou non, une commande MTS ne déclenche aucun ordre de fabrication.
+    event(new \App\Events\ProductionAuthorized($order->fresh()));
 
     expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
 });

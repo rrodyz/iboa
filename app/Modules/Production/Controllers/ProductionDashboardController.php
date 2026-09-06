@@ -126,18 +126,24 @@ class ProductionDashboardController extends Controller
         // ── Coût standard vs réel (§11 CDC) ──────────────────────────────────
         $coutComparaison = $this->computeCostComparison($f, $t);
 
-        // [CDC §tôles-bac] Commandes tôles bac autorisées vs en attente d'autorisation.
-        // Tôles bac = articles de famille BPRE ou BGAL.
-        // Une commande est autorisée si : client cash + BP créé, OU client crédit + BP créé.
+        // [R4.6] Commandes tôles bac autorisées vs en attente d'autorisation.
+        // L'article est reconnu par sa CATÉGORIE de gestion via
+        // Product::scopeToleBac() — les codes familles BPRE/BGAL utilisés
+        // auparavant n'existent dans aucune ligne, le panneau restait vide.
+        // Autorisée = bon de préparation actif, lequel n'est désormais émis
+        // qu'après règlement intégral (comptant), acompte au seuil, ou
+        // approbation hiérarchique (crédit) : le BP EST la validation.
+        $bpActif = fn ($q) => $q->whereIn('status', ['en_attente', 'en_cours', 'charge']);
+
         $toBacAutorisees = Order::whereIn('status', ['confirme', 'en_preparation'])
-            ->whereHas('items.product.family', fn ($q) => $q->whereIn('code', ['BPRE', 'BGAL']))
-            ->whereHas('bonPreparations', fn ($q) => $q->whereIn('status', ['en_attente', 'en_cours', 'charge']))
+            ->whereHas('items.product', fn ($q) => $q->toleBac())
+            ->whereHas('bonPreparations', $bpActif)
             ->with(['client:id,name,payment_mode', 'bonPreparations' => fn ($q) => $q->latest()->limit(1)])
             ->orderByDesc('id')->limit(10)->get();
 
         $toBacEnAttente = Order::whereIn('status', ['confirme', 'en_preparation'])
-            ->whereHas('items.product.family', fn ($q) => $q->whereIn('code', ['BPRE', 'BGAL']))
-            ->whereDoesntHave('bonPreparations', fn ($q) => $q->whereIn('status', ['en_attente', 'en_cours', 'charge']))
+            ->whereHas('items.product', fn ($q) => $q->toleBac())
+            ->whereDoesntHave('bonPreparations', $bpActif)
             ->with(['client:id,name,payment_mode'])
             ->orderByDesc('id')->limit(10)->get();
 

@@ -254,7 +254,17 @@ it('BL lié à un lot : décrément à la validation, gardes, réintégration à
         ->and($dn->fresh()->items->first()->lot_number)->toBe('LOT-TB-001')  // n° aligné pour le PDF
         ->and((float) ProductStock::where('product_id', $product->id)->value('quantity'))->toBe(22.0);
 
-    // Annulation : lot ET stock réintégrés
+    // Annulation : lot ET stock réintégrés.
+    //
+    // [R4.11] La validation a émis une facture en brouillon. Un bon de livraison
+    // facturé ne s'annule pas en laissant sa facture derrière lui : le brouillon
+    // est d'abord supprimé — ce que InvoiceService::delete() autorise
+    // explicitement pour un brouillon, en restaurant le statut de la commande.
+    $factureAuto = \App\Models\Invoice::where('delivery_note_id', $dn->id)->first();
+    if ($factureAuto) {
+        app(\App\Services\InvoiceService::class)->delete($factureAuto);
+    }
+
     $svc->cancelValidated($dn->fresh());
     expect((float) $lot->fresh()->quantity)->toBe(12.0)
         ->and((float) ProductStock::where('product_id', $product->id)->value('quantity'))->toBe(30.0);

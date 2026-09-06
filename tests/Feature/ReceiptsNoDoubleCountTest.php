@@ -34,7 +34,7 @@ function rcCompany(): Company
 
 function rcOrder(Company $co, int $ttc = 1000000): Order
 {
-    $client = Client::factory()->create(['payment_mode' => 'comptant']);
+    $client = Client::factory()->create(['payment_mode' => Client::PAYMENT_CASH]);
     $order = Order::create([
         'company_id' => $co->id, 'fiscal_year_id' => $co->current_fiscal_year_id,
         'client_id' => $client->id, 'number' => 'CMD-RC-' . uniqid(),

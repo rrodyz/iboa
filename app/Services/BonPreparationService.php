@@ -18,9 +18,37 @@ class BonPreparationService
      * Crée automatiquement un BP pour une commande à crédit validée par le responsable.
      * Appelé par CommercialWorkflowService::validateOrder() pour clients crédit.
      */
+    /**
+     * [R4 — concurrence] Verrouille la commande et refuse un second bon actif.
+     *
+     * Le contrôleur vérifiait déjà `hasBonPreparation()`, mais hors transaction
+     * et hors verrou : deux encaissements simultanés, ou deux responsables
+     * approuvant la même demande, passaient tous les deux le contrôle et
+     * créaient chacun leur bon. Deux bons pour une commande, c'est deux
+     * autorisations de chargement — et, depuis R4.7, deux événements
+     * d'autorisation de production.
+     *
+     * Le verrou est pris sur la ligne `orders` : c'est l'objet que les deux
+     * chemins se disputent, et il sérialise donc la lecture du bon existant.
+     */
+    private function verrouillerSansBonExistant(Order $order): Order
+    {
+        $verrouillee = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+        if ($verrouillee->hasBonPreparation()) {
+            throw new \RuntimeException(sprintf(
+                'Un bon de préparation actif existe déjà pour la commande %s.',
+                $verrouillee->number,
+            ));
+        }
+
+        return $verrouillee;
+    }
+
     public function createForCreditOrder(Order $order): BonPreparation
     {
         return DB::transaction(function () use ($order) {
+            $order = $this->verrouillerSansBonExistant($order);
             $company = $order->company ?? currentCompany();
             $bp = BonPreparation::create([
                 'company_id'    => $company->id,
@@ -33,6 +61,11 @@ class BonPreparationService
                 'validated_at'  => now(),
                 'created_by'    => Auth::id(),
             ]);
+
+            // [R4.7] Le bon de préparation EST l'autorisation de produire : c'est
+            // ici, pas à la confirmation commerciale, que l'OF automatique MTO
+            // devient légitime.
+            \App\Events\ProductionAuthorized::dispatch($order->fresh());
 
             // Notifie le magasinier : un bon de préparation est disponible
             ValidationStepNotification::sendToRoles(
@@ -59,6 +92,7 @@ class BonPreparationService
         ?int $cashAccountId = null
     ): BonPreparation {
         return DB::transaction(function () use ($order, $amount, $reference, $cashAccountId) {
+            $order = $this->verrouillerSansBonExistant($order);
             $company = $order->company ?? currentCompany();
 
             // [FIX argent caisse] L'encaissement du guichet passe par le service
@@ -83,6 +117,19 @@ class BonPreparationService
                 'notes'           => 'Règlement caisse commande ' . $order->number . ' (bon de préparation)',
             ]);
 
+            // [R4.2/R4.3] Le règlement seul ne suffit pas : il doit COUVRIR
+            // l'exigence du mode de règlement (comptant = 100 % du TTC,
+            // acompte = TTC × taux). Avant ce contrôle, un versement d'un franc
+            // générait le bon de préparation — donc le chargement ET la
+            // visibilité production. La règle vit dans
+            // PreparationEligibilityService et n'est jamais recopiée ici.
+            $eligibilite = app(\App\Services\Sales\PreparationEligibilityService::class)
+                ->evaluate($order->fresh());
+
+            if (! $eligibilite->allowed) {
+                throw new \RuntimeException($eligibilite->reason);
+            }
+
             $bp = BonPreparation::create([
                 'company_id'          => $company->id,
                 'order_id'            => $order->id,
@@ -102,6 +149,9 @@ class BonPreparationService
             if ($order->status === 'confirme') {
                 $order->update(['status' => 'en_preparation']);
             }
+
+            // [R4.7] Couverture financière constatée → production autorisée.
+            \App\Events\ProductionAuthorized::dispatch($order->fresh());
 
             ValidationStepNotification::sendToRoles(
                 ['magasinier'],

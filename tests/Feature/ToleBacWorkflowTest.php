@@ -98,6 +98,13 @@ it('parcourt Vente → Production tôle bac : gate financière réelle, bobine, 
     $wf->validateOrder($order->fresh());
     expect($order->fresh()->status)->toBe('confirme');
 
+    // [R4.4/R4.7] La confirmation commerciale n'autorise plus la production :
+    // le client est à crédit, un responsable doit approuver le passage en bon
+    // de préparation. C'est cette approbation — pas la confirmation — qui ouvre
+    // l'ordre de fabrication automatique.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+    $wf->decidePreparationApproval($order->fresh(), true, 'encours validé par la direction');
+
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $tole->id)->first();
     expect($of)->not->toBeNull()->and((float) $of->quantity_requested)->toBe(30.0);
 

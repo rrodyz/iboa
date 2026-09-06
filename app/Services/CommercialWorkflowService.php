@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Quote;
 use App\Modules\Production\Services\ProductionDeliveryGuard;
 use App\Modules\Production\Services\ReservationService;
+use App\Exceptions\CreditLimitExceededException;
 use App\Notifications\ValidationStepNotification;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -59,7 +60,7 @@ class CommercialWorkflowService
         }
 
         if ($document instanceof Order) {
-            $document = DB::transaction(function () use ($document, $motif) {
+            $soumission = function () use ($document, $motif) {
                 // [Ventes §3] ORDRE DE VERROUILLAGE GLOBAL : client D'ABORD, commandes ensuite.
                 //
                 // Cet ordre n'est pas cosmétique. Le contrôle de crédit lit les commandes
@@ -75,11 +76,31 @@ class CommercialWorkflowService
                     throw new \RuntimeException("Cette commande a déjà été soumise (statut : {$fresh->status}).");
                 }
 
-                $this->creditExposureService->assertMaySubmit($fresh);
+                // [R4.5] Une dérogation de dépassement accordée ET toujours valide
+                // (contrat financier inchangé) remplace le contrôle : le responsable
+                // a déjà tranché sur exactement ce montant. Sinon le contrôle
+                // s'applique et lève CreditLimitExceededException.
+                if (! $fresh->hasValidCreditOverrunApproval()) {
+                    $this->creditExposureService->assertMaySubmit($fresh);
+                }
                 $fresh->submit($motif);
 
                 return $fresh->fresh('client');
-            });
+            };
+
+            try {
+                $document = DB::transaction($soumission);
+            } catch (CreditLimitExceededException $e) {
+                // La demande est ouverte APRÈS le rollback, hors transaction :
+                // écrite à l'intérieur, elle disparaîtrait avec l'annulation et le
+                // blocage redeviendrait terminal — exactement ce que R4.5 interdit.
+                // La commande, elle, reste non soumise tant que nul n'a tranché.
+                $this->requestCreditOverrunApproval($document->fresh(), $e);
+
+                throw new \RuntimeException($e->getMessage()
+                    .' Une demande d\'approbation exceptionnelle a été ouverte : un responsable'
+                    .' doit l\'accorder avant que la commande puisse être soumise.');
+            }
         } else {
             $document->submit($motif);
         }
@@ -158,8 +179,11 @@ class CommercialWorkflowService
     /**
      * Valide une commande (validation financière — en_attente_validation → confirme).
      * Déclenche OrderConfirmed, identique au circuit direct OrderService::confirm() :
-     * réservation stock (ReserveStockOnOrderConfirmed) + auto-création OF pour les
-     * articles MTO (TriggerMtoProductionOnOrderConfirmed).
+     * réservation stock (ReserveStockOnOrderConfirmed).
+     *
+     * [R4.7] La confirmation ne crée plus d'ordre de fabrication : l'OF
+     * automatique MTO attend ProductionAuthorized — bon de préparation émis ou
+     * dérogation gérant.
      *
      * @throws \RuntimeException
      */
@@ -194,12 +218,250 @@ class CommercialWorkflowService
             color: 'blue',
         );
 
-        // [CDC §commande-crédit] Commande crédit validée par responsable → bon de préparation auto-créé.
-        // Le bon de préparation autorise le magasinier à procéder au chargement.
+        // [R4.4] Commande à crédit : le bon de préparation n'est PLUS créé
+        // automatiquement. La validation commerciale ouvre une demande
+        // d'approbation hiérarchique ; seul un responsable
+        // (permission `bon_preparations.validate`) la transforme en bon de
+        // préparation — donc en autorisation de chargement et en visibilité
+        // production. Le contexte de crédit est figé au moment de la demande :
+        // une décision prise plus tard doit rester justifiable.
         $client = $fresh->client ?? Client::find($fresh->client_id);
         if ($client && $client->isCredit() && ! $fresh->hasBonPreparation()) {
-            $this->bonPrepService->createForCreditOrder($fresh);
+            $this->requestPreparationApproval($fresh, $client);
         }
+    }
+
+    /**
+     * [R4.4/R4.5/R4.18] Ouvre (ou laisse ouverte) la demande d'approbation du
+     * passage en bon de préparation, avec le contexte financier du moment.
+     */
+    public function requestPreparationApproval(Order $order, ?Client $client = null): void
+    {
+        if (in_array($order->preparation_approval_status, [
+            \App\Services\Sales\PreparationEligibilityService::APPROVAL_PENDING,
+            \App\Services\Sales\PreparationEligibilityService::APPROVAL_APPROVED,
+        ], true)) {
+            return; // demande déjà ouverte ou déjà tranchée favorablement
+        }
+
+        $client ??= $order->client;
+        $exposition = $client
+            ? app(\App\Services\CustomerCreditExposureService::class)->assess($order)
+            : [];
+
+        $order->forceFill([
+            'preparation_approval_status' => \App\Services\Sales\PreparationEligibilityService::APPROVAL_PENDING,
+            'preparation_requested_by'    => Auth::id(),
+            'preparation_requested_at'    => now(),
+            'preparation_approval_context' => [
+                'credit_limit'      => $exposition['limit'] ?? null,
+                'current_exposure'  => $exposition['outstanding'] ?? null,
+                'order_amount'      => (int) $order->total_ttc,
+                'projected_exposure'=> $exposition['projected'] ?? null,
+                'overrun_amount'    => isset($exposition['projected'], $exposition['limit']) && ($exposition['limited'] ?? false)
+                    ? max(0, (int) $exposition['projected'] - (int) $exposition['limit'])
+                    : 0,
+            ],
+        ])->save();
+
+        ValidationStepNotification::sendToRoles(
+            ['responsable_commercial', 'daf', 'directeur'],
+            title: 'Passage en préparation à approuver',
+            message: "Commande {$order->number} (client à crédit) — approbation requise avant bon de préparation.",
+            url: route('ventes.commandes.show', $order),
+            modelType: 'Order',
+            modelId: $order->id,
+            type: 'preparation_approval_requested',
+            icon: 'clipboard-document-check',
+            color: 'amber',
+        );
+    }
+
+    /**
+     * [R4.4/R4.5/R4.18] Décision du responsable sur le passage en préparation.
+     *
+     * L'approbation crée le bon de préparation dans la MÊME transaction : une
+     * décision approuvée sans bon émis laisserait la commande dans un état
+     * intermédiaire invérifiable. La trace (auteur, motif, contexte crédit figé)
+     * part dans le journal commercial, jamais seulement dans un log applicatif.
+     */
+    public function decidePreparationApproval(Order $order, bool $approuve, ?string $motif = null): Order
+    {
+        return DB::transaction(function () use ($order, $approuve, $motif) {
+            $verrouillee = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($verrouillee->preparation_approval_status !== \App\Services\Sales\PreparationEligibilityService::APPROVAL_PENDING) {
+                throw new \RuntimeException('Aucune demande d\'approbation en attente sur cette commande.');
+            }
+
+            $statut = $approuve
+                ? \App\Services\Sales\PreparationEligibilityService::APPROVAL_APPROVED
+                : \App\Services\Sales\PreparationEligibilityService::APPROVAL_REJECTED;
+
+            $verrouillee->forceFill([
+                'preparation_approval_status' => $statut,
+                'preparation_approved_by'     => Auth::id(),
+                'preparation_approved_at'     => now(),
+                'preparation_approval_reason' => $motif,
+            ])->save();
+
+            $verrouillee->logWorkflowAction(
+                $approuve ? CommercialValidation::ACTION_VALIDATION : CommercialValidation::ACTION_REFUS,
+                'preparation_pending',
+                $approuve ? 'preparation_approved' : 'preparation_rejected',
+                $motif,
+                ['contexte_credit' => $verrouillee->preparation_approval_context],
+            );
+
+            if ($approuve && ! $verrouillee->hasBonPreparation()) {
+                $this->bonPrepService->createForCreditOrder($verrouillee);
+            }
+
+            return $verrouillee->fresh();
+        });
+    }
+
+    /**
+     * [R4.1/R4.18] Réouverture d'une commande annulée par un responsable.
+     *
+     * Deux exigences, et elles ne sont pas décoratives : la permission
+     * `orders.reopen` (le commercial qui a vu sa commande annulée ne se la
+     * rouvre pas lui-même) et un motif écrit. Une commande annulée puis remise
+     * en circulation sans justification est indistinguable d'une manipulation ;
+     * la décision part donc dans le journal commercial avec son auteur, son
+     * horodatage et les deux statuts encadrant la transition.
+     *
+     * La commande revient en BROUILLON, jamais directement en confirmée : elle
+     * doit reparcourir la soumission et la validation, donc repasser sous les
+     * contrôles de prix plancher et d'encours.
+     */
+    public function reopenOrder(Order $order, ?string $motif = null): Order
+    {
+        $this->assertPermission('orders.reopen');
+
+        $motif = trim((string) $motif);
+        if (mb_strlen($motif) < 5) {
+            throw new \RuntimeException('Un motif d\'au moins 5 caractères est obligatoire pour rouvrir une commande annulée.');
+        }
+
+        return DB::transaction(function () use ($order, $motif) {
+            $verrouillee = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($verrouillee->status !== 'annule') {
+                throw new \RuntimeException("Seules les commandes annulées peuvent être réouvertes (statut : {$verrouillee->status}).");
+            }
+
+            $ancienStatut = $verrouillee->status;
+            $verrouillee->update(['status' => 'brouillon', 'rejection_reason' => null]);
+
+            $verrouillee->logWorkflowAction(
+                CommercialValidation::ACTION_VALIDATION,
+                $ancienStatut,
+                'brouillon',
+                $motif,
+                [
+                    'operation'     => 'reopen',
+                    'approved_by'   => Auth::id(),
+                    'approved_at'   => now()->toIso8601String(),
+                    'requested_by'  => Auth::id(),
+                    'requested_at'  => now()->toIso8601String(),
+                    'old_status'    => $ancienStatut,
+                    'new_status'    => 'brouillon',
+                ],
+            );
+
+            return $verrouillee->fresh();
+        });
+    }
+
+    /**
+     * [R4.5] Ouvre la demande d'approbation exceptionnelle d'un dépassement
+     * d'encours, avec l'exposition figée au moment du refus.
+     *
+     * Idempotent : une demande déjà en attente n'est pas réécrite (l'auteur et
+     * l'heure d'origine sont ce qui sera audité), et une dérogation déjà
+     * accordée n'est pas ré-ouverte. Un refus antérieur, en revanche, rouvre :
+     * la commande a pu être renégociée entre-temps.
+     */
+    public function requestCreditOverrunApproval(Order $order, CreditLimitExceededException $e): void
+    {
+        if ($order->credit_overrun_status === 'pending' || $order->hasValidCreditOverrunApproval()) {
+            return;
+        }
+
+        $order->forceFill([
+            'credit_overrun_status'       => 'pending',
+            'credit_overrun_requested_by' => Auth::id(),
+            'credit_overrun_requested_at' => now(),
+            'credit_overrun_approved_by'  => null,
+            'credit_overrun_approved_at'  => null,
+            'credit_overrun_reason'       => null,
+            'credit_overrun_fingerprint'  => null,
+            'credit_overrun_context'      => [
+                'credit_limit'       => (int) ($e->exposure['limit'] ?? 0),
+                'current_exposure'   => (int) ($e->exposure['outstanding'] ?? 0),
+                'open_orders'        => (int) ($e->exposure['open_orders'] ?? 0),
+                'deposits'           => (int) ($e->exposure['deposits'] ?? 0),
+                'order_amount'       => (int) ($e->exposure['new_order'] ?? $order->total_ttc),
+                'projected_exposure' => (int) ($e->exposure['projected'] ?? 0),
+                'overrun_amount'     => $e->overrunAmount(),
+            ],
+        ])->save();
+
+        ValidationStepNotification::sendToRoles(
+            ['responsable_commercial', 'daf', 'directeur'],
+            title: 'Dépassement d\'encours à arbitrer',
+            message: sprintf(
+                'Commande %s — dépassement de %s FCFA du plafond client. Approbation exceptionnelle requise.',
+                $order->number,
+                number_format($e->overrunAmount(), 0, ',', ' '),
+            ),
+            url: route('ventes.commandes.show', $order),
+            modelType: 'Order',
+            modelId: $order->id,
+            type: 'credit_overrun_requested',
+            icon: 'exclamation-triangle',
+            color: 'red',
+        );
+    }
+
+    /**
+     * [R4.5/R4.18] Décision du responsable sur un dépassement d'encours.
+     *
+     * L'approbation grave l'empreinte du contrat financier : elle couvre CE
+     * montant sur CE client, pas la commande indéfiniment. Toute retouche
+     * ultérieure (lignes, remise, client, mode de règlement) invalide la
+     * dérogation et ramène la commande sous le contrôle de plafond.
+     */
+    public function decideCreditOverrun(Order $order, bool $approuve, ?string $motif = null): Order
+    {
+        $this->assertPermission('sales_credit_overrun.approve');
+
+        return DB::transaction(function () use ($order, $approuve, $motif) {
+            $verrouillee = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            if ($verrouillee->credit_overrun_status !== 'pending') {
+                throw new \RuntimeException('Aucun dépassement d\'encours en attente d\'arbitrage sur cette commande.');
+            }
+
+            $verrouillee->forceFill([
+                'credit_overrun_status'      => $approuve ? 'approved' : 'rejected',
+                'credit_overrun_approved_by' => Auth::id(),
+                'credit_overrun_approved_at' => now(),
+                'credit_overrun_reason'      => $motif,
+                'credit_overrun_fingerprint' => $approuve ? $verrouillee->productionFinancialFingerprint() : null,
+            ])->save();
+
+            $verrouillee->logWorkflowAction(
+                $approuve ? CommercialValidation::ACTION_VALIDATION : CommercialValidation::ACTION_REFUS,
+                'credit_overrun_pending',
+                $approuve ? 'credit_overrun_approved' : 'credit_overrun_rejected',
+                $motif,
+                ['contexte_credit' => $verrouillee->credit_overrun_context],
+            );
+
+            return $verrouillee->fresh();
+        });
     }
 
     /**

@@ -55,6 +55,15 @@ function pomqOrder(Product $p, int $qty): App\Models\Order
     ]);
     $o->items()->create(['product_id' => $p->id, 'description' => $p->name, 'quantity' => $qty, 'unit_price' => 1000, 'line_total_ht' => $qty * 1000, 'line_tax' => 0, 'line_total_ttc' => $qty * 1000]);
 
+    // [R4.7] L'autorisation de produire est matérialisée par le bon de
+    // préparation : sans lui, la garde de ProductionService refuse tout OF et
+    // ces cas échoueraient sur un contrôle qui n'est pas leur objet.
+    \App\Models\BonPreparation::create([
+        'company_id' => $co->id, 'order_id' => $o->id,
+        'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'BP-POMQ-'.uniqid(), 'payment_mode' => 'credit', 'status' => 'en_attente',
+    ]);
+
     return $o;
 }
 
@@ -66,7 +75,12 @@ it('OF de 100 pour une commande de 100, malgré 80 en stock', function () {
     BillOfMaterial::create(['company_id' => $co->id, 'product_id' => $p->id, 'name' => 'BOM POMQ', 'is_active' => true]);
     ProductStock::create(['product_id' => $p->id, 'warehouse_id' => $wh->id, 'quantity' => 80, 'reserved_quantity' => 0, 'avg_cost' => 500]);
 
-    app(OrderService::class)->confirm(pomqOrder($p, 100));
+    $commande = pomqOrder($p, 100);
+    app(OrderService::class)->confirm($commande);
+    // [R4.7] Ce qui est mesuré ici est la QUANTITÉ de l'OF face au stock, pas
+    // son déclencheur : l'autorisation de production est posée pour atteindre
+    // la règle visée.
+    event(new \App\Events\ProductionAuthorized($commande->fresh()));
 
     $of = ProductionOrder::where('product_id', $p->id)->first();
     expect($of)->not->toBeNull();
@@ -81,7 +95,12 @@ it('crée quand même un OF quand le stock couvre toute la commande', function (
     BillOfMaterial::create(['company_id' => $co->id, 'product_id' => $p->id, 'name' => 'BOM POMQ2', 'is_active' => true]);
     ProductStock::create(['product_id' => $p->id, 'warehouse_id' => $wh->id, 'quantity' => 200, 'reserved_quantity' => 0, 'avg_cost' => 500]);
 
-    app(OrderService::class)->confirm(pomqOrder($p, 100));
+    $commande = pomqOrder($p, 100);
+    app(OrderService::class)->confirm($commande);
+    // [R4.7] Ce qui est mesuré ici est la QUANTITÉ de l'OF face au stock, pas
+    // son déclencheur : l'autorisation de production est posée pour atteindre
+    // la règle visée.
+    event(new \App\Events\ProductionAuthorized($commande->fresh()));
 
     // 200 en stock pour 100 commandés : l'ancienne règle ne créait AUCUN OF et
     // servait la commande sur un reliquat dont rien ne prouvait la compatibilité.

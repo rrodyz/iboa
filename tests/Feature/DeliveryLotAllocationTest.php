@@ -75,7 +75,10 @@ it('alloue une livraison sur plusieurs lots et fige le COGS historique', functio
         ->and((float) $lotB->fresh()->quantity)->toBe(3.0)
         ->and((float) StockMovement::where('reference_type', 'delivery_note')->where('reference_id', $delivery->id)->sum('total_cost'))->toBe(1300.0);
 
-    $invoice = $service->createInvoice($delivery->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Les assertions qui suivent —
+    // montants, COGS, écritures, règlements — restent inchangées.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $delivery->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     expect((float) $invoice->fresh('items')->items->first()->unit_cost)->toBe(185.71);
     $cogs = JournalEntry::where('reference', $invoice->number.'-STK')->first();

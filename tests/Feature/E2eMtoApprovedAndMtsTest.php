@@ -84,6 +84,11 @@ it('B — MTO approuvé : gate refusée puis approbation gérant, production, li
     $wf->submit($order);
     $wf->validateOrder($order->fresh());
 
+    // [R4.4/R4.7] Client à crédit : aucun OF tant que le responsable n'a pas
+    // approuvé le passage en préparation.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+    $wf->decidePreparationApproval($order->fresh(), true, 'accord direction pour lancement');
+
     $of = ProductionOrder::where('order_id', $order->id)->first();
     expect($of)->not->toBeNull();
 
@@ -197,7 +202,7 @@ it('C — MTS : OF sans client depuis le besoin, stock général, vente servie s
         ->and(\App\Models\StockReservation::where('production_order_id', $of->id)->where('status', 'reserved')->count())->toBe(0);
 
     // 4. Vente ultérieure servie sur stock : PAS de nouvel OF (produit dispo).
-    $client = Client::factory()->create(['is_active' => true, 'payment_mode' => 'comptant']);
+    $client = Client::factory()->create(['is_active' => true, 'payment_mode' => Client::PAYMENT_CASH]);
     $order = app(OrderService::class)->create([
         'client_id' => $client->id, 'issued_at' => now()->toDateString(),
         'items' => [[

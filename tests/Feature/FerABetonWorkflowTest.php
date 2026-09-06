@@ -52,7 +52,7 @@ it('parcourt Vente → Production fer à béton : dépôt PF par défaut + rése
     $company = Company::first();
     $this->actingAs($user);
 
-    $client  = Client::factory()->create(['is_active' => true, 'payment_mode' => 'comptant']);
+    $client  = Client::factory()->create(['is_active' => true, 'payment_mode' => Client::PAYMENT_CASH]);
     $unit    = Unit::firstOrCreate(['name' => 'Barre FAB'], ['abbreviation' => 'bfab']);
     $taxRate = TaxRate::firstOrCreate(['name' => 'TVA 18% FAB'], ['short_name' => 'TVA18F', 'rate' => 18, 'is_active' => true]);
 
@@ -95,6 +95,13 @@ it('parcourt Vente → Production fer à béton : dépôt PF par défaut + rése
     $wf->submit($order);
     $wf->validateOrder($order->fresh());
     expect($order->fresh()->status)->toBe('confirme');
+
+    // [R4.2/R4.7] Client au comptant : l'encaissement intégral émet le bon de
+    // préparation, et c'est lui qui autorise l'ordre de fabrication. Une
+    // commande confirmée mais impayée n'en déclenche aucun.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+    app(\App\Services\BonPreparationService::class)
+        ->createForCashOrder($order->fresh(), (int) $order->fresh()->total_ttc, 'FER-CAISSE-001');
 
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $fer->id)->first();
     expect($of)->not->toBeNull()->and((float) $of->quantity_requested)->toBe(100.0);

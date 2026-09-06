@@ -100,7 +100,10 @@ it('B-nominal : réservation, livraison, sortie au CMP, facture, 2 règlements, 
     expect(StockMovement::where('reference_type', 'delivery_note')->where('reference_id', $dn->id)->count())->toBe(1);
 
     // ── Facture depuis le BL : 8 × 10 000 = 80 000 (indépendant)
-    $inv = app(\App\Services\InvoiceService::class)->createFromDeliveryNote($dn->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Les assertions qui suivent —
+    // montants, COGS, écritures, règlements — restent inchangées.
+    $inv = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(\App\Services\InvoiceService::class)->validate($inv->fresh());
     $inv->fresh()->update(['status' => 'emise']);
     expect((int) $inv->fresh()->total_ttc)->toBe(80000);

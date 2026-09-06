@@ -74,7 +74,7 @@ it('rejoue commande comptant → OF → clôture → BP → chargement → BL �
     $company = pilotCompany();
     $this->actingAs($user);
 
-    $client  = Client::factory()->create(['is_active' => true, 'payment_mode' => 'comptant']);
+    $client  = Client::factory()->create(['is_active' => true, 'payment_mode' => Client::PAYMENT_CASH]);
     $unit    = Unit::firstOrCreate(['name' => 'Pièce PILOT'], ['abbreviation' => 'pcpi']);
     $taxRate = TaxRate::firstOrCreate(['name' => 'TVA 18% PILOT'], ['short_name' => 'TVA18PI', 'rate' => 18, 'is_active' => true]);
     $warehouse = Warehouse::firstOrCreate(
@@ -183,7 +183,10 @@ it('rejoue commande comptant → OF → clôture → BP → chargement → BL �
     expect($dn->status)->toBe('valide');
 
     // ── Facture + imputation de l'acompte DÉJÀ existant (pas un nouveau paiement) ──
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn);
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Un second appel serait refusé —
+    // c'est la garde anti-double facturation qui le prouve.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     $invoice->refresh();
 

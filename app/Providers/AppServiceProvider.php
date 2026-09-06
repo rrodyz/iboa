@@ -48,7 +48,7 @@ use App\Listeners\NotifyLowStock;
 use App\Listeners\NotifyCreditNoteValidated;
 use App\Listeners\NotifySupplierInvoiceValidated;
 use App\Listeners\ReserveStockOnOrderConfirmed;
-use App\Listeners\TriggerMtoProductionOnOrderConfirmed;
+use App\Listeners\TriggerMtoProductionOnAuthorization;
 use App\Listeners\SendInvoiceToClient;
 use App\Listeners\SyncClientBalanceOnInvoice;
 use App\Listeners\SyncSupplierBalanceOnInvoice;
@@ -115,7 +115,11 @@ class AppServiceProvider extends ServiceProvider
 
         // Commandes
         Event::listen(OrderConfirmed::class,            ReserveStockOnOrderConfirmed::class);
-        Event::listen(OrderConfirmed::class,            TriggerMtoProductionOnOrderConfirmed::class);
+        // [R4.7] L'OF automatique MTO ne suit plus la confirmation commerciale
+        // mais l'autorisation de production (bon de préparation émis ou
+        // dérogation gérant) : une commande confirmée et impayée ne doit
+        // déclencher aucune fabrication.
+        Event::listen(\App\Events\ProductionAuthorized::class, TriggerMtoProductionOnAuthorization::class);
 
         // Ventes
         Event::listen(InvoiceValidated::class,          SendInvoiceToClient::class);

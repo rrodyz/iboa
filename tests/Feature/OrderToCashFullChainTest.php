@@ -139,6 +139,13 @@ it('parcourt Devis → Commande → Validation → OF → Réservation → Produ
     $order->refresh();
     expect($order->status)->toBe('confirme');
 
+    // ── Étape 2 bis : autorisation de production ─────────────────────────────
+    // [R4.4/R4.7] La factory crée un client à crédit : la confirmation ouvre une
+    // demande d'approbation, elle n'autorise rien. Tant qu'un responsable n'a
+    // pas tranché, aucun ordre de fabrication n'existe.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+    $workflow->decidePreparationApproval($order->fresh(), true, 'encours client couvert');
+
     // ── Étape 3 : OF auto-généré (MTO, stock insuffisant) ────────────────────
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $finished->id)->first();
     expect($of)->not->toBeNull()
@@ -214,6 +221,13 @@ it('parcourt Devis → Commande → Validation → OF → Réservation → Produ
     expect((float) ProductStock::where('product_id', $finished->id)->where('warehouse_id', $warehouse->id)->value('quantity'))->toBe(50.0);
 
     // ── Étape 8 : Livraison ───────────────────────────────────────────────────
+    // [R4.10] Le bon de livraison constate ce qui a été chargé : le magasin doit
+    // donc avoir démarré PUIS clôturé le chargement du bon de préparation.
+    $bpSvc = app(\App\Services\BonPreparationService::class);
+    $bpCharge = $order->fresh()->activeBonPreparation();
+    $bpSvc->startLoading($bpCharge);
+    $bpSvc->finishLoading($bpCharge->fresh());
+
     $dn = $orderSvc->createDeliveryNote($order->fresh());
     expect($dn->items)->toHaveCount(1);
 
@@ -224,13 +238,16 @@ it('parcourt Devis → Commande → Validation → OF → Réservation → Produ
     $order->refresh();
 
     expect($dn->status)->toBe('valide')
-        ->and($order->status)->toBe('livre');
+        // [R4.11] La validation du BL émet la facture dans la foulée : la
+        // commande franchit 'livre' et se retrouve à 'facture'.
+        ->and($order->status)->toBe('facture');
 
     $stockAfterShip = (float) ProductStock::where('product_id', $finished->id)->where('warehouse_id', $warehouse->id)->value('quantity');
     expect($stockBeforeShip - $stockAfterShip)->toBe(50.0);
 
     // ── Étape 9 : Facture ─────────────────────────────────────────────────────
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn);
+    // [R4.11] La facture existe déjà — on la récupère au lieu de la créer.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     $invoice->refresh();
 

@@ -183,7 +183,10 @@ class CustomerCreditExposureService
 
         $exposure = $this->assess($order, true);
         if ($exposure['limited'] && $exposure['projected'] > $exposure['limit']) {
-            throw new RuntimeException(sprintf(
+            // [R4.5] Exception typée : le dépassement est rattrapable par une
+            // approbation exceptionnelle, contrairement aux autres refus de ce
+            // service. Le message reste identique — c'est lui que l'utilisateur lit.
+            throw new \App\Exceptions\CreditLimitExceededException(sprintf(
                 'Commande bloquée : encours prévisionnel %s FCFA supérieur au plafond %s FCFA '
                 .'(factures %s + commandes ouvertes %s + nouvelle commande %s - acomptes %s).',
                 number_format($exposure['projected'], 0, ',', ' '),
@@ -192,7 +195,7 @@ class CustomerCreditExposureService
                 number_format($exposure['open_orders'], 0, ',', ' '),
                 number_format($exposure['new_order'], 0, ',', ' '),
                 number_format($exposure['deposits'], 0, ',', ' '),
-            ));
+            ), $exposure);
         }
 
         return $exposure;

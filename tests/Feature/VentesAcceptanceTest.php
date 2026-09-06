@@ -112,7 +112,10 @@ function vaccValidatedInvoice(Company $co, int $qty = 10): Invoice
     $dn = app(OrderService::class)->createDeliveryNote($order->fresh());
     app(DeliveryNoteService::class)->validate($dn);
 
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Un second appel serait refusé —
+    // c'est la garde anti-double facturation qui le prouve.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
 
     return $invoice->fresh();
@@ -159,13 +162,18 @@ it('exécute la chaîne Ventes bout-en-bout avec statuts, impacts stock et écri
     $order->refresh();
 
     expect($dn->status)->toBe('valide')
-        ->and($order->status)->toBe('livre');
+        // [R4.11] La validation du BL émet la facture dans la foulée : la commande
+        // franchit 'livre' et se retrouve à 'facture' au sortir de cette étape.
+        ->and($order->status)->toBe('facture');
 
     $stockAfter = (float) ProductStock::where('product_id', $product->id)->where('warehouse_id', $wh->id)->value('quantity');
     expect($stockBefore - $stockAfter)->toBe(40.0);
 
     // ── Facture : statut + écriture comptable équilibrée ─────────────────────
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn);
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Un second appel serait refusé —
+    // c'est la garde anti-double facturation qui le prouve.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     $invoice->refresh();
 

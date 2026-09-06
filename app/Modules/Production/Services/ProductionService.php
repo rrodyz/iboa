@@ -73,6 +73,25 @@ class ProductionService
                 }
             }
 
+            // [R4.7] Aucun OF anticipé : une commande client n'alimente la
+            // production qu'une fois son point de contrôle franchi — bon de
+            // préparation émis (comptant réglé, acompte au seuil, ou crédit
+            // approuvé par un responsable) ou dérogation de production tracée.
+            // La garde de LANCEMENT existait déjà ; sans celle-ci, un OF pouvait
+            // être créé — donc planifié et alloué en matière — avant tout contrôle.
+            if (! empty($data['order_id'])) {
+                $commandeLiee = \App\Models\Order::find($data['order_id']);
+                if ($commandeLiee
+                    && ! $commandeLiee->hasBonPreparation()
+                    && ! $commandeLiee->hasValidProductionApproval()) {
+                    throw ValidationException::withMessages([
+                        'order_id' => 'OF refusé : '
+                            .app(\App\Services\Sales\PreparationEligibilityService::class)->evaluate($commandeLiee)->reason
+                            .' Aucun ordre de fabrication ne peut être créé avant ce contrôle.',
+                    ]);
+                }
+            }
+
             // [Audit MTO — double OF / reliquat] OF lié à une commande : la somme des OF
             // actifs (non annulés) du même article ne peut pas dépasser la quantité
             // commandée. Bloque le double OF (double clic / 2 coordinateurs) et limite

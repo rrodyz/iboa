@@ -6,7 +6,7 @@
  * La règle est portée par MtoOrderRequirementGuard et appelée depuis
  * ProductionService::create(), seul chemin de création métier — vérifié par
  * cartographie : le contrôleur (store), le listener de confirmation de commande
- * (TriggerMtoProductionOnOrderConfirmed) et tout futur canal y convergent.
+ * (TriggerMtoProductionOnAuthorization) et tout futur canal y convergent.
  *
  * Deux OF antérieurs à la règle (OF-2026-0004, OF-2026-0005 en base de
  * développement) restent non conformes. Ils ne sont PAS régularisés d'office :
@@ -84,6 +84,17 @@ function mtoReqSalesOrder(Product $p): App\Models\Order
     $o->items()->create([
         'product_id' => $p->id, 'description' => $p->name, 'quantity' => 100,
         'unit_price' => 1000, 'line_total_ht' => 100000, 'line_tax' => 0, 'line_total_ttc' => 100000,
+    ]);
+
+    // [R4.7] Ce fichier vérifie le RATTACHEMENT d'un OF à une commande, pas la
+    // couverture financière. Depuis R4, aucun OF n'est créable tant que la
+    // production n'est pas autorisée : le bon de préparation est cette
+    // autorisation. On le pose donc dans le décor, sans quoi tous les cas
+    // échoueraient sur un contrôle qui n'est pas leur objet.
+    \App\Models\BonPreparation::create([
+        'company_id' => $co->id, 'order_id' => $o->id,
+        'fiscal_year_id' => $co->current_fiscal_year_id,
+        'number' => 'BP-MTOREQ-'.uniqid(), 'payment_mode' => 'credit', 'status' => 'en_attente',
     ]);
 
     return $o;

@@ -2,7 +2,7 @@
 
 namespace App\Listeners;
 
-use App\Events\OrderConfirmed;
+use App\Events\ProductionAuthorized;
 use App\Modules\Production\Models\BillOfMaterial;
 use App\Modules\Production\Models\ProductionOrder;
 use App\Modules\Production\Services\ProductionService;
@@ -21,13 +21,18 @@ use Illuminate\Support\Facades\Log;
  * Crée un OF en brouillon lié à la commande ;
  * l'équipe production complète ensuite l'allocation matière et le lance.
  *
+ * [R4.7] Déclenché par ProductionAuthorized — bon de préparation émis ou
+ * dérogation gérant — et non plus par la confirmation commerciale : une
+ * commande confirmée mais non couverte financièrement ne doit produire aucun
+ * ordre de fabrication, même en brouillon.
+ *
  * Synchrone (même transaction que la confirmation). Jamais bloquant : un échec
  * de création d'OF est journalisé sans faire échouer la confirmation — le
  * bouton « Lancer en production » reste le filet manuel.
  */
-class TriggerMtoProductionOnOrderConfirmed
+class TriggerMtoProductionOnAuthorization
 {
-    public function handle(OrderConfirmed $event): void
+    public function handle(ProductionAuthorized $event): void
     {
         $order = $event->order->loadMissing('items.product');
 

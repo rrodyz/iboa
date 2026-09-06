@@ -87,7 +87,29 @@ it('MTO-01 — client comptant : lancement OF bloqué sans paiement, débloqué 
     $order->refresh();
     expect($order->status)->toBe('confirme');
 
-    // ── 3 : OF auto-généré ────────────────────────────────────────────────────
+    // ── 3 : SANS paiement, la production est refusée — À LA SOURCE ──────────
+    //
+    // Ce test prouvait auparavant le refus au LANCEMENT d'un OF déjà créé.
+    // Depuis R4.7 le refus intervient plus tôt et plus fort : une commande
+    // comptant non réglée ne produit aucun ordre de fabrication, pas même en
+    // brouillon. L'assertion de blocage n'est pas retirée, elle est posée au
+    // point où le blocage a désormais lieu.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+
+    expect(fn () => app(ProductionService::class)->create([
+        'order_id' => $order->id, 'product_id' => $finished->id, 'quantity_requested' => 20,
+    ]))->toThrow(ValidationException::class);
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+    expect(ProductStock::where('product_id', $finished->id)->where('warehouse_id', $warehouse->id)->count())->toBe(0);
+
+    // ── 4 : Encaissement intégral au comptoir → bon de préparation → OF ─────
+    // Le règlement comptant crée l'encaissement confirmé non affecté (acompte
+    // avant facture) ET le bon de préparation qui autorise la production.
+    $totalTtc = (int) round(20 * 15_000 * 1.18);
+    $cashAccount = CashAccount::factory()->create(['company_id' => $company->id, 'type' => 'banque', 'current_balance' => 0, 'is_active' => true]);
+    app(\App\Services\BonPreparationService::class)
+        ->createForCashOrder($order->fresh(), $totalTtc, 'E2E-MTO-01', $cashAccount->id);
+
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $finished->id)->first();
     expect($of)->not->toBeNull();
     $of->update(['bill_of_material_id' => $bom->id, 'production_line_id' => $line->id]);
@@ -98,28 +120,7 @@ it('MTO-01 — client comptant : lancement OF bloqué sans paiement, débloqué 
     $prodSvc->validateByChef($of->fresh());
     $prodSvc->validateByResponsable($of->fresh());
 
-    // ── 5 : Tentative de lancement SANS paiement — attendu BLOCK ─────────────
-    // Garde financière RÉELLE (ProductionFinancialEligibilityService), pas de
-    // dérogation posée : comptant + 0 encaissé = refus fail-closed.
-    expect(fn () => $prodSvc->launch($of->fresh()))->toThrow(ValidationException::class);
-    expect($of->fresh()->status)->not->toBe('lance');
-    expect(ProductStock::where('product_id', $finished->id)->where('warehouse_id', $warehouse->id)->count())->toBe(0);
-
-    // ── 6 : Encaissement intégral AVANT production ───────────────────────────
-    $totalTtc = (int) round(20 * 15_000 * 1.18);
-    $cashAccount = CashAccount::factory()->create(['company_id' => $company->id, 'type' => 'banque', 'current_balance' => 0, 'is_active' => true]);
-    app(ClientPaymentService::class)->create([
-        'client_id' => $client->id, 'cash_account_id' => $cashAccount->id,
-        'amount' => $totalTtc, 'method' => 'virement', 'payment_date' => now()->toDateString(),
-        // [Garde anti-doublon] Premier règlement du client, aucune facture
-        // encore émise — la garde structurelle (0 impayé = 0 non-imputé
-        // "légitime") le classe par défaut comme doublon. force_duplicate le
-        // confirme comme véritable acompte sur commande à venir, exactement
-        // le cas d'usage MTO comptant (paiement AVANT facturation).
-        'is_acompte' => true, 'force_duplicate' => true,
-    ]);
-
-    // ── 7 : Lancement désormais autorisé (couverture 100% via l'acompte libre) ──
+    // ── 5 : Lancement autorisé — couverture 100 % constatée par la gate ─────
     $prodSvc->launch($of->fresh());
     $prodSvc->start($of->fresh());
     $of->refresh();
@@ -144,14 +145,24 @@ it('MTO-01 — client comptant : lancement OF bloqué sans paiement, débloqué 
     expect($of->fresh()->status)->toBe('termine');
 
     // ── 13-14 : Livraison, jamais avant libération qualité (déjà garanti par finish()) ──
+    // [R4.10] Le bon de livraison constate ce qui a été chargé : chargement
+    // démarré puis clôturé avant de l'établir.
+    $bpSvc = app(\App\Services\BonPreparationService::class);
+    $bpCharge = $order->fresh()->activeBonPreparation();
+    $bpSvc->startLoading($bpCharge);
+    $bpSvc->finishLoading($bpCharge->fresh());
+
     $dn = $orderSvc->createDeliveryNote($order->fresh());
     app(DeliveryNoteService::class)->validate($dn);
     $dn->refresh();
     $order->refresh();
-    expect($dn->status)->toBe('valide')->and($order->status)->toBe('livre');
+    // [R4.11] La validation facture dans la foulée : la commande franchit
+    // « livré » et ressort « facturé ».
+    expect($dn->status)->toBe('valide')->and($order->status)->toBe('facture');
 
     // ── 15 : Facture + solde (déjà couvert par l'acompte) ────────────────────
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn);
+    // [R4.11] La validation du bon de livraison a déjà émis la facture.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     $invoice->refresh();
     expect((float) $invoice->total_ttc)->toBe((float) $totalTtc);

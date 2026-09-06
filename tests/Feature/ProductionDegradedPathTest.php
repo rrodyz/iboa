@@ -120,7 +120,10 @@ it('2. gère une livraison partielle avec reliquat puis le solde', function () {
     $dn2->items->first()->update(['quantity' => 40]);
     app(DeliveryNoteService::class)->validate($dn2->fresh());
     $order->refresh();
-    expect($order->status)->toBe('livre')
+    // [R4.11] La validation du second bon de livraison facture dans la foulée :
+    // la commande franchit « livré » et ressort « facturé ». Les quantités
+    // livrées et le stock, eux, restent ce qu'ils étaient.
+    expect($order->status)->toBe('facture')
         ->and((float) $order->items->first()->delivered_quantity)->toBe(100.0)
         ->and((float) ProductStock::where('product_id', $product->id)->where('warehouse_id', $wh->id)->value('quantity'))->toBe(0.0);
 });

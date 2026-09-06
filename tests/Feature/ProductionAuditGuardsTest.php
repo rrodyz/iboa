@@ -42,7 +42,7 @@ function agAdmin(Company $co): User
 }
 
 /** Commande confirmée avec une ligne MTO de 50 (10 tôles × 5 m). */
-function agOrderWithLine(Company $co, Product $product, float $qty = 50): Order
+function agOrderWithLine(Company $co, Product $product, float $qty = 50, bool $autorisee = true): Order
 {
     $order = Order::create([
         'company_id' => $co->id, 'fiscal_year_id' => $co->current_fiscal_year_id,
@@ -54,6 +54,19 @@ function agOrderWithLine(Company $co, Product $product, float $qty = 50): Order
         'unit_price' => 4000, 'line_total_ht' => (int) ($qty * 4000), 'line_tax' => 0,
         'line_total_ttc' => (int) ($qty * 4000), 'sort_order' => 0,
     ]);
+
+    // [R4.7] Ce fichier vérifie les gardes de RELIQUAT et de double OF. La
+    // garde d'autorisation de production s'exécute avant elles : sans bon de
+    // préparation, les cas seraient refusés pour un motif qui n'est pas celui
+    // qu'ils mesurent. Le décor pose donc l'autorisation — sauf pour les cas
+    // qui mesurent précisément la NON-éligibilité d'une commande.
+    if ($autorisee) {
+        \App\Models\BonPreparation::create([
+            'company_id' => $co->id, 'order_id' => $order->id,
+            'fiscal_year_id' => $co->current_fiscal_year_id,
+            'number' => 'BP-AG-'.uniqid(), 'payment_mode' => 'credit', 'status' => 'en_attente',
+        ]);
+    }
 
     return $order;
 }
@@ -120,7 +133,9 @@ it('révoque une approbation de production (et la commande redevient non éligib
     Artisan::call('db:seed', ['--class' => RolesAndPermissionsSeeder::class, '--force' => true]);
     $admin = agAdmin($co);
     $tole = Product::factory()->create(['production_mode' => 'mto']);
-    $order = agOrderWithLine($co, $tole, 50);
+    // Sans bon de préparation : l'éligibilité mesurée ici doit tenir à la seule
+    // approbation de production, et retomber à zéro quand elle est révoquée.
+    $order = agOrderWithLine($co, $tole, 50, autorisee: false);
     $order->update(['production_approved' => true, 'production_approved_at' => now(), 'production_approved_by' => $admin->id]);
 
     expect(Order::eligibleForProduction()->count())->toBe(1);

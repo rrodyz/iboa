@@ -203,12 +203,17 @@ describe('Chemin A — Devis → Validation commerciale → financière → BL �
         expect($dn->status)->toBe('valide')
             ->and($dn->validated_at)->not->toBeNull()
             ->and($stockBefore - $stockAfter)->toBe(10.0)
-            ->and($order->status)->toBe('livre');
+            // [R4.11] La validation du BL émet la facture dans la foulée : la commande
+            // franchit 'livre' et se retrouve à 'facture' au sortir de cette étape.
+            ->and($order->status)->toBe('facture');
 
         // ── Étape 8 : Facturation ─────────────────────────────────────────────
         /** @var DeliveryNoteService $dnSvc */
         $dnSvc   = app(DeliveryNoteService::class);
-        $invoice = $dnSvc->createInvoice($dn);
+        // [R4.11] La validation du bon de livraison a déjà émis la facture :
+        // on la récupère au lieu de la créer. Un second appel serait refusé —
+        // c'est la garde anti-double facturation qui le prouve.
+        $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
 
         expect($invoice)->toBeInstanceOf(Invoice::class)
             ->and($invoice->client_id)->toBe($client->id)
@@ -324,10 +329,15 @@ describe('Chemin B — Validation commerciale → financière → BL → Facture
 
         expect($dn->status)->toBe('valide')
             ->and($stockBefore - $stockAfter)->toBe(5.0)
-            ->and($order->status)->toBe('livre');
+            // [R4.11] La validation du BL émet la facture dans la foulée : la commande
+            // franchit 'livre' et se retrouve à 'facture' au sortir de cette étape.
+            ->and($order->status)->toBe('facture');
 
         // ── Étape 6 : Facturation ─────────────────────────────────────────────
-        $invoice = app(DeliveryNoteService::class)->createInvoice($dn);
+        // [R4.11] La validation du bon de livraison a déjà émis la facture :
+        // on la récupère au lieu de la créer. Un second appel serait refusé —
+        // c'est la garde anti-double facturation qui le prouve.
+        $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
         app(\App\Services\InvoiceService::class)->validate($invoice->fresh());
         $invoice->refresh();
 

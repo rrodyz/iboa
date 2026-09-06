@@ -110,17 +110,22 @@ it('CDC §33 : client comptant — devis→commande→règlement→OF→producti
     $order->refresh();
     expect($order->status)->toBe('confirme');
 
+    // ── Règlement intégral (236 000) → bon de préparation → OF ──────────────
+    // [R4.2/R4.7] L'ordre des gestes n'est pas indifférent : c'est
+    // l'encaissement qui émet le bon de préparation, et le bon de préparation
+    // qui autorise l'ordre de fabrication. Une commande confirmée mais impayée
+    // n'en déclenche aucun — ce que vérifie l'attente ci-dessous.
+    expect(ProductionOrder::where('order_id', $order->id)->exists())->toBeFalse();
+
+    // Le règlement comptoir crée l'encaissement confirmé non affecté (acompte
+    // avant facture), exactement comme l'encaissement libre qu'il remplace ici.
+    app(\App\Services\BonPreparationService::class)
+        ->createForCashOrder($order->fresh(), 236000, 'ENC-AC-'.uniqid());
+
     // ── OF auto MTO ─────────────────────────────────────────────────────────
     $of = ProductionOrder::where('order_id', $order->id)->where('product_id', $tole->id)->first();
     expect($of)->not->toBeNull();
     $of->update(['bill_of_material_id' => $bom->id, 'production_line_id' => $line->id]);
-
-    // ── Règlement intégral (236 000) — encaissement libre confirmé ──────────
-    ClientPayment::create([
-        'company_id' => $company->id, 'client_id' => $client->id, 'status' => 'confirme',
-        'is_acompte' => true, 'amount' => 236000, 'unallocated_amount' => 236000,
-        'payment_date' => now(), 'number' => 'ENC-AC-' . uniqid(),
-    ]);
 
     // La gate passe sur la couverture intégrale (aucune dérogation).
     app(ProductionService::class)->checkFinancialGate($of->fresh()); // ne lève pas
@@ -159,6 +164,13 @@ it('CDC §33 : client comptant — devis→commande→règlement→OF→producti
     expect((float) ProductStock::where('product_id', $tole->id)->where('warehouse_id', $warehouse->id)->value('quantity'))->toBe(50.0);
 
     // Commande livrable : le BL se crée avec la ligne PF.
+    // [R4.10] Le bon de livraison constate ce qui a été chargé : le magasin doit
+    // donc avoir démarré PUIS clôturé le chargement du bon de préparation.
+    $bpSvc = app(\App\Services\BonPreparationService::class);
+    $bpCharge = $order->fresh()->activeBonPreparation();
+    $bpSvc->startLoading($bpCharge);
+    $bpSvc->finishLoading($bpCharge->fresh());
+
     $dn = app(OrderService::class)->createDeliveryNote($order->fresh());
     expect($dn->items)->toHaveCount(1);
 });
@@ -170,7 +182,7 @@ it('le paiement caisse du BP crée un encaissement central sans double comptage'
     $user = acAdmin($co);
     $this->actingAs($user);
 
-    $client = Client::factory()->create(['is_active' => true, 'payment_mode' => 'comptant']);
+    $client = Client::factory()->create(['is_active' => true, 'payment_mode' => Client::PAYMENT_CASH]);
     $p = Product::factory()->create(['production_mode' => 'mto', 'sale_price' => 5000, 'is_sellable' => true]);
     $order = \App\Models\Order::create([
         'company_id' => $co->id, 'fiscal_year_id' => $co->current_fiscal_year_id,

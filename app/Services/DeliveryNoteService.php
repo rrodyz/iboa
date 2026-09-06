@@ -43,6 +43,8 @@ class DeliveryNoteService
      */
     public function createFromOrder(Order $order): DeliveryNote
     {
+        $this->assertChargementTermine($order);
+
         return DB::transaction(function () use ($order) {
             $company = currentCompany();
 
@@ -112,6 +114,63 @@ class DeliveryNoteService
      * Validate a delivery note: status -> valide, create stock-out movements,
      * update delivered_quantity on order items, and advance the order status.
      */
+    /**
+     * [R4.10] Le bon de préparation est l'autorisation de chargement : tant
+     * qu'il n'est pas « chargé », rien n'est sorti du magasin et un bon de
+     * livraison n'aurait rien à constater.
+     *
+     * La règle elle-même vit sur le modèle (`Order::isReadyForDelivery()`) et
+     * était jusqu'ici appliquée par le seul contrôleur — donc contournable par
+     * un appel de service ou une commande console. Elle est reprise ici, au
+     * point de passage obligé de toute création de bon de livraison.
+     *
+     * Le cas « aucun bon de préparation » reste autorisé : c'est le flux direct
+     * déjà couvert par DeliveryAfterLoadingTest, hors du périmètre R4.10.
+     */
+    private function assertChargementTermine(Order $order): void
+    {
+        if ($order->isReadyForDelivery()) {
+            return;
+        }
+
+        $bp = $order->activeBonPreparation();
+
+        throw new \RuntimeException(sprintf(
+            'Commande %s : le chargement n\'est pas terminé (bon de préparation %s, statut « %s »). '
+            .'Le bon de livraison ne peut être établi qu\'après clôture du chargement.',
+            $order->number,
+            $bp?->number ?? '—',
+            $bp?->status ?? 'inconnu',
+        ));
+    }
+
+    /**
+     * [R4.10] Interdit de livrer au-delà du reste dû, ligne par ligne.
+     */
+    private function assertPasDeSurlivraison(DeliveryNote $dn): void
+    {
+        foreach ($dn->items as $item) {
+            if (! $item->order_item_id) {
+                continue; // ligne libre : aucune commande ne la borne
+            }
+
+            $ligneCommande = OrderItem::find($item->order_item_id);
+            if (! $ligneCommande) {
+                continue;
+            }
+
+            $reste = (float) $ligneCommande->quantity - (float) $ligneCommande->delivered_quantity;
+            if ((float) $item->quantity > $reste + 1e-6) {
+                throw new \RuntimeException(sprintf(
+                    'Sur-livraison refusée sur « %s » : %s demandé(s) pour %s restant(s) à livrer.',
+                    $ligneCommande->description ?: 'ligne de commande',
+                    rtrim(rtrim(number_format((float) $item->quantity, 4, '.', ''), '0'), '.'),
+                    rtrim(rtrim(number_format(max(0, $reste), 4, '.', ''), '0'), '.'),
+                ));
+            }
+        }
+    }
+
     public function validate(DeliveryNote $dn, ?string $derogationQualite = null): DeliveryNote
     {
         if ($dn->status !== 'brouillon') {
@@ -123,7 +182,26 @@ class DeliveryNoteService
         // avec le motif de workflow, sous peine de déroger sans le vouloir.
         app(ProductionDeliveryGuard::class)->assertDeliverable($dn, $derogationQualite);
 
+        // [R4.10] Aucune ligne ne peut livrer plus que ce qui reste dû. Sans ce
+        // contrôle, `delivered_quantity` était incrémenté sans plafond : deux BL
+        // successifs pouvaient sortir 60 unités d'une commande de 50, et le
+        // stock partait pour de bon.
+        $this->assertPasDeSurlivraison($dn);
+
         return DB::transaction(function () use ($dn) {
+            // [R4 — concurrence] Le contrôle de statut ci-dessus est lu hors
+            // transaction : deux validations simultanées du même bon le
+            // franchissaient toutes les deux, sortaient le stock deux fois et
+            // émettaient deux factures. Le verrou + re-lecture ferme la course ;
+            // le second arrivant repart avec un refus métier, pas un doublon.
+            $dn = DeliveryNote::lockForUpdate()->findOrFail($dn->id);
+            if ($dn->status !== 'brouillon') {
+                throw new \RuntimeException(sprintf(
+                    'Le bon de livraison %s a déjà été traité (statut : %s).',
+                    $dn->number, $dn->status,
+                ));
+            }
+
             $dn->update([
                 'status' => 'valide',
                 'validated_by' => Auth::id(),
@@ -131,6 +209,15 @@ class DeliveryNoteService
             ]);
 
             $this->applyStockOut($dn);
+
+            // [R4.11] L'activation du bon de livraison entraîne la facturation,
+            // dans la MÊME transaction : une livraison validée sans facture
+            // laisserait une sortie de stock non facturée, invisible du compte
+            // client. Idempotent — un BL déjà facturé (chemin manuel utilisé
+            // avant ce changement) ne fait pas échouer la validation.
+            if (! Invoice::where('delivery_note_id', $dn->id)->exists()) {
+                app(InvoiceService::class)->createFromDeliveryNote($dn->fresh());
+            }
 
             // [Sync ERP] event domaine apres commit — point d'extension decouple
             DB::afterCommit(fn () => event(new DeliveryNoteValidated($dn)));

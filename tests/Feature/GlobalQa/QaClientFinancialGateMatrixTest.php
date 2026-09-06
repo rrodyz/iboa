@@ -113,37 +113,83 @@ it('QA-CLI-CASH — paiement intégral encaissé : gate financier PASS', functio
     expect($req->satisfied)->toBeTrue();
 });
 
-// ═══════════════ QA-CLI-DEPOSIT — couverture partielle (voir FINDING) ═══════════════
+// ═══════════════ QA-CLI-DEPOSIT — mode ACOMPTE réel (R4.3) ═══════════════
+//
+// Ce bloc portait autrefois sur un client au COMPTANT à qui l'on versait la
+// moitié : il nommait « acompte » ce qui n'était qu'un règlement partiel, et le
+// mode acompte n'existait pas encore. Depuis R3 il existe pour de bon, avec un
+// seuil canonique. Le scénario est donc rétabli dans son intention d'origine —
+// prouver qu'un acompte suffisant ouvre la production — mais sur le vrai mode.
 
-it('QA-CLI-DEPOSIT (cash) — 0 versé : BLOCK', function () {
+/** Client à acompte + seuil global, sur la société QA. */
+function qaFinDepositClient(Company $co, string $code, float $taux = 50): Client
+{
+    app()->instance('current_company', $co);
+    $setting = \App\Models\SalesSetting::current();
+    $setting->deposit_required_rate = $taux;
+    $setting->save();
+
+    return Client::factory()->create([
+        'code' => $code, 'name' => 'QA Client Acompte',
+        'payment_mode' => Client::PAYMENT_DEPOSIT, 'credit_limit' => 0, 'is_active' => true,
+    ]);
+}
+
+it('QA-CLI-DEPOSIT — 0 versé : BLOCK', function () {
     $co = qaFinCompany();
     $this->actingAs(qaFinAdmin($co));
-    $client = Client::factory()->create(['code' => 'QA-CLI-DEPOSIT', 'name' => 'QA Client Acompte', 'payment_mode' => Client::PAYMENT_CASH, 'credit_limit' => 0, 'is_active' => true]);
+    $client = qaFinDepositClient($co, 'QA-CLI-DEPOSIT');
     $order = qaFinOrder($co, $client, 500_000); // 590 000 TTC
     app(CommercialWorkflowService::class)->submit($order);
     app(CommercialWorkflowService::class)->validateOrder($order->fresh());
 
     $req = app(ProductionFinancialEligibilityService::class)->evaluate($order->fresh());
-    expect($req->satisfied)->toBeFalse()->and((int) $req->coveredAmount)->toBe(0);
+    expect($req->satisfied)->toBeFalse()
+        ->and((int) $req->coveredAmount)->toBe(0)
+        ->and((int) $req->requiredAmount)->toBe(295_000); // 50 % de 590 000
 });
 
-it('QA-CLI-DEPOSIT (cash) — versement partiel insuffisant : BLOCK', function () {
+it('QA-CLI-DEPOSIT — versement sous le seuil : BLOCK', function () {
     $co = qaFinCompany();
     $this->actingAs(qaFinAdmin($co));
-    $client = Client::factory()->create(['code' => 'QA-CLI-DEPOSIT-2', 'name' => 'QA Client Acompte', 'payment_mode' => Client::PAYMENT_CASH, 'credit_limit' => 0, 'is_active' => true]);
+    $client = qaFinDepositClient($co, 'QA-CLI-DEPOSIT-2');
     $order = qaFinOrder($co, $client, 500_000);
     app(CommercialWorkflowService::class)->submit($order);
     app(CommercialWorkflowService::class)->validateOrder($order->fresh());
     $order->refresh();
 
     $cash = CashAccount::factory()->create(['company_id' => $co->id, 'type' => 'caisse', 'current_balance' => 0, 'is_active' => true]);
-    $partiel = (int) round($order->total_ttc * 0.5);
-    // [FIX QA-01] Même correctif que ci-dessus — chemin métier réel.
-    app(\App\Services\BonPreparationService::class)->createForCashOrder($order->fresh(), $partiel, 'QA-DEPOSIT-PARTIAL-001', $cash->id);
+
+    // Un franc sous le seuil : le bon de préparation reste fermé. Le seuil est
+    // une frontière, pas une approximation.
+    expect(fn () => app(\App\Services\BonPreparationService::class)
+        ->createForCashOrder($order->fresh(), 294_999, 'QA-DEPOSIT-UNDER-001', $cash->id))
+        ->toThrow(RuntimeException::class);
+    expect($order->fresh()->hasBonPreparation())->toBeFalse();
+});
+
+it('QA-CLI-DEPOSIT — acompte au seuil : bon de préparation émis', function () {
+    $co = qaFinCompany();
+    $this->actingAs(qaFinAdmin($co));
+    $client = qaFinDepositClient($co, 'QA-CLI-DEPOSIT-3');
+    $order = qaFinOrder($co, $client, 500_000);
+    app(CommercialWorkflowService::class)->submit($order);
+    app(CommercialWorkflowService::class)->validateOrder($order->fresh());
+    $order->refresh();
+
+    expect((int) $order->total_ttc)->toBe(590_000);
+
+    $cash = CashAccount::factory()->create(['company_id' => $co->id, 'type' => 'caisse', 'current_balance' => 0, 'is_active' => true]);
+    $bp = app(\App\Services\BonPreparationService::class)
+        ->createForCashOrder($order->fresh(), 295_000, 'QA-DEPOSIT-OK-001', $cash->id);
+
+    expect($bp->exists)->toBeTrue()
+        ->and($order->fresh()->hasBonPreparation())->toBeTrue();
 
     $req = app(ProductionFinancialEligibilityService::class)->evaluate($order->fresh());
-    expect($req->satisfied)->toBeFalse()
-        ->and((int) $req->coveredAmount)->toBe($partiel);
+    expect((int) $req->requiredAmount)->toBe(295_000)
+        ->and((int) $req->coveredAmount)->toBe(295_000)
+        ->and($req->satisfied)->toBeTrue();
 });
 
 // ═══════════════ QA-CLI-CREDIT — crédit ═══════════════

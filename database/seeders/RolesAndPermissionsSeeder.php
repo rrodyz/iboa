@@ -32,7 +32,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'quotes.view', 'quotes.create', 'quotes.edit', 'quotes.delete', 'quotes.validate',
             'orders.view', 'orders.create', 'orders.edit', 'orders.delete', 'orders.validate', 'orders.reopen',
             'orders.edit_validated', // [CDC §13.1] modifier une commande déjà validée (prix verrouillés pour les autres)
-            'bon_preparations.view', 'bon_preparations.update',
+            // [R4.4] `validate` = trancher la demande d'approbation qui autorise le
+            // passage d'une commande à crédit en bon de préparation.
+            'bon_preparations.view', 'bon_preparations.update', 'bon_preparations.validate',
             'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.delete', 'invoices.validate', 'invoices.send',
             'deliveries.view', 'deliveries.create', 'deliveries.edit', 'deliveries.validate',
             'credit_notes.view', 'credit_notes.create', 'credit_notes.edit',
@@ -47,6 +49,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'sales.bypass_self_validation', // valider son propre document (bypass double validation)
             'sales_below_floor.request', 'sales_below_floor.approve',
             'sales_below_floor.reject', 'sales_below_floor.cancel',
+            // [R4.5] Arbitrer un dépassement de plafond d'encours (approbation ou refus).
+            'sales_credit_overrun.approve',
             // Achats
             'purchase_requests.view', 'purchase_requests.create', 'purchase_requests.submit', 'purchase_requests.approve',
             'purchase_requests.validate_l1', // validation chef service (<500k FCFA)
@@ -238,7 +242,11 @@ class RolesAndPermissionsSeeder extends Seeder
             'receptions.view', 'supplier_returns.view',
             // Workflow ventes
             'sales.validate', 'sales.reject', 'sales.cancel', 'sales.view_all',
+            // [R4.4] Le risque crédit relève aussi de la finance : le DAF tranche
+            // le passage en préparation d'une commande à crédit.
+            'bon_preparations.view', 'bon_preparations.validate',
             'sales_below_floor.approve', 'sales_below_floor.reject', 'sales_below_floor.cancel',
+            'sales_credit_overrun.approve', // [R4.5] le risque d'encours relève de la finance
             // Validation financière OF (§13.2 CDC) — DAF débloque fabrication
             'production.view', 'production.approve_financial',
             'production.modification.avis_finance', // §13.10 — étape 3/4
@@ -364,12 +372,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'orders.view', 'orders.create', 'orders.edit', 'orders.delete', 'orders.validate', 'orders.reopen',
             'orders.edit_validated', // [CDC §13.1] seul un responsable peut retoucher une commande validée
             'bon_preparations.view', // [CDC §BP] suivi des bons de préparation
+            'bon_preparations.validate', // [R4.4] approuve/refuse le passage en préparation à crédit
             'invoices.view', 'invoices.create', 'invoices.send',
             'deliveries.view', 'deliveries.create',
             'credit_notes.view', 'credit_notes.create',
             'payments.view', 'reports.view',
             'stocks.view',
             'sales.create', 'sales.submit', 'sales.transform', 'sales_below_floor.request', 'sales.validate', 'sales.view_all',
+            'sales_credit_overrun.approve', // [R4.5] arbitre un dépassement d'encours
             // [P1-A — MTO Fiacre SANKARA] « Administrateur des ventes » = ce rôle
             // (le seul palier de responsabilité commerciale au-dessus du
             // commercial simple) : peut désormais accorder la dérogation

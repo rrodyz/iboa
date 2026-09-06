@@ -376,6 +376,35 @@ class Product extends Model
         return $query->where('is_stockable', true);
     }
 
+    /** [R4.6] Catégorie de gestion des tôles bac fabriquées sur commande. */
+    public const CATEGORIE_TOLE_BAC = 'PF_TOLE_MTO';
+
+    /** Familles de repli pour les articles historiques sans catégorie. */
+    public const FAMILLES_TOLE_BAC_LEGACY = ['TOLES_BAC', 'PFTBC', 'TLBPFT'];
+
+    /**
+     * [R4.6] Articles « tôle bac » au sens du contrôle de production.
+     *
+     * Discriminant = la CATÉGORIE de gestion (`item_categories.code`), pas la
+     * famille de classement : la famille « Tôles bac » regroupe aussi les
+     * avaries et chutes (catégorie SOUS_PRODUIT), qui ne doivent pas déclencher
+     * ce contrôle. Le repli par famille ne sert que les articles historiques
+     * sans catégorie — aucune reconnaissance par libellé, qui casserait au
+     * premier renommage.
+     *
+     * Les codes utilisés jusqu'ici par le tableau de bord (BPRE, BGAL)
+     * n'existent dans aucune ligne : le panneau tôles bac restait donc vide.
+     */
+    public function scopeToleBac(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->whereHas('itemCategory', fn ($c) => $c->where('code', self::CATEGORIE_TOLE_BAC))
+                ->orWhere(fn (Builder $legacy) => $legacy
+                    ->whereNull('item_category_id')
+                    ->whereHas('family', fn ($f) => $f->whereIn('code', self::FAMILLES_TOLE_BAC_LEGACY)));
+        });
+    }
+
     // -------------------------------------------------------------------------
     // Methods
     // -------------------------------------------------------------------------

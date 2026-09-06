@@ -58,7 +58,10 @@ it('QA — chaque pièce comptable générée (vente + encaissement) est équili
 
     $dn = app(OrderService::class)->createDeliveryNote($order->fresh());
     app(DeliveryNoteService::class)->validate($dn);
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Les assertions qui suivent —
+    // montants, COGS, écritures, règlements — restent inchangées.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice); // → postClientInvoice + postSaleStockMovement automatiques.
 
     $cash = CashAccount::factory()->create(['company_id' => $co->id, 'type' => 'caisse', 'current_balance' => 0, 'is_active' => true]);

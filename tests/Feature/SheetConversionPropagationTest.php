@@ -59,7 +59,10 @@ it('propage nb tôles / longueur unitaire de la commande au BL puis à la factur
     app(DeliveryNoteService::class)->validate($bl->fresh());
 
     // BL → facture : nb tôles / longueur hérités.
-    $invoice = app(InvoiceService::class)->createFromDeliveryNote($bl->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Les assertions de propagation
+    // (nb tôles, longueur unitaire) restent inchangées.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $bl->id)->firstOrFail();
     $invItem = $invoice->items->first();
     expect((float) $invItem->nb_toles)->toBe(10.0)
         ->and((float) $invItem->metrage_par_tole)->toBe(5.0)

@@ -156,9 +156,19 @@ it('QA-CLI-CASH — chaîne MTO complète : réservation lot explicite → conso
 
     // ── Livraison → Facture ──────────────────────────────────────────────────
     $orderSvc = app(OrderService::class);
+    // [R4.10] Le bon de livraison constate ce qui a été chargé : le magasin doit
+    // donc avoir démarré PUIS clôturé le chargement du bon de préparation.
+    $bpSvc = app(\App\Services\BonPreparationService::class);
+    $bpCharge = $order->fresh()->activeBonPreparation();
+    $bpSvc->startLoading($bpCharge);
+    $bpSvc->finishLoading($bpCharge->fresh());
+
     $dn = $orderSvc->createDeliveryNote($order->fresh());
     app(DeliveryNoteService::class)->validate($dn);
-    $invoice = app(DeliveryNoteService::class)->createInvoice($dn->fresh());
+    // [R4.11] La validation du bon de livraison a déjà émis la facture :
+    // on la récupère au lieu de la créer. Un second appel serait refusé —
+    // c'est la garde anti-double facturation qui le prouve.
+    $invoice = \App\Models\Invoice::where('delivery_note_id', $dn->id)->firstOrFail();
     app(InvoiceService::class)->validate($invoice);
     $invoice->refresh();
 
