@@ -95,6 +95,15 @@ class ReceptionController extends Controller
             'items.*.received_quantity.min'      => 'La quantité reçue ne peut pas être négative.',
         ]);
 
+        // [SEC-PHASE2 §2] Maker-checker (mode strict production) : celui qui a
+        // saisi la réception ne la valide pas — l'entrée de stock est certifiée
+        // par un second regard. Configurable (petites équipes : désactivé).
+        try {
+            app(\App\Services\MakerCheckerService::class)->assert($reception->created_by, 'reception.validate', "la réception {$reception->number}", $reception);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
         // Compteurs pour message final transparent à l'utilisateur
         $movementsCreated = 0;
         $linesSkipped     = 0;
@@ -158,6 +167,19 @@ class ReceptionController extends Controller
                     'validated_at' => now(),
                 ]);
 
+                // [Gap inter-modules — recette] Génération AUTOMATIQUE des bobines
+                // et lots pour les articles à suivi bobine/lot : l'action manuelle
+                // « Générer les bobines » restait facile à rater et bloquait
+                // ensuite la consommation matière en production. Le service filtre
+                // lui-même les articles éligibles et ne double PAS l'entrée de
+                // stock (traçabilité pure sur ce chemin).
+                try {
+                    app(\App\Modules\Production\Services\CoilReceptionService::class)
+                        ->createFromReception($reception->fresh('items.product.itemCategory'), onlyTracked: true);
+                } catch (\Illuminate\Validation\ValidationException) {
+                    // Déjà générées ou rien d'éligible — silencieux.
+                }
+
                 // Update PO status
                 $po = $reception->purchaseOrder;
                 if ($po) {
@@ -218,5 +240,29 @@ class ReceptionController extends Controller
         return redirect()
             ->route('achats.receptions.show', $reception)
             ->with($linesSkipped > 0 ? 'warning' : 'success', $msg);
+    }
+
+    /**
+     * [Audit annulations] Annulation technique d'une réception validée par
+     * erreur — gardes et inversions dans PurchaseOrderService::cancelReception.
+     */
+    public function cancelReception(Request $request, Reception $reception): RedirectResponse
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'reason.required' => 'Le motif d\'annulation est obligatoire.',
+            'reason.min'      => 'Le motif doit faire au moins 5 caractères.',
+        ]);
+
+        try {
+            app(\App\Services\PurchaseOrderService::class)->cancelReception($reception, $data['reason']);
+
+            return redirect()
+                ->route('achats.receptions.show', $reception)
+                ->with('success', 'Réception ' . $reception->number . ' annulée — stock contre-passé, bobines retirées, commande fournisseur réouverte.');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 }

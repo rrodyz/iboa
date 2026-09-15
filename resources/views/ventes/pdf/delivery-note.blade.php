@@ -76,9 +76,12 @@
         .qr-ref { font-size:8px; color:#9ca3af; margin-top:5px; font-family:monospace; }
 
         .footer { margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 9px; color: #9ca3af; text-align: center; }
-    </style>
+        .pagenum { position: fixed; bottom: 4px; right: 28px; font-size: 7.5px; color: #9ca3af; }
+    .pagenum:after { content: "Page " counter(page) " / " counter(pages); }
+</style>
 </head>
 <body>
+<div class="pagenum"></div>
 <div class="page">
 
     @php
@@ -105,16 +108,7 @@
     <div class="header">
         <div class="header-left">
             @if($logoBase64)<img src="{{ $logoBase64 }}" class="logo" alt="Logo">@endif
-            <div class="company-name">{{ $company?->trade_name ?? $company?->name ?? 'A3 ERP' }}</div>
-            @if($company?->address)
-            <div class="company-sub">{{ $company->address }}{{ $company->city ? ', '.$company->city : '' }}</div>
-            @endif
-            @if($company?->phone)
-            <div class="company-sub">Tél. : {{ $company->phone }}</div>
-            @endif
-            @if($company?->ifu)
-            <div class="company-sub">IFU : {{ $company->ifu }}</div>
-            @endif
+            @include('ventes.pdf.partials.company-identity', ['company' => $company])
         </div>
         <div class="header-right">
             <div class="doc-title">BON DE LIVRAISON</div>
@@ -139,7 +133,7 @@
     <div class="parties">
         <div class="party-left">
             <div class="party-label">Expéditeur</div>
-            <div class="party-name">{{ $company?->name ?? 'A3 ERP' }}</div>
+            <div class="party-name">{{ $company?->name ?? 'OA METAL INDUSTRIE' }}</div>
             @if($company?->address) <div class="party-detail">{{ $company->address }}</div> @endif
             @if($company?->phone) <div class="party-detail">Tél. : {{ $company->phone }}</div> @endif
         </div>
@@ -195,7 +189,12 @@
             @forelse($deliveryNote->items as $item)
             <tr>
                 <td>{{ $loop->iteration }}</td>
-                <td>{{ $item->description }}</td>
+                <td>
+                    {{ $item->description }}
+                    @if($item->nb_toles > 0 && $item->metrage_par_tole > 0)
+                    <br><span style="font-size:8px;color:#6b7280">{{ number_format($item->nb_toles, 0, ',', ' ') }} tôle(s) × {{ rtrim(rtrim(number_format($item->metrage_par_tole, 2, ',', ' '), '0'), ',') }} m = {{ number_format($item->quantity, 2, ',', ' ') }} ml</span>
+                    @endif
+                </td>
                 <td style="font-family: monospace; font-size: 8px; color: #6b7280;">
                     {{ $item->product?->reference ?? '—' }}
                 </td>
@@ -268,7 +267,7 @@
         @if($settings?->footer_text)
             {{ $settings->footer_text }}
         @else
-            {{ $company?->trade_name ?? $company?->name ?? 'A3 ERP' }}
+            {{ $company?->trade_name ?? $company?->name ?? 'OA METAL INDUSTRIE' }}
             @if($company?->address) — {{ $company->address }} @endif
             @if($company?->rccm) | RCCM : {{ $company->rccm }} @endif
             @if($company?->ifu) | IFU : {{ $company->ifu }} @endif

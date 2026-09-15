@@ -91,6 +91,9 @@ class JournalEntryService
             // which would double-increment account balances.
             $entry = JournalEntry::lockForUpdate()->findOrFail($entry->id);
 
+            // [SEC-PHASE2 §2] Maker-checker : l'auteur d'une écriture manuelle ne la poste pas seul
+            app(MakerCheckerService::class)->assert($entry->created_by, 'journal_entry.validate', "l'écriture {$entry->number}", $entry);
+
             if ($entry->status !== 'brouillon') {
                 throw new \RuntimeException('Seules les écritures en brouillon peuvent être validées.');
             }
@@ -143,6 +146,9 @@ class JournalEntryService
             // Comme file-cache ne supporte pas les tags, on flush par pattern.
             $companyId = $entry->company_id;
             $this->flushFinancialReportCache($companyId);
+
+            // [SEC-PHASE2 §8] Journal (succès = après commit)
+            DB::afterCommit(fn () => app(AuditService::class)->log('ecriture.validation', $entry, [], ['debit' => $entry->total_debit]));
 
             return $entry->fresh();
         });

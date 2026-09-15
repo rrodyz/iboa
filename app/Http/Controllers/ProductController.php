@@ -34,15 +34,18 @@ class ProductController extends Controller
         $this->authorize('viewAny', Product::class);
         if ($request->boolean('export')) {
             return Excel::download(
-                new ProductsExport($request->only(['search', 'family_id', 'brand_id', 'type'])),
+                new ProductsExport($request->only(['search', 'family_id', 'brand_id', 'type', 'item_category_id'])),
                 'articles-' . now()->format('Ymd') . '.xlsx'
             );
         }
 
         $products  = $this->repository->search($request->all(), 20);
-        $families  = ProductFamily::whereNull('parent_id')->with('children')->orderBy('name')->get();
+        $families  = ProductFamily::whereNull('parent_id')->where('is_active', true)
+            ->with(['children' => fn ($q) => $q->where('is_active', true)])
+            ->orderBy('sort_order')->orderBy('name')->get();
         $familiesFlat = ProductFamily::where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']);
         $brands    = Brand::where('is_active', true)->orderBy('name')->get();
+        $itemCategories = \App\Models\ItemCategory::where('is_active', true)->orderBy('sort_order')->get(['id', 'code', 'name']);
 
         $summary = [
             'total'     => Product::count(),
@@ -51,7 +54,7 @@ class ProductController extends Controller
             'purchasable'=> Product::where('is_active', true)->where('is_purchasable', true)->count(),
         ];
 
-        return view('products.index', compact('products', 'families', 'familiesFlat', 'brands', 'summary'));
+        return view('products.index', compact('products', 'families', 'familiesFlat', 'brands', 'itemCategories', 'summary'));
     }
 
     public function create(): View
@@ -192,5 +195,35 @@ class ProductController extends Controller
         $this->authorize('delete', $product);
         $this->service->delete($product);
         return redirect()->route('products.index')->with('success', 'Article supprimé.');
+    }
+
+    /** [X3 §10] Ajoute/actualise la déclinaison article-site (upsert par site). */
+    public function storeSite(\Illuminate\Http\Request $request, Product $product): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $product);
+        $data = $request->validate([
+            'site_id'              => 'required|exists:warehouses,id',
+            'mp_warehouse_id'      => 'nullable|exists:warehouses,id',
+            'pf_warehouse_id'      => 'nullable|exists:warehouses,id',
+            'receipt_warehouse_id' => 'nullable|exists:warehouses,id',
+            'production_line_id'   => 'nullable|exists:production_lines,id',
+            'lead_time_days'       => 'nullable|integer|min:0|max:365',
+            'stock_min'            => 'nullable|numeric|min:0',
+            'stock_max'            => 'nullable|numeric|min:0',
+            'stock_securite'       => 'nullable|numeric|min:0',
+        ]);
+
+        $product->productSites()->updateOrCreate(['site_id' => $data['site_id']], $data);
+
+        return back()->with('success', 'Déclinaison site enregistrée.');
+    }
+
+    public function destroySite(Product $product, \App\Models\ProductSite $site): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('update', $product);
+        abort_unless($site->product_id === $product->id, 404);
+        $site->delete();
+
+        return back()->with('success', 'Déclinaison site supprimée.');
     }
 }

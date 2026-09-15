@@ -52,7 +52,7 @@
                 {{-- Grille 3 colonnes [Maquette] --}}
                 <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Code société <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Code société</label>
                         <input type="text" name="company_code" maxlength="30" value="{{ old('company_code', $company->company_code) }}" placeholder="OMA-BF-001"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono uppercase focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
@@ -63,13 +63,13 @@
                         @error('name')<p class="text-red-500 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Sigle <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Sigle</label>
                         <input type="text" name="sigle" maxlength="20" value="{{ old('sigle', $company->sigle) }}" placeholder="OAMI"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm uppercase focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Forme juridique <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Forme juridique</label>
                         @php $lf = old('legal_form', $company->legal_form); @endphp
                         <select name="legal_form" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
                             <option value="">&mdash; Sélectionner &mdash;</option>
@@ -79,28 +79,28 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">IFU <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">IFU</label>
                         <input type="text" name="ifu" value="{{ old('ifu', $company->ifu) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">RCCM <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">RCCM</label>
                         <input type="text" name="rccm" value="{{ old('rccm', $company->rccm) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">CNSS / N° employeur <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">CNSS / N° employeur</label>
                         <input type="text" name="cnss_number" maxlength="40" value="{{ old('cnss_number', $company->cnss_number) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Activité principale <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Activité principale</label>
                         <input type="text" name="main_activity" maxlength="120" value="{{ old('main_activity', $company->main_activity) }}" placeholder="Fabrication de structures métalliques"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Devise de base <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Devise de base</label>
                         <select name="default_currency_id" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
                             @foreach($currencies ?? [] as $cur)
                             <option value="{{ $cur->id }}" @selected(old('default_currency_id', $company->default_currency_id)==$cur->id)>{{ $cur->code }} &ndash; {{ $cur->name }}</option>
@@ -109,7 +109,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Langue <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Langue</label>
                         @php $lang = old('language', $company->language ?? 'fr'); @endphp
                         <select name="language" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
                             <option value="fr" @selected($lang==='fr')>Français (France)</option>
@@ -117,7 +117,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Pays <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Pays</label>
                         <input type="text" name="country" value="{{ old('country', $company->country ?? 'Burkina Faso') }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
@@ -128,7 +128,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Fuseau horaire <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Fuseau horaire</label>
                         @php $tz = old('timezone', $company->timezone ?? 'GMT'); @endphp
                         <select name="timezone" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
                             <option value="GMT" @selected($tz==='GMT')>(GMT) Afrique de l'Ouest &mdash; Ouagadougou / Dakar</option>
@@ -136,12 +136,12 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Date d'ouverture <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Date d'ouverture</label>
                         <input type="date" name="opened_at" value="{{ old('opened_at', optional($company->opened_at)->format('Y-m-d')) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Statut <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Statut</label>
                         @php $cst = old('status', $company->status ?? 'active'); @endphp
                         <select name="status" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 {{ $cst === 'active' ? 'text-emerald-700 font-semibold' : '' }}">
                             <option value="active" @selected($cst==='active')>Active</option>
@@ -150,12 +150,12 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Email principal <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email principal</label>
                         <input type="email" name="email" value="{{ old('email', $company->email) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Téléphone <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
                         <input type="text" name="phone" value="{{ old('phone', $company->phone) }}"
                                class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">
                     </div>
@@ -217,7 +217,7 @@
             <h2 class="text-base font-semibold text-gray-900">Adresse et contacts</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Adresse complète <span class="text-red-500">*</span></label>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Adresse complète</label>
                     <textarea name="address" rows="2" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm resize-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500">{{ old('address', $company->address) }}</textarea>
                 </div>
                 <div>
@@ -346,23 +346,25 @@
         <div class="p-3 overflow-x-auto">
             @php $accounts = $company->bankAccounts ?? collect(); @endphp
             @if($accounts->isNotEmpty())
-            <table class="w-full text-[12.5px]">
+            {{-- [Charte X3] table-fixed + truncate/title : les colonnes SWIFT /
+                 Principal / Statut sortaient du cadre (scroll horizontal caché). --}}
+            <table class="w-full table-fixed text-[12.5px]">
                 <thead><tr class="bg-[#eef5f0] text-emerald-900">
-                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300 w-7">#</th>
-                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300">Banque</th>
-                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300">Intitulé</th>
-                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300">IBAN / Compte</th>
-                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300">SWIFT</th>
-                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300">Principal</th>
-                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300">Statut</th>
+                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300 w-[6%]">#</th>
+                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300 w-[20%]">Banque</th>
+                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300 w-[20%]">Intitulé</th>
+                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300 w-[26%]">IBAN / Compte</th>
+                    <th class="text-left font-bold px-1.5 py-1.5 border-b border-gray-300 w-[10%]">SWIFT</th>
+                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300 w-[9%]">Princ.</th>
+                    <th class="text-center font-bold px-1.5 py-1.5 border-b border-gray-300 w-[9%]">Statut</th>
                 </tr></thead>
                 <tbody>
                     @foreach($accounts as $acc)
                     <tr class="border-b border-gray-100 last:border-0 odd:bg-white even:bg-gray-50/40">
                         <td class="px-1.5 py-2 text-center text-gray-400 tabular-nums">{{ $loop->iteration }}</td>
-                        <td class="px-1.5 py-2 font-semibold text-gray-700">{{ $acc->bank_name }}</td>
-                        <td class="px-1.5 py-2 text-gray-600">{{ $acc->account_holder }}</td>
-                        <td class="px-1.5 py-2 font-mono text-[11px] text-gray-600 whitespace-nowrap">{{ $acc->iban ?: $acc->account_number }}</td>
+                        <td class="px-1.5 py-2 font-semibold text-gray-700 truncate" title="{{ $acc->bank_name }}">{{ $acc->bank_name }}</td>
+                        <td class="px-1.5 py-2 text-gray-600 truncate" title="{{ $acc->account_holder }}">{{ $acc->account_holder }}</td>
+                        <td class="px-1.5 py-2 font-mono text-[11px] text-gray-600 truncate" title="{{ $acc->iban ?: $acc->account_number }}">{{ $acc->iban ?: $acc->account_number }}</td>
                         <td class="px-1.5 py-2 font-mono text-[11.5px] text-gray-600">{{ $acc->swift_bic ?: '—' }}</td>
                         <td class="px-1.5 py-2 text-center {{ $acc->is_default ? 'text-emerald-600' : 'text-gray-300' }}">{{ $acc->is_default ? '★' : '☆' }}</td>
                         <td class="px-1.5 py-2 text-center"><span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $acc->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500' }}">{{ $acc->is_active ? 'Actif' : 'Inactif' }}</span></td>
@@ -388,21 +390,27 @@
         </div>
         <div class="max-h-[420px] overflow-y-auto">
             @if(($sequences ?? collect())->isNotEmpty())
-            <table class="w-full text-[11.5px]">
+            {{-- table-fixed : la somme des colonnes ne peut jamais déborder la
+                 carte (sinon la colonne Document partait hors champ en scroll
+                 horizontal invisible) ; les libellés longs sont tronqués avec
+                 title pour le texte complet. --}}
+            <table class="w-full table-fixed text-[11.5px]">
                 <thead class="sticky top-0"><tr class="bg-[#eef5f0] text-emerald-900">
-                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300">Document</th>
-                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300">Préfixe</th>
-                    <th class="text-right font-bold px-1 py-1.5 border-b border-gray-300">N°</th>
-                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300">Format</th>
-                    <th class="text-center font-bold px-1 py-1.5 border-b border-gray-300">Auto</th>
+                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300 w-[30%]">Document</th>
+                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300 w-[16%]">Préfixe</th>
+                    <th class="text-right font-bold px-1 py-1.5 border-b border-gray-300 w-[14%]">N°</th>
+                    <th class="text-left font-bold px-1 py-1.5 border-b border-gray-300 w-[29%]">Format</th>
+                    <th class="text-center font-bold px-1 py-1.5 border-b border-gray-300 w-[11%]">Auto</th>
                 </tr></thead>
                 <tbody>
                     @foreach($sequences as $seq)
+                    @php $docLabel = ucfirst(str_replace('_', ' ', $seq->document_type)); @endphp
                     <tr class="border-b border-gray-100 last:border-0 odd:bg-white even:bg-gray-50/40">
-                        <td class="px-1 py-1.5 text-gray-700 truncate max-w-[92px]">{{ ucfirst(str_replace('_', ' ', $seq->document_type)) }}</td>
-                        <td class="px-1 py-1.5 font-mono text-emerald-800">{{ $seq->prefix }}</td>
-                        <td class="px-1 py-1.5 text-right font-mono tabular-nums text-gray-600">{{ str_pad((string) $seq->last_number, max(1, (int) $seq->padding), '0', STR_PAD_LEFT) }}</td>
-                        <td class="px-1 py-1.5 font-mono text-[10px] text-gray-500 whitespace-nowrap">{{ rtrim($seq->prefix, $seq->year_separator ?: '-') }}{{ $seq->include_year ? ($seq->year_separator ?: '-').date($seq->year_format === 'yy' ? 'y' : 'Y') : '' }}{{ $seq->year_separator ?: '-' }}{{ str_repeat('#', max(1, (int) $seq->padding)) }}</td>
+                        <td class="px-1 py-1.5 text-gray-700 truncate" title="{{ $docLabel }}">{{ $docLabel }}</td>
+                        <td class="px-1 py-1.5 font-mono text-emerald-800 truncate">{{ $seq->prefix }}</td>
+                        <td class="px-1 py-1.5 text-right font-mono tabular-nums text-gray-600 truncate">{{ str_pad((string) $seq->last_number, max(1, (int) $seq->padding), '0', STR_PAD_LEFT) }}</td>
+                        @php $fmt = rtrim($seq->prefix, $seq->year_separator ?: '-').($seq->include_year ? ($seq->year_separator ?: '-').date($seq->year_format === 'yy' ? 'y' : 'Y') : '').($seq->year_separator ?: '-').str_repeat('#', max(1, (int) $seq->padding)); @endphp
+                        <td class="px-1 py-1.5 font-mono text-[10px] text-gray-500 truncate" title="{{ $fmt }}">{{ $fmt }}</td>
                         <td class="px-1 py-1.5 text-center">
                             <span class="relative inline-block w-7 h-4 align-middle rounded-full {{ $seq->numbering_mode !== 'manuel' ? 'bg-emerald-600' : 'bg-gray-300' }}" title="{{ $seq->numbering_mode }}"><span class="absolute top-0.5 w-3 h-3 bg-white rounded-full shadow {{ $seq->numbering_mode !== 'manuel' ? 'right-0.5' : 'left-0.5' }}"></span></span>
                         </td>
@@ -538,39 +546,28 @@
             @csrf @method('PUT')
             <input type="hidden" name="_tab" value="legal">
 
+            {{-- [Audit paramétrage] Forme juridique / RCCM / IFU / Taux TVA retirés :
+                 déjà saisis dans « Informations générales » et « Fiscalité » — le
+                 doublon écrasait la donnée selon le formulaire soumis en dernier.
+                 Le champ « Taux TVA par défaut » était de plus mappé sur vat_number
+                 (numéro d'identification TVA) et corrompait cette colonne. --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Forme juridique</label>
-                    <select name="legal_form" class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
-                        <option value="">-- Sélectionner --</option>
-                        @foreach(['SARL', 'SA', 'SAS', 'EI', 'SUARL', 'GIE', 'Association'] as $form)
-                        <option value="{{ $form }}" {{ old('legal_form', $company->legal_form) === $form ? 'selected' : '' }}>{{ $form }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">RCCM</label>
-                    <input type="text" name="rccm" value="{{ old('rccm', $company->rccm) }}" placeholder="BF-OUA-2020-B-12345"
-                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">IFU / Numéro fiscal</label>
-                    <input type="text" name="ifu" value="{{ old('ifu', $company->ifu) }}" placeholder="00123456789"
-                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
-                </div>
-
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">NIF</label>
                     <input type="text" name="nif" value="{{ old('nif', $company->nif) }}"
-                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
+                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">N° TVA (identifiant)</label>
+                    <input type="text" name="vat_number" value="{{ old('vat_number', $company->vat_number) }}"
+                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm font-mono focus:ring-1 focus:ring-emerald-500">
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">Capital social (FCFA)</label>
                     <input type="number" name="share_capital" value="{{ old('share_capital', $company->share_capital) }}" min="0" step="100000"
-                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
+                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm text-right font-mono focus:ring-1 focus:ring-emerald-500">
                 </div>
 
                 <div>
@@ -587,12 +584,6 @@
                             <span class="text-sm">Non</span>
                         </label>
                     </div>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Taux TVA par défaut (%)</label>
-                    <input type="number" name="vat_number" value="{{ old('vat_number', $company->vat_number ?? 18) }}" min="0" max="100" step="0.5"
-                           class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">
                 </div>
             </div>
 
@@ -715,6 +706,13 @@
                     <label class="block text-sm font-medium text-gray-700 mb-1">Conditions générales de vente (CGV)</label>
                     <textarea name="terms_conditions" rows="4"
                               class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">{{ old('terms_conditions', $ds?->terms_conditions) }}</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Mentions de pénalités de retard</label>
+                    <textarea name="penalty_mentions" rows="3"
+                              placeholder="Laisser vide pour utiliser la mention légale OHADA par défaut"
+                              class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm focus:ring-1 focus:ring-emerald-500">{{ old('penalty_mentions', $ds?->penalty_mentions) }}</textarea>
+                    <p class="text-xs text-gray-400 mt-1">Affiché en bas des factures (bloc pénalités). Vide = texte OHADA standard.</p>
                 </div>
             </div>
 

@@ -88,6 +88,25 @@ class QuoteService
             $this->assertVersion($quote, $data['_lock_version'] ?? null);
             unset($data['_lock_version'], $data['_idempotency_key']);
 
+            // [LOT 3 — modification post-validation] Un devis CONVERTI en commande
+            // est figé (sinon le devis signé et la commande divergent) ; un devis
+            // validé/accepté ne se modifie pas silencieusement — repasser par un
+            // nouveau devis ou une révision explicite.
+            $quote = Quote::lockForUpdate()->findOrFail($quote->id);
+            if ($quote->converted_to_order_id) {
+                throw new \RuntimeException(
+                    'Ce devis a été converti en commande ' . ($quote->convertedOrder?->number ?? '') .
+                    ' — il est figé. Modifiez la commande ou créez un nouveau devis.'
+                );
+            }
+            if (! in_array($quote->status, [Quote::STATUS_DRAFT, 'en_attente_validation', 'refuse'], true)) {
+                throw new \RuntimeException(sprintf(
+                    'Le devis %s est « %s » — un devis validé ne se modifie pas silencieusement. Créez une nouvelle version.',
+                    $quote->number,
+                    $quote->status
+                ));
+            }
+
             $items = $data['items'] ?? null;
             unset($data['items']);
 
@@ -235,6 +254,9 @@ class QuoteService
         if ($quote->converted_to_order_id) {
             throw new \RuntimeException('Ce devis a déjà été converti en commande.');
         }
+        // [CDC §7] Gardes AVANT le passage en 'accepte' : si la conversion est
+        // impossible, le devis ne doit pas changer d'état.
+        $this->assertConvertible($quote);
 
         // Accept first, then convert — all in one DB transaction
         $quote->update([
@@ -261,6 +283,7 @@ class QuoteService
         if ($quote->converted_to_order_id) {
             throw new \RuntimeException('Ce devis a déjà été converti en commande.');
         }
+        $this->assertConvertible($quote);
 
         return DB::transaction(function () use ($quote) {
             $company = currentCompany();
@@ -299,6 +322,8 @@ class QuoteService
                     'description'      => $item->description,
                     'unit_id'          => $item->unit_id,
                     'quantity'         => $item->quantity,
+                    'nb_toles'         => $item->nb_toles,
+                    'metrage_par_tole' => $item->metrage_par_tole,
                     'unit_price'       => $item->unit_price,
                     'discount_percent' => $item->discount_percent,
                     'tax_rate_id'      => $item->tax_rate_id,
@@ -329,6 +354,62 @@ class QuoteService
     // Private helpers
     // -------------------------------------------------------------------------
 
+    /**
+     * [CDC §7 — versionnement] Gardes communes de conversion :
+     *  - un devis expiré n'engage plus la société → le réviser pour re-valider ;
+     *  - un devis remplacé par une révision active se convertit via la révision.
+     */
+    private function assertConvertible(Quote $quote): void
+    {
+        if ($quote->isExpired()) {
+            throw new \RuntimeException(sprintf(
+                'Le devis %s a expiré le %s — il ne peut plus être converti. Créez une révision pour proposer une offre à jour.',
+                $quote->number,
+                $quote->expires_at->format('d/m/Y')
+            ));
+        }
+        if ($quote->hasActiveRevision()) {
+            $rev = $quote->revisions()->whereNotIn('status', ['annule', 'refuse'])->latest('id')->first();
+            throw new \RuntimeException(sprintf(
+                'Le devis %s a été remplacé par la révision %s — convertissez la révision.',
+                $quote->number,
+                $rev->number
+            ));
+        }
+    }
+
+    /**
+     * [CDC §7 — versionnement] Crée une révision d'un devis figé : nouvelle
+     * version en brouillon liée au devis d'origine (revision_of_id), numéro de
+     * révision incrémenté. L'original reste intact et consultable (son PDF est
+     * reproductible) ; il devient non convertible tant que la révision est active.
+     */
+    public function revise(Quote $quote): Quote
+    {
+        return DB::transaction(function () use ($quote) {
+            $quote = Quote::lockForUpdate()->findOrFail($quote->id);
+
+            if ($quote->converted_to_order_id) {
+                throw new \RuntimeException('Ce devis a été converti en commande — il ne peut plus être révisé.');
+            }
+            if (in_array($quote->status, ['brouillon', 'annule'], true)) {
+                throw new \RuntimeException('Un devis en brouillon se modifie directement ; un devis annulé ne se révise pas.');
+            }
+            if ($quote->hasActiveRevision()) {
+                throw new \RuntimeException('Une révision active existe déjà pour ce devis.');
+            }
+
+            $revision = $this->duplicate($quote);
+            $revision->update([
+                'revision_of_id'  => $quote->id,
+                'revision_number' => (int) $quote->revision_number + 1,
+                'reference'       => $quote->reference,
+            ]);
+
+            return $revision->fresh('items');
+        });
+    }
+
     private function syncItems(Quote $quote, array $items): void
     {
         foreach ($items as $i => $item) {
@@ -336,7 +417,10 @@ class QuoteService
                 continue;
             }
 
-            $qty   = (float) ($item['quantity'] ?? 1);
+            // [§5 TÔLE BAC] Métrage linéaire = nb tôles × longueur unitaire (centralisé).
+            $nbToles = isset($item['nb_toles']) ? (float) $item['nb_toles'] : null;
+            $metrage = isset($item['metrage_par_tole']) ? (float) $item['metrage_par_tole'] : null;
+            $qty   = \App\Support\SheetConversion::resolveQuantity($nbToles, $metrage, $item['quantity'] ?? 1);
             $price = (float) ($item['unit_price'] ?? 0);
             $disc  = (float) ($item['discount_percent'] ?? 0);
             $tax   = (float) ($item['tax_rate_value'] ?? 0);
@@ -349,6 +433,8 @@ class QuoteService
                 'description'      => $item['description'] ?? '',
                 'unit_id'          => $item['unit_id'] ?? null,
                 'quantity'         => $qty,
+                'nb_toles'         => $nbToles,
+                'metrage_par_tole' => $metrage,
                 'unit_price'       => (int) $price,
                 'discount_percent' => $disc,
                 'tax_rate_id'      => $item['tax_rate_id'] ?? null,

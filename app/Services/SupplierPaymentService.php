@@ -92,7 +92,7 @@ class SupplierPaymentService
             $totalAllocated = 0;
 
             // Pre-validate: total allocations must not exceed payment amount
-            $requestedTotal = collect($allocations)->sum(fn($a) => (int) ($a['allocated_amount'] ?? 0));
+            $requestedTotal = collect($allocations)->sum(fn($a) => (int) ($a['allocated_amount'] ?? $a['amount'] ?? 0));
             if ($requestedTotal > (int) $payment->amount) {
                 throw new \RuntimeException(
                     'Le total des allocations (' . number_format($requestedTotal, 0, ',', ' ') . ' FCFA) '
@@ -101,10 +101,19 @@ class SupplierPaymentService
             }
 
             foreach ($allocations as $alloc) {
-                if (empty($alloc['supplier_invoice_id']) || empty($alloc['allocated_amount'])) {
+                // [GARDE format] Une allocation qui référence une facture mais dont le
+                // montant est absent/mal nommé ne doit pas être ignorée en silence :
+                // l'écriture GL partirait sans jamais solder la facture.
+                if (! empty($alloc['supplier_invoice_id'])
+                    && ! isset($alloc['allocated_amount']) && ! isset($alloc['amount'])) {
+                    throw new \RuntimeException(
+                        'Allocation invalide : montant manquant (clé allocated_amount) pour la facture #' . $alloc['supplier_invoice_id'] . '.'
+                    );
+                }
+                if (empty($alloc['supplier_invoice_id'])) {
                     continue;
                 }
-                $amount = (int) $alloc['allocated_amount'];
+                $amount = (int) ($alloc['allocated_amount'] ?? $alloc['amount'] ?? 0);
                 if ($amount <= 0) {
                     continue;
                 }
@@ -227,6 +236,9 @@ class SupplierPaymentService
                 throw new \RuntimeException('Ce décaissement n\'est pas en attente de validation.');
             }
 
+            // [SEC-PHASE2 §2] Maker-checker : l'auteur du décaissement ne l'approuve pas lui-même
+            app(MakerCheckerService::class)->assert($payment->created_by, 'decaissement.approve', "le décaissement {$payment->number}", $payment);
+
             $user = Auth::user();
             $rule = $this->approvalService->findRequiredRule((int) $payment->company_id, (int) $payment->amount);
             if (! $this->approvalService->userCanApprove($user, $rule)) {
@@ -246,6 +258,9 @@ class SupplierPaymentService
                 'validated_by'        => $user->id,
                 'validated_at'        => now(),
             ]);
+
+            // [SEC-PHASE2 §8] Journal (succès = après commit)
+            DB::afterCommit(fn () => app(AuditService::class)->log('decaissement.approbation', $payment, [], ['montant' => $payment->amount]));
 
             return $payment->fresh();
         });
@@ -380,6 +395,9 @@ class SupplierPaymentService
                 'status' => 'annule',
                 'notes'  => trim(($payment->notes ?? '') . "\n\n" . $cancelNote),
             ]);
+
+            // [SEC-PHASE2] Journal d'audit : annulation financière tracée
+            app(AuditService::class)->log('decaissement.annulation', $payment, [], ['motif' => $reason, 'montant' => $payment->amount]);
 
             return $payment->fresh();
         });

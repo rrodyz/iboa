@@ -29,6 +29,7 @@
 
 <form action="{{ $isEdit ? route('products.update', $p) : route('products.store') }}"
       method="POST" enctype="multipart/form-data" data-turbo="false"
+      x-init="if(!Alpine.store('cat')) Alpine.store('cat', { f: {{ ($p->itemCategory ?? null) ? json_encode(['man'=>(bool)$p->itemCategory->is_manufactured,'buy'=>(bool)$p->itemCategory->is_purchasable,'sell'=>(bool)$p->itemCategory->is_sellable,'stk'=>(bool)$p->itemCategory->is_stockable,'nat'=>$p->itemCategory->nature]) : 'null' }} })"
       x-data="productForm({
           tab: 'general',
           manuf: {{ old('is_manufacturable', $p->is_manufacturable ?? false) ? 'true' : 'false' }},
@@ -102,27 +103,52 @@
                             </select>{!! $caret !!}
                         </div>
                     </div>
+                    {{-- [X3] Catégorie de gestion : détermine le fonctionnement de l'article
+                         (flux, stratégie MTO/MTS, stock, comptes). Défauts appliqués CÔTÉ
+                         SERVEUR à la création (CategoryDefaultsService) ; les data-props
+                         pilotent l'affichage des sections Achat/Vente/Production/Stock. --}}
+                    <div class="sm:col-span-4">
+                        <label class="{{ $lbl }}" title="Modèle de gestion (≠ famille). Pose les défauts : flux, MTO/MTS, stock, comptes.">Catégorie de gestion</label>
+                        <div class="relative">
+                            <select name="item_category_id" class="{{ $lk }}"
+                                    @change="const o=$event.target.selectedOptions[0]; $store.cat.f = o && o.dataset.props ? JSON.parse(o.dataset.props) : null">
+                                <option value="">—</option>
+                                @foreach(\App\Models\ItemCategory::where('is_active', true)->orderBy('sort_order')->get() as $ic)
+                                    <option value="{{ $ic->id }}"
+                                            data-props='{!! json_encode(['man' => (bool) $ic->is_manufactured, 'buy' => (bool) $ic->is_purchasable, 'sell' => (bool) $ic->is_sellable, 'stk' => (bool) $ic->is_stockable, 'nat' => $ic->nature]) !!}'
+                                            @selected(old('item_category_id', $p->item_category_id ?? '') == $ic->id)>{{ $ic->code }} — {{ $ic->name }}</option>
+                                @endforeach
+                            </select>{!! $caret !!}
+                        </div>
+                    </div>
                     <div class="sm:col-span-3">
-                        <label class="{{ $lbl }}">Catégorie article <span class="text-red-600">*</span></label>
-                        @php
-                            $famProps = fn($f) => 'data-props=\'' . json_encode([
-                                'flux'=>(array)($f->type_flux ?? []),'gs'=>(bool)$f->gestion_stock,'sneg'=>(bool)($f->stock_negatif ?? false),
-                                'gl'=>(bool)$f->gestion_lot,'serie'=>(bool)$f->gestion_numero_serie,'qc'=>(bool)$f->controle_qualite,
-                                'us'=>$f->unite_stock_id,'ua'=>$f->unite_achat_id,'uv'=>$f->unite_vente_id,'depot'=>$f->site_stockage_id,
-                            ], JSON_HEX_APOS) . '\'';
-                        @endphp
+                        <label class="{{ $lbl }}" title="Classement commercial et statistique (n'influe pas sur la gestion).">Famille</label>
                         <div class="relative">
                             <select name="family_id" id="family_id_select" class="{{ $lk }}">
                                 <option value="">—</option>
                                 @foreach($families as $f)
-                                    <option value="{{ $f->id }}" {!! $famProps($f) !!} @selected(old('family_id', $p->family_id ?? '') == $f->id)>{{ $f->code ?: $f->name }}</option>
+                                    <option value="{{ $f->id }}" @selected(old('family_id', $p->family_id ?? '') == $f->id)>{{ $f->code ?: $f->name }}</option>
                                     @foreach($f->children as $child)
-                                        <option value="{{ $child->id }}" {!! $famProps($child) !!} @selected(old('family_id', $p->family_id ?? '') == $child->id)>&nbsp;&nbsp;└ {{ $child->code ?: $child->name }}</option>
+                                        <option value="{{ $child->id }}" @selected(old('family_id', $p->family_id ?? '') == $child->id)>&nbsp;&nbsp;└ {{ $child->code ?: $child->name }}</option>
                                     @endforeach
                                 @endforeach
                             </select>{!! $caret !!}
                         </div>
                     </div>
+                    {{-- [X3 §5] Sous-famille : filtrée sur la famille sélectionnée (garde serveur en plus). --}}
+                    <div class="sm:col-span-3">
+                        <label class="{{ $lbl }}" title="Doit appartenir à la famille choisie (contrôlé côté serveur).">Sous-famille</label>
+                        <div class="relative">
+                            <select name="sub_family_id" id="sub_family_select" class="{{ $lk }}"
+                                    onfocus="(function(s){var fam=document.getElementById('family_id_select').value;Array.from(s.options).forEach(function(o){o.hidden=o.value!=='' && o.dataset.parent!==fam;});})(this)">
+                                <option value="">—</option>
+                                @foreach(\App\Models\ProductFamily::whereNotNull('parent_id')->where('is_active', true)->orderBy('name')->get() as $sf)
+                                    <option value="{{ $sf->id }}" data-parent="{{ $sf->parent_id }}" @selected(old('sub_family_id', $p->sub_family_id ?? '') == $sf->id)>{{ $sf->name }}</option>
+                                @endforeach
+                            </select>{!! $caret !!}
+                        </div>
+                    </div>
+
                     <div class="sm:col-span-2">
                         <label class="{{ $lbl }}">Code article <span class="text-red-600">*</span></label>
                         <input type="text" name="code_article" maxlength="10" value="{{ old('code_article', $p->code_article ?? '') }}"
@@ -142,6 +168,27 @@
                             </select>{!! $caret !!}
                         </div>
                     </div>
+                    <div class="sm:col-span-2">
+                        <label class="{{ $lbl }}">Statut</label>
+                        <div class="relative">
+                            <select name="statut" class="{{ $lk }}">
+                                @php $st = old('statut', $p->statut ?? 'actif'); @endphp
+                                <option value="actif" @selected($st==='actif')>Actif</option>
+                                <option value="inactif" @selected($st==='inactif')>En sommeil</option>
+                                <option value="bloque" @selected($st==='bloque')>Bloqué</option>
+                            </select>{!! $caret !!}
+                        </div>
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label class="{{ $lbl }}">Structure</label>
+                        <div class="relative">
+                            <select name="type" x-model="type" required class="{{ $lk }}">
+                                <option value="simple">Simple</option>
+                                <option value="service">Service</option>
+                                <option value="compose">Composé (kit)</option>
+                            </select>{!! $caret !!}
+                        </div>
+                    </div>
 
                     <div class="sm:col-span-6">
                         <label class="{{ $lbl }}">Désignation 1 <span class="text-red-600">*</span></label>
@@ -154,29 +201,8 @@
                                class="{{ $inp }}" placeholder="TÔLE BAC ALUMINIUM PUR 70/100 AL6">
                     </div>
 
-                    <div class="sm:col-span-2">
-                        <label class="{{ $lbl }}">Statut</label>
-                        <div class="relative">
-                            <select name="statut" class="{{ $lk }}">
-                                @php $st = old('statut', $p->statut ?? 'actif'); @endphp
-                                <option value="actif" @selected($st==='actif')>Actif</option>
-                                <option value="inactif" @selected($st==='inactif')>En sommeil</option>
-                                <option value="bloque" @selected($st==='bloque')>Bloqué</option>
-                            </select>{!! $caret !!}
-                        </div>
-                    </div>
-                    <div class="sm:col-span-2">
-                        <label class="{{ $lbl }}">Structure</label>
-                        <div class="relative">
-                            <select name="type" x-model="type" required class="{{ $lk }}">
-                                <option value="simple">Simple</option>
-                                <option value="service">Service</option>
-                                <option value="compose">Composé (kit)</option>
-                            </select>{!! $caret !!}
-                        </div>
-                    </div>
                     @foreach(['famille1_id' => 'Famille 1', 'famille2_id' => 'Famille 2', 'famille3_id' => 'Famille 3'] as $fname => $flabel)
-                    <div class="sm:col-span-2">
+                    <div class="sm:col-span-3">
                         <label class="{{ $lbl }}">{{ $flabel }}</label>
                         <div class="relative">
                             <select name="{{ $fname }}" class="{{ $lk }} font-mono">
@@ -186,7 +212,7 @@
                         </div>
                     </div>
                     @endforeach
-                    <div class="sm:col-span-2">
+                    <div class="sm:col-span-3">
                         <label class="{{ $lbl }}">Marque</label>
                         <div class="relative">
                             <select name="brand_id" class="{{ $lk }}">
@@ -248,7 +274,8 @@
 
         {{-- ══════════════════ STOCK ═══════════════════════════════════════════ --}}
         <div id="sec-stock" class="p-4 pt-0 space-y-4 scroll-mt-28">
-            <section class="border border-gray-200 rounded-[4px]">
+            {{-- [X3 §7] Section masquée pour un service (catégorie non stockable). --}}
+            <section class="border border-gray-200 rounded-[4px]" x-show="!$store.cat?.f || $store.cat.f.stk" x-cloak>
                 <div class="{{ $secH }}">Gestion stock</div>
                 <div class="p-4 space-y-4">
                     <div class="flex flex-wrap gap-x-8 gap-y-2">
@@ -392,7 +419,8 @@
 
         {{-- ══════════════════ ACHAT ═══════════════════════════════════════════ --}}
         <div id="sec-achat" class="p-4 pt-0 scroll-mt-28">
-            <section class="border border-gray-200 rounded-[4px]">
+            {{-- [X3 §7] Section masquée si la catégorie n'est pas achetable (serveur = maître). --}}
+            <section class="border border-gray-200 rounded-[4px]" x-show="!$store.cat?.f || $store.cat.f.buy" x-cloak>
                 <div class="{{ $secH }}">Achat</div>
                 <div class="p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div><label class="{{ $lbl }}">Prix d'achat HT</label><input type="number" min="0" step="1" name="purchase_price" x-model.number="purchasePrice" value="{{ old('purchase_price', $p->purchase_price ?? 0) }}" class="{{ $inpR }}"></div>
@@ -431,7 +459,8 @@
 
         {{-- ══════════════════ VENTE ═══════════════════════════════════════════ --}}
         <div id="sec-vente" class="p-4 pt-0 scroll-mt-28">
-            <section class="border border-gray-200 rounded-[4px]">
+            {{-- [X3 §7] Section masquée si la catégorie n'est pas vendable. --}}
+            <section class="border border-gray-200 rounded-[4px]" x-show="!$store.cat?.f || $store.cat.f.sell" x-cloak>
                 <div class="{{ $secH }}">Vente</div>
                 <div class="p-4 space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -451,6 +480,7 @@
                              et affiche une erreur visible via <x-validation-errors>. --}}
                         <div><label class="{{ $lbl }}">Marge cible (%)</label><input type="number" step="0.01" name="margin_rate_target" x-model.number="marginRate" @input="recomputeFromMargin()" value="{{ old('margin_rate_target', $p->margin_rate_target ?? '') }}" class="{{ $inpR }}"></div>
                         <div><label class="{{ $lbl }}">Prix plancher</label><input type="number" min="0" step="1" name="min_sale_price" value="{{ old('min_sale_price', $p->min_sale_price ?? 0) }}" class="{{ $inpR }}"></div>
+                        <div><label class="{{ $lbl }}">Prix plafond <span class="text-gray-400 font-normal">(indicatif)</span></label><input type="number" min="0" step="1" name="max_sale_price" value="{{ old('max_sale_price', $p->max_sale_price ?? '') }}" placeholder="—" class="{{ $inpR }}"></div>
                         <div>
                             <label class="{{ $lbl }}">TVA vente</label>
                             <div class="relative">
@@ -483,7 +513,8 @@
 
         {{-- ══════════════════ PRODUCTION ══════════════════════════════════════ --}}
         <div id="sec-prod" class="p-4 pt-0 scroll-mt-28">
-            <section class="border border-gray-200 rounded-[4px]">
+            {{-- [X3 §7] Section masquée si la catégorie n'est pas fabriquée. --}}
+            <section class="border border-gray-200 rounded-[4px]" x-show="!$store.cat?.f || $store.cat.f.man" x-cloak>
                 <div class="{{ $secH }}">Production tôle bac</div>
                 <div class="p-4 space-y-4">
                     <div class="flex flex-wrap gap-x-8 gap-y-2">
@@ -514,6 +545,8 @@
                         <div><label class="{{ $lbl }}">Épaisseur (mm)</label><input type="number" step="0.01" min="0" x-model="thickness" class="{{ $inpR }}"></div>
                         <div><label class="{{ $lbl }}">Largeur utile (mm)</label><input type="number" step="0.01" min="0" name="largeur_utile" value="{{ old('largeur_utile', $p->largeur_utile ?? '') }}" class="{{ $inpR }}"></div>
                         <div><label class="{{ $lbl }}">Longueur standard (mm)</label><input type="number" step="0.01" min="0" name="longueur_standard" value="{{ old('longueur_standard', $p->longueur_standard ?? '') }}" class="{{ $inpR }}"></div>
+                        <div><label class="{{ $lbl }}">Longueur mini fabricable (m)</label><input type="number" step="0.001" min="0" name="longueur_min" value="{{ old('longueur_min', $p->longueur_min ?? '') }}" placeholder="—" class="{{ $inpR }}"></div>
+                        <div><label class="{{ $lbl }}">Longueur maxi fabricable (m)</label><input type="number" step="0.001" min="0" name="longueur_max" value="{{ old('longueur_max', $p->longueur_max ?? '') }}" placeholder="—" class="{{ $inpR }}"></div>
                         <div>
                             <label class="{{ $lbl }}">Machine par défaut</label>
                             <div class="relative">
@@ -717,32 +750,10 @@ function productForm(init) {
     };
 }
 
-// ── CDC articles : héritage des propriétés de la catégorie ──────────────────
+// [X3] L'ancien héritage FAMILLE→article (data-props sur family_id_select) est
+// SUPPRIMÉ : la famille est un classement pur ; le fonctionnement vient de la
+// CATÉGORIE (CategoryDefaultsService côté serveur, $store.cat côté affichage).
 document.addEventListener('DOMContentLoaded', function () {
-    const catSelect = document.getElementById('family_id_select');
-    if (catSelect) {
-        catSelect.addEventListener('change', function () {
-            const opt = this.options[this.selectedIndex];
-            if (!opt || !opt.dataset.props) return;
-            const p = JSON.parse(opt.dataset.props);
-            // [FIX Fabriqué(F)] dispatch 'change' pour que les cases pilotées par x-model
-            // (état Alpine) prennent la nouvelle valeur — sinon l'état écraserait le .checked.
-            const setCheck = (name, val) => { const b = document.querySelector('input[type="checkbox"][name="' + name + '"]'); if (b) { b.checked = !!val; b.dispatchEvent(new Event('change')); } };
-            const setSelect = (name, val) => { const s = document.querySelector('select[name="' + name + '"]'); if (s && val) s.value = val; };
-            setCheck('is_stockable', p.gs);
-            setCheck('allow_negative_stock', p.sneg);
-            setCheck('has_lot_number', p.gl);
-            setCheck('has_serial_number', p.serie);
-            setCheck('controle_qualite', p.qc);
-            setCheck('is_purchasable', (p.flux || []).includes('achete'));
-            setCheck('is_sellable', (p.flux || []).includes('vendu'));
-            setCheck('is_manufacturable', (p.flux || []).includes('fabrique'));
-            setSelect('unit_id', p.us);
-            setSelect('purchase_unit_id', p.ua);
-            setSelect('sale_unit_id', p.uv);
-            setSelect('main_warehouse_id', p.depot);
-        });
-    }
     // Coef UA-US auto = 1 / poids net
     const netWeight = document.querySelector('input[name="net_weight_per_us"]');
     const coefUaUs  = document.getElementById('ua_to_us_coef');

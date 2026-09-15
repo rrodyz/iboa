@@ -39,7 +39,7 @@ class ProductionCostService
      */
     public function compute(ProductionOrder $order, array $opts = []): ProductionCost
     {
-        $order->loadMissing(['consumptions', 'outputs', 'billOfMaterial', 'productionLine.machine', 'product', 'order']);
+        $order->loadMissing(['consumptions.coil', 'outputs', 'billOfMaterial', 'productionLine.machine', 'product', 'order']);
 
         // NB : quantity_produced casté decimal → "0.00" (TRUTHY). Caster en float
         // AVANT le ?: sinon un OF non encore produit prend 0 au lieu de la demande.
@@ -50,12 +50,20 @@ class ProductionCostService
         //    composants BOM sortis du stock (product_stocks) valorisés au CMP.
         //    Les composants non-bobine sont tracés en stock_movements (type sortie)
         //    référençant les déclarations de production (ProductionOutput) de l'OF.
+        //
+        // [FIX A1 — anti double comptage] Quand une bobine est consommée physiquement
+        // (ProductionConsumption) ET que la BOM backflushe le MÊME produit à la
+        // déclaration, la matière serait comptée deux fois (réel bobine + théorique
+        // BOM). Le coût réel bobine prime : on exclut du backflush les sorties dont
+        // le produit correspond à une bobine consommée sur cet OF.
         $material = (int) $order->consumptions->sum('cost');
+        $coilProductIds = $order->consumptions->pluck('coil.product_id')->filter()->unique();
         $outputIds = $order->outputs->pluck('id');
         if ($outputIds->isNotEmpty()) {
             $material += (int) \App\Models\StockMovement::where('type', 'sortie')
                 ->where('reference_type', ProductionOutput::class)
                 ->whereIn('reference_id', $outputIds)
+                ->when($coilProductIds->isNotEmpty(), fn ($q) => $q->whereNotIn('product_id', $coilProductIds))
                 ->sum('total_cost');
         }
 
@@ -108,8 +116,13 @@ class ProductionCostService
             ? (int) $opts['packaging_cost']
             : (int) round((float) ($bom->packaging_per_unit ?? 0) * $quantity);
 
+        // 6bis. Sous-traitance — opérations externalisées (saisie manuelle)
+        $subcontract = array_key_exists('subcontract_cost', $opts) && $opts['subcontract_cost'] !== null
+            ? (int) $opts['subcontract_cost']
+            : 0;
+
         // 7. Frais indirects — taux % sur la somme des coûts directs
-        $direct = $material + $labor + $machine + $energy + $maintenance + $packaging;
+        $direct = $material + $labor + $machine + $energy + $maintenance + $packaging + $subcontract;
         if (array_key_exists('overhead_cost', $opts) && $opts['overhead_cost'] !== null) {
             $overhead = (int) $opts['overhead_cost'];
         } else {
@@ -156,6 +169,7 @@ class ProductionCostService
                 'maintenance_cost' => $maintenance,
                 'packaging_cost'   => $packaging,
                 'overhead_cost'    => $overhead,
+                'subcontract_cost' => $subcontract,
                 'total_cost'       => $total,
                 'standard_total'   => $standardTotal,
                 'variance'         => $variance,

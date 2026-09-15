@@ -64,6 +64,7 @@ class ProductFamily extends Model
         'image',
         'depth',
         'is_active',
+        'sort_order',
     ];
 
     protected $casts = [
@@ -152,7 +153,8 @@ class ProductFamily extends Model
      */
     public function children(): HasMany
     {
-        return $this->hasMany(ProductFamily::class, 'parent_id');
+        return $this->hasMany(ProductFamily::class, 'parent_id')
+            ->orderBy('sort_order')->orderBy('name');
     }
 
     /**
@@ -161,6 +163,12 @@ class ProductFamily extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class, 'family_id');
+    }
+
+    /** [X3 §5] Articles rattachés à cette SOUS-famille (axe sub_family_id). */
+    public function subProducts(): HasMany
+    {
+        return $this->hasMany(Product::class, 'sub_family_id');
     }
 
     /**

@@ -28,6 +28,12 @@ class Order extends Model
         'number',
         'reference',
         'status',
+        'production_approved',
+        'production_approved_at',
+        'production_approved_by',
+        'production_approval_reason',
+        'production_approval_unpaid',
+        'production_approval_expires_at',
         'issued_at',
         'expires_at',
         'delivery_date',
@@ -63,6 +69,10 @@ class Order extends Model
 
     protected $casts = [
         'net_prices'              => 'boolean',
+        'production_approved'     => 'boolean',
+        'production_approved_at'  => 'datetime',
+        'production_approval_expires_at' => 'date',
+        'production_approval_unpaid'     => 'integer',
         'total_weight_kg'         => 'decimal:2',
         'issued_at'               => 'date',
         'expires_at'              => 'date',
@@ -146,6 +156,154 @@ class Order extends Model
     public function bonPreparations(): HasMany
     {
         return $this->hasMany(BonPreparation::class);
+    }
+
+    public function productionApprovedBy(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'production_approved_by');
+    }
+
+    /** OF actif (non annulé) lié à la commande. */
+    public function hasActiveProductionOrder(): bool
+    {
+        return $this->productionOrders()->where('status', '!=', 'annule')->exists();
+    }
+
+    /**
+     * [MTO §1.3 — méthode centrale] Encaissements confirmés rattachables à la commande :
+     *   1. allocations confirmées sur les factures de la commande ;
+     *   2. paiements caisse enregistrés sur les bons de préparation actifs (comptant) ;
+     *   3. acomptes libres confirmés du client (non alloués).
+     * Utilisée PAR LE TABLEAU d'éligibilité ET par la gate financière de lancement OF
+     * (même règle, même source — exigence de recette).
+     */
+    /**
+     * Montant retenu UNIQUEMENT pour l'éligibilité de la commande à la production
+     * (tableau coordinateur + gate financière de lancement OF).
+     *
+     * Le résultat est PLAFONNÉ au TTC de la commande et ne représente pas
+     * nécessairement le total comptable ou bancaire réellement encaissé.
+     * Ne jamais l'utiliser pour : états d'encaissement, trésorerie, solde client,
+     * comptabilité, remboursements, balance âgée, détection de trop-perçus.
+     *
+     * Pas de mémoïsation : une décision financière doit toujours refléter l'état
+     * courant (un paiement ajouté/annulé dans la même exécution est vu au prochain appel).
+     */
+    public function confirmedReceipts(): int
+    {
+        // Seuls les paiements CONFIRMÉS comptent (brouillons/annulés/rejetés exclus) ;
+        // un BP annulé est exclu (statuts actifs seulement). L'acompte libre affecté
+        // ensuite à une facture est un TRANSFERT (unallocated ↓, allocation ↑) — pas
+        // de double comptage par construction.
+        $invoiceIds = \App\Models\Invoice::where('order_id', $this->id)->pluck('id');
+        $viaInvoices = $invoiceIds->isNotEmpty()
+            ? (int) \App\Models\ClientPaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                ->whereHas('clientPayment', fn ($q) => $q->where('status', 'confirme'))->sum('amount')
+            : 0;
+
+        // [Anti-double BP↔encaissement] Les BP liés à un encaissement central
+        // (client_payment_id) comptent via l'acompte du client, pas ici.
+        $viaCaisse = (int) $this->bonPreparations()
+            ->whereIn('status', ['en_attente', 'en_cours', 'charge'])
+            ->whereNull('client_payment_id')
+            ->sum('payment_amount');
+
+        $acomptesLibres = (int) \App\Models\ClientPayment::where('client_id', $this->client_id)
+            ->where('status', 'confirme')->where('is_acompte', true)
+            ->sum('unallocated_amount');
+
+        // [FIX anomalie ÉLEVÉE — acomptes libres partagés] Un même acompte libre ne
+        // peut pas rendre plusieurs commandes éligibles : les commandes SŒURS du
+        // client ayant déjà un OF ACTIF « réservent » la part d'acompte libre qui a
+        // couvert leur exigence (requis − leurs encaissements propres). Déduction
+        // conservatrice : en cas de doute, la commande est SOUS-éligible, jamais sur-éligible.
+        if ($acomptesLibres > 0) {
+            $siblings = static::where('client_id', $this->client_id)
+                ->where('id', '!=', $this->id)
+                ->whereHas('productionOrders', fn ($q) => $q->where('status', '!=', 'annule'))
+                ->get();
+            foreach ($siblings as $sibling) {
+                $required = $sibling->requiredBeforeProduction();
+                if ($required === null) {
+                    continue; // crédit : éligible par approbation, ne consomme pas d'acompte
+                }
+                $ownReceipts = (int) \App\Models\Invoice::where('order_id', $sibling->id)->pluck('id')
+                    ->pipe(fn ($ids) => $ids->isNotEmpty()
+                        ? \App\Models\ClientPaymentAllocation::whereIn('invoice_id', $ids)
+                            ->whereHas('clientPayment', fn ($q) => $q->where('status', 'confirme'))->sum('amount')
+                        : 0)
+                    + (int) $sibling->bonPreparations()
+                        ->whereIn('status', ['en_attente', 'en_cours', 'charge'])->sum('payment_amount');
+                $claimed = max(0, $required - $ownReceipts);
+                $acomptesLibres = max(0, $acomptesLibres - $claimed);
+                if ($acomptesLibres === 0) {
+                    break;
+                }
+            }
+        }
+
+        // Plafond au TTC : si le même argent caisse (BP) est ensuite ressaisi en
+        // trésorerie et alloué à la facture (aucun lien BP↔ClientPayment n'existe),
+        // la somme sur-compterait — le plafond rend ce cumul inoffensif pour
+        // l'éligibilité et la gate (comparaisons bornées à 100 % du TTC).
+        return min($viaInvoices + $viaCaisse + $acomptesLibres, (int) $this->total_ttc);
+    }
+
+    /**
+     * [MTO §1.3] Montant minimum requis avant production selon le mode de paiement
+     * du client : comptant = 100 % TTC ; acompte = TTC × taux paramétré ;
+     * crédit/inconnu = jamais éligible financièrement (chemin approbation/DAF).
+     */
+    public function requiredBeforeProduction(): ?int
+    {
+        $mode = $this->client?->payment_mode;
+        if ($mode === 'comptant') {
+            return (int) $this->total_ttc;
+        }
+        if ($mode === 'acompte') {
+            $rate = (float) (\App\Models\SalesSetting::current()->deposit_required_rate ?? 70);
+
+            return (int) ceil((int) $this->total_ttc * $rate / 100);
+        }
+
+        return null; // crédit / non défini : pas de chemin financier direct
+    }
+
+    /** [MTO §1.3] Éligibilité financière = encaissements confirmés ≥ minimum requis. */
+    public function isFinanciallyEligibleForProduction(): bool
+    {
+        $required = $this->requiredBeforeProduction();
+
+        return $required !== null && $this->confirmedReceipts() >= $required;
+    }
+
+    /** [MTO §1.3] Approbation gérant valide (posée et non expirée). */
+    public function hasValidProductionApproval(): bool
+    {
+        return (bool) $this->production_approved
+            && ($this->production_approval_expires_at === null
+                || $this->production_approval_expires_at->gte(today()));
+    }
+
+    /**
+     * [Flux tôle bac §3 / MTO §1.3] Pré-filtre SQL de l'éligibilité : confirmée,
+     * ≥ 1 article MTO, sans OF actif, ET (approbation valide OU BP actif).
+     * Le volet financier exact (montant encaissé ≥ requis, 3 sources) n'est pas
+     * exprimable proprement en SQL : il est appliqué par le contrôleur du tableau
+     * via isFinanciallyEligibleForProduction() — même méthode que la gate OF.
+     */
+    public function scopeEligibleForProduction($query)
+    {
+        return $query->whereIn('status', ['confirme', 'en_preparation'])
+            ->whereHas('items.product', fn ($q) => $q->where('production_mode', 'mto'))
+            ->whereDoesntHave('productionOrders', fn ($q) => $q->where('status', '!=', 'annule'))
+            ->where(fn ($q) => $q
+                ->where(fn ($a) => $a
+                    ->where('production_approved', true)
+                    ->where(fn ($v) => $v
+                        ->whereNull('production_approval_expires_at')
+                        ->orWhereDate('production_approval_expires_at', '>=', today())))
+                ->orWhereHas('bonPreparations', fn ($b) => $b->whereIn('status', ['en_attente', 'en_cours', 'charge'])));
     }
 
     /** Retourne true si la commande a un bon de préparation actif (pas annulé). */

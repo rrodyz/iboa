@@ -27,11 +27,14 @@ class CreditNote extends Model
         'status',
         'issued_at',
         'reason',
+        'is_replacement',
+        'replacement_delivery_id',
         'currency_code',
         'subtotal_ht',
         'total_tax',
         'total_ttc',
         'applied_amount',
+        'refunded_amount',
         'remaining_credit',
         'notes',
         'created_by',
@@ -46,10 +49,12 @@ class CreditNote extends Model
 
     protected $casts = [
         'issued_at'        => 'date',
+        'is_replacement'   => 'boolean',
         'subtotal_ht'      => 'integer',
         'total_tax'        => 'integer',
         'total_ttc'        => 'integer',
         'applied_amount'   => 'integer',
+        'refunded_amount'  => 'integer',
         'remaining_credit' => 'integer',
         'validated_at'     => 'datetime',
         'submitted_at'     => 'datetime',
@@ -73,6 +78,12 @@ class CreditNote extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    /** [VEN Retour] BL de remplacement généré depuis cet avoir. */
+    public function replacementDelivery(): BelongsTo
+    {
+        return $this->belongsTo(DeliveryNote::class, 'replacement_delivery_id');
     }
 
     public function createdBy(): BelongsTo

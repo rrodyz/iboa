@@ -10,189 +10,164 @@
 @section('content')
 <div class="space-y-3">
 
-    {{-- Header --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <h1 class="text-[16px] font-bold text-gray-900">CRM — Tableau de bord</h1>
-            <p class="text-sm text-gray-500 mt-0.5">Vue d'ensemble de votre pipeline commercial</p>
-        </div>
-        <div class="flex items-center gap-2 flex-wrap">
-            <a href="{{ route('crm.contacts.create') }}"
-               class="inline-flex items-center gap-2 px-3 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-[4px] text-sm font-medium hover:bg-gray-50 transition-colors">
-                <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                </svg>
-                Nouveau contact
-            </a>
-            <a href="{{ route('crm.opportunities.create') }}"
-               class="inline-flex items-center gap-2 px-3 py-2.5 bg-emerald-700 text-white rounded-[4px] text-sm font-medium hover:bg-emerald-800 transition-colors">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                Nouvelle opportunité
-            </a>
-        </div>
-    </div>
+    {{-- ══ Barre titre + actions (design system X3) ═════════════════════════ --}}
+    <x-x3.title-bar title="CRM — Tableau de bord"
+                    subtitle="Pipeline commercial, activités et contacts — {{ now()->translatedFormat('F Y') }}">
+        <x-x3.btn variant="primary" :href="route('crm.opportunities.create')">+ Nouvelle opportunité</x-x3.btn>
+        <x-x3.btn :href="route('crm.contacts.create')">Nouveau contact</x-x3.btn>
+    </x-x3.title-bar>
 
-    {{-- KPIs --}}
-    <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        <x-ui.stat
-            label="Contacts"
-            value="{{ number_format($totalContacts) }}"
-            sub="+{{ $newThisMonth }} ce mois"
-            icon="👥"
-            color="blue"
-            href="{{ route('crm.contacts.index') }}" />
+    {{-- ══ Synthèse KPIs ═════════════════════════════════════════════════════ --}}
+    <x-x3.synthesis cols="5">
+        <x-x3.stat label="Contacts" :value="number_format($totalContacts, 0, ',', ' ')"
+                   sub="+{{ $newThisMonth }} ce mois" :href="route('crm.contacts.index')" />
+        <x-x3.stat label="Opportunités ouvertes" color="blue" :value="number_format($openOpps, 0, ',', ' ')"
+                   sub="en cours" :href="route('crm.opportunities.index')" />
+        <x-x3.stat label="Pipeline brut" color="blue" :value="number_format($pipeline, 0, ',', ' ')" unit="FCFA"
+                   sub="pondéré : {{ number_format($weightedPipeline, 0, ',', ' ') }} FCFA" />
+        <x-x3.stat label="Gagné ce mois" color="emerald" :value="number_format($wonThisMonth, 0, ',', ' ')" unit="FCFA"
+                   :sub="now()->translatedFormat('F Y')" />
+        <x-x3.stat label="Activités en retard" :color="$overdueActivities > 0 ? 'red' : 'gray'"
+                   :value="number_format($overdueActivities, 0, ',', ' ')"
+                   :sub="$overdueActivities > 0 ? 'à traiter' : 'à jour'"
+                   :href="route('crm.activities.index', ['status' => 'pending'])" />
+    </x-x3.synthesis>
 
-        <x-ui.stat
-            label="Opportunités ouvertes"
-            value="{{ number_format($openOpps) }}"
-            sub="en cours"
-            icon="💡"
-            color="violet"
-            href="{{ route('crm.opportunities.index') }}" />
+    {{-- ══ 1. Pipeline par étape ═════════════════════════════════════════════ --}}
+    @php
+        $totalOpps   = collect($stageStats)->sum('count');
+        $totalAmount = collect($stageStats)->sum('amount');
+    @endphp
+    <x-x3.section number="1" title="Pipeline par étape" flush>
+        <x-slot:meta>{{ $totalOpps }} opportunité(s)</x-slot:meta>
+        <table class="w-full table-fixed text-[12.5px]">
+            <thead>
+                <tr class="bg-band/70">
+                    <th class="w-[34%] px-4 py-1.5 text-left text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Étape</th>
+                    <th class="w-[12%] px-3 py-1.5 text-right text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Nb</th>
+                    <th class="w-[22%] px-3 py-1.5 text-right text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Montant</th>
+                    <th class="w-[12%] px-3 py-1.5 text-right text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Prob. std</th>
+                    <th class="w-[20%] px-4 py-1.5 text-right text-[10px] font-bold text-emerald-900 uppercase tracking-wide">Part montant</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($stageStats as $stage => $stat)
+                @php $cfg = $stat['config']; $part = $totalAmount > 0 ? $stat['amount'] / $totalAmount * 100 : 0; @endphp
+                <tr class="border-b border-gray-50 even:bg-gray-50/40 hover:bg-band/40 transition-colors">
+                    <td class="px-4 py-1.5">
+                        <a href="{{ route('crm.opportunities.index') }}#stage-{{ $stage }}" class="font-medium {{ $stage === 'perdu' ? 'text-red-600' : ($stage === 'gagne' ? 'text-emerald-700' : 'text-gray-800') }} hover:underline">
+                            {{ $cfg['label'] }}
+                        </a>
+                    </td>
+                    <td class="px-3 py-1.5 text-right font-mono tabular-nums font-semibold">{{ $stat['count'] }}</td>
+                    <td class="px-3 py-1.5 text-right font-mono tabular-nums {{ $stage === 'perdu' ? 'text-red-600' : 'text-blue-700' }} font-semibold">{{ number_format($stat['amount'], 0, ',', ' ') }}</td>
+                    <td class="px-3 py-1.5 text-right font-mono tabular-nums text-gray-500">{{ $cfg['prob'] }} %</td>
+                    <td class="px-4 py-1.5">
+                        <div class="flex items-center gap-2 justify-end">
+                            <div class="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div class="h-full {{ $stage === 'perdu' ? 'bg-red-400' : 'bg-emerald-600' }}" style="width: {{ round($part) }}%"></div>
+                            </div>
+                            <span class="font-mono tabular-nums text-[11px] text-gray-500 w-10 text-right">{{ number_format($part, 0) }} %</span>
+                        </div>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </x-x3.section>
 
-        <x-ui.stat
-            label="Pipeline total"
-            value="{{ number_format($pipeline, 0, ',', ' ') }} F"
-            sub="valeur pondérée"
-            icon="📊"
-            color="indigo" />
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
-        <x-ui.stat
-            label="Gagné ce mois"
-            value="{{ number_format($wonThisMonth, 0, ',', ' ') }} F"
-            sub="{{ now()->translatedFormat('F Y') }}"
-            icon="🏆"
-            color="emerald" />
-
-        <x-ui.stat
-            label="Activités en retard"
-            value="{{ number_format($overdueActivities) }}"
-            sub="{{ $overdueActivities > 0 ? 'à traiter' : 'Tout est à jour ✓' }}"
-            icon="⏰"
-            color="{{ $overdueActivities > 0 ? 'red' : 'gray' }}" />
-    </div>
-
-    {{-- Pipeline par stage --}}
-    <div class="bg-white rounded-[4px] border border-gray-300 p-5">
-        <h2 class="text-sm font-semibold text-gray-700 mb-4">Pipeline par étape</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            @foreach($stageStats as $stage => $stat)
-            @php $cfg = $stat['config']; @endphp
-            <a href="{{ route('crm.opportunities.index') }}#stage-{{ $stage }}"
-               class="flex flex-col items-center p-3 rounded-[4px] border border-{{ $cfg['color'] }}-100 bg-{{ $cfg['color'] }}-50 hover:bg-{{ $cfg['color'] }}-100 transition-colors text-center group">
-                <span class="text-2xl mb-1">{{ $cfg['icon'] }}</span>
-                <span class="text-xs font-medium text-{{ $cfg['color'] }}-700 truncate w-full">{{ $cfg['label'] }}</span>
-                <span class="text-[16px] font-bold text-{{ $cfg['color'] }}-800 mt-1">{{ $stat['count'] }}</span>
-                <span class="text-xs text-{{ $cfg['color'] }}-600 mt-0.5">{{ number_format($stat['amount'], 0, ',', ' ') }} F</span>
-            </a>
-            @endforeach
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {{-- Activités à faire --}}
-        <div class="bg-white rounded-[4px] border border-gray-300">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <h2 class="text-sm font-semibold text-gray-700">Activités à faire</h2>
-                <a href="{{ route('crm.activities.index', ['status' => 'pending']) }}"
-                   class="text-xs text-emerald-700 hover:text-emerald-800 font-medium">Voir tout →</a>
-            </div>
+        {{-- ══ 2. Activités à faire ══════════════════════════════════════════ --}}
+        <x-x3.section number="2" title="Activités à faire" flush>
+            <x-slot:meta>
+                <a href="{{ route('crm.activities.index', ['status' => 'pending']) }}" class="text-emerald-600 hover:text-emerald-800 font-medium">Voir tout →</a>
+            </x-slot:meta>
             @if($pendingActivities->isEmpty())
-            <div class="px-5 py-8 text-center text-sm text-gray-400">Aucune activité en attente 🎉</div>
+            <div class="px-4 py-6 text-center text-sm text-gray-400">Aucune activité en attente.</div>
             @else
             <ul class="divide-y divide-gray-50">
                 @foreach($pendingActivities as $act)
-                <li class="flex items-start gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                    <span class="text-lg flex-shrink-0 mt-0.5">{{ $act->typeIcon() }}</span>
+                <li class="flex items-start gap-3 px-4 py-2 hover:bg-band/40 transition-colors text-[12.5px]">
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-gray-800 truncate">{{ $act->subject }}</p>
-                        <p class="text-xs text-gray-500 truncate">
-                            {{ $act->contact?->name ?? $act->opportunity?->title ?? '—' }}
-                        </p>
+                        <p class="font-medium text-gray-800 truncate" title="{{ $act->subject }}">{{ $act->subject }}</p>
+                        <p class="text-xs text-gray-500 truncate">{{ $act->typeLabel() }} · {{ $act->contact?->name ?? $act->opportunity?->title ?? '—' }}</p>
                     </div>
                     <div class="flex-shrink-0 text-right">
                         @if($act->isOverdue())
-                            <span class="text-xs font-medium text-red-600">En retard</span>
+                            <span class="inline-flex px-1.5 py-0.5 rounded-[3px] text-[10.5px] font-medium bg-red-100 text-red-700">En retard</span>
                         @elseif($act->due_at)
-                            <span class="text-xs text-gray-400">{{ $act->due_at->diffForHumans() }}</span>
+                            <span class="text-xs text-gray-400">{{ $act->due_at->format('d/m/Y') }}</span>
                         @endif
-                        <form method="POST" action="{{ route('crm.activities.toggle-done', $act) }}" class="mt-1">
+                        <form method="POST" action="{{ route('crm.activities.toggle-done', $act) }}" class="mt-0.5">
                             @csrf @method('PATCH')
-                            <button type="submit" class="text-xs text-emerald-600 hover:text-emerald-700 font-medium">✓ Fait</button>
+                            <button type="submit" class="text-xs text-emerald-700 hover:text-emerald-900 font-medium">✓ Fait</button>
                         </form>
                     </div>
                 </li>
                 @endforeach
             </ul>
             @endif
-        </div>
+        </x-x3.section>
 
-        {{-- Top opportunités --}}
-        <div class="bg-white rounded-[4px] border border-gray-300">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                <h2 class="text-sm font-semibold text-gray-700">Top opportunités</h2>
-                <a href="{{ route('crm.opportunities.index') }}"
-                   class="text-xs text-emerald-700 hover:text-emerald-800 font-medium">Pipeline →</a>
-            </div>
+        {{-- ══ 3. Top opportunités ═══════════════════════════════════════════ --}}
+        <x-x3.section number="3" title="Top opportunités" flush>
+            <x-slot:meta>
+                <a href="{{ route('crm.opportunities.index') }}" class="text-emerald-600 hover:text-emerald-800 font-medium">Pipeline →</a>
+            </x-slot:meta>
             @if($topOpps->isEmpty())
-            <div class="px-5 py-8 text-center text-sm text-gray-400">Aucune opportunité ouverte</div>
+            <div class="px-4 py-6 text-center text-sm text-gray-400">Aucune opportunité ouverte.</div>
             @else
             <ul class="divide-y divide-gray-50">
                 @foreach($topOpps as $opp)
-                <li class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                    <div class="w-2 h-2 rounded-full bg-{{ $opp->stageColor() }}-400 flex-shrink-0"></div>
+                <li class="flex items-center gap-3 px-4 py-2 hover:bg-band/40 transition-colors text-[12.5px]">
                     <div class="flex-1 min-w-0">
                         <a href="{{ route('crm.opportunities.show', $opp) }}"
-                           class="text-sm font-medium text-gray-800 hover:text-emerald-700 truncate block">{{ $opp->title }}</a>
+                           class="font-medium text-gray-800 hover:text-emerald-700 truncate block" title="{{ $opp->title }}">{{ $opp->title }}</a>
                         <p class="text-xs text-gray-500 truncate">{{ $opp->contact?->name ?? '—' }} · {{ $opp->stageLabel() }}</p>
                     </div>
                     <div class="flex-shrink-0 text-right">
-                        <p class="text-sm font-semibold text-gray-900">{{ number_format($opp->amount, 0, ',', ' ') }} F</p>
-                        <p class="text-xs text-gray-400">{{ $opp->probability }} %</p>
+                        <p class="font-mono tabular-nums font-semibold text-blue-700">{{ number_format($opp->amount, 0, ',', ' ') }}</p>
+                        <p class="text-xs text-gray-400 font-mono tabular-nums">{{ $opp->probability }} %</p>
                     </div>
                 </li>
                 @endforeach
             </ul>
             @endif
-        </div>
+        </x-x3.section>
 
     </div>
 
-    {{-- Derniers contacts --}}
-    <div class="bg-white rounded-[4px] border border-gray-300">
-        <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h2 class="text-sm font-semibold text-gray-700">Contacts récents</h2>
-            <a href="{{ route('crm.contacts.index') }}"
-               class="text-xs text-emerald-700 hover:text-emerald-800 font-medium">Tous les contacts →</a>
-        </div>
+    {{-- ══ 4. Contacts récents ═══════════════════════════════════════════════ --}}
+    <x-x3.section number="4" title="Contacts récents" flush>
+        <x-slot:meta>
+            <a href="{{ route('crm.contacts.index') }}" class="text-emerald-600 hover:text-emerald-800 font-medium">Tous les contacts →</a>
+        </x-slot:meta>
         @if($recentContacts->isEmpty())
-        <div class="px-5 py-8 text-center text-sm text-gray-400">Aucun contact enregistré</div>
+        <div class="px-4 py-6 text-center text-sm text-gray-400">Aucun contact enregistré.</div>
         @else
         <div class="divide-y divide-gray-50">
             @foreach($recentContacts as $c)
-            <div class="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors">
-                <div class="w-9 h-9 rounded-full bg-{{ $c->typeColor() }}-100 flex items-center justify-center flex-shrink-0">
-                    <span class="text-xs font-bold text-{{ $c->typeColor() }}-700">{{ $c->initials() }}</span>
-                </div>
+            <div class="flex items-center gap-3 px-4 py-2 hover:bg-band/40 transition-colors text-[12.5px]">
                 <div class="flex-1 min-w-0">
                     <a href="{{ route('crm.contacts.show', $c) }}"
-                       class="text-sm font-medium text-gray-800 hover:text-emerald-700 truncate block">{{ $c->name }}</a>
+                       class="font-medium text-gray-800 hover:text-emerald-700 truncate block">{{ $c->name }}</a>
                     <p class="text-xs text-gray-500 truncate">{{ $c->company_name ?? $c->email ?? '—' }}</p>
                 </div>
                 <div class="flex-shrink-0 flex items-center gap-2">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[11px] font-medium bg-{{ $c->typeColor() }}-100 text-{{ $c->typeColor() }}-700">
-                        {{ $c->typeLabel() }}
-                    </span>
-                    <span class="text-xs text-gray-400">{{ $c->created_at->diffForHumans() }}</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-[3px] text-[10.5px] font-medium bg-gray-100 text-gray-700">{{ $c->typeLabel() }}</span>
+                    <span class="text-xs text-gray-400">{{ $c->created_at->format('d/m/Y') }}</span>
                 </div>
             </div>
             @endforeach
         </div>
         @endif
-    </div>
+    </x-x3.section>
+
+    {{-- ══ Footer contexte ═══════════════════════════════════════════════════ --}}
+    <x-x3.footer module="CRM — Tableau de bord">
+        <span>Période : <strong class="text-white">{{ now()->translatedFormat('F Y') }}</strong></span>
+    </x-x3.footer>
 
 </div>
 @endsection

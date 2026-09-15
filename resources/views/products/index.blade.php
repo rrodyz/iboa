@@ -98,6 +98,16 @@
             </div>
 
             <div>
+                <label class="{{ $lblX }}">Catégorie</label>
+                <div class="relative"><select name="item_category_id" class="{{ $lkX }}">
+                    <option value="">Toutes les catégories</option>
+                    @foreach($itemCategories as $ic)
+                        <option value="{{ $ic->id }}" {{ request('item_category_id') == $ic->id ? 'selected' : '' }}>{{ $ic->code }} — {{ $ic->name }}</option>
+                    @endforeach
+                </select>{!! $carX !!}</div>
+            </div>
+
+            <div>
                 <label class="{{ $lblX }}">Type</label>
                 <div class="relative"><select name="type" class="{{ $lkX }}">
                     <option value="">Tous les types</option>
@@ -170,7 +180,8 @@
                     <tr class="bg-[#3b4248] text-white text-[11px]">
                         <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide whitespace-nowrap w-32">Code article</th>
                         <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide">Désignation</th>
-                        <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide hidden md:table-cell">Catégorie</th>
+                        <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide hidden md:table-cell">Famille</th>
+                        <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide hidden md:table-cell w-28">Catégorie</th>
                         <th class="text-left font-semibold px-3 py-1.5 uppercase tracking-wide hidden lg:table-cell w-32">Type</th>
                         <th class="text-center font-semibold px-3 py-1.5 uppercase tracking-wide w-24">Flux</th>
                         <th class="text-center font-semibold px-3 py-1.5 uppercase tracking-wide hidden lg:table-cell w-16">UM</th>
@@ -201,7 +212,12 @@
                             <a href="{{ route('products.show', $product) }}" class="font-medium text-gray-900 hover:text-emerald-700 block truncate max-w-md">{{ $product->name }}</a>
                         </td>
                         <td class="px-3 py-1 hidden md:table-cell text-gray-600">
-                            <span class="block truncate max-w-[180px]" title="{{ $product->family?->name }}">{{ $product->family?->name ?? '—' }}</span>
+                            <span class="block truncate max-w-[180px]" title="{{ $product->family?->name }}{{ $product->subFamily ? ' / ' . $product->subFamily->name : '' }}">{{ $product->family?->name ?? '—' }}@if($product->subFamily)<span class="text-gray-400"> / {{ $product->subFamily->name }}</span>@endif</span>
+                        </td>
+                        <td class="px-3 py-1 hidden md:table-cell">
+                            @if($product->itemCategory)
+                            <a href="{{ route('articles.categories.show', $product->itemCategory) }}" class="font-mono text-[11px] text-emerald-800 hover:underline" title="{{ $product->itemCategory->name }}">{{ $product->itemCategory->code }}</a>
+                            @else — @endif
                         </td>
                         <td class="px-3 py-1 hidden lg:table-cell text-gray-600">
                             {{ $typeArticleLabels[$product->type_article] ?? ($product->type_article ?: '—') }}
@@ -251,7 +267,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="11" class="px-4 py-16 text-center">
+                        <td colspan="12" class="px-4 py-16 text-center">
                             <div class="flex flex-col items-center gap-3 text-gray-400">
                                 <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>

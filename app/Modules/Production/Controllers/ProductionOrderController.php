@@ -13,6 +13,7 @@ use App\Modules\Production\Models\ProductionOrder;
 use App\Models\Unit;
 use App\Models\User;
 use App\Modules\Production\Services\ProductionService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -50,7 +51,9 @@ class ProductionOrderController extends Controller
         $vue = $request->input('vue');
 
         $orders = ProductionOrder::with(['client:id,name,trade_name', 'product:id,name,reference', 'productionLine:id,name', 'order:id,number', 'responsible:id,name'])
-            ->withSum('lines as total_meters', 'total_meters')
+            // [FIX MÉTRAGE] Mètres réellement produits (déclarations), pas les lignes
+            // planifiées — vides pour les OF MTO générés depuis une commande.
+            ->withSum('outputs as total_meters', 'total_meters')
             ->when($request->input('status'), fn ($q, $v) => $q->where('status', $v))
             ->when($request->input('client_id'), fn ($q, $v) => $q->where('client_id', $v))
             ->when($request->input('product_id'), fn ($q, $v) => $q->where('product_id', $v))
@@ -72,7 +75,9 @@ class ProductionOrderController extends Controller
             'en_cours'  => ProductionOrder::whereIn('status', ['lance', 'en_cours'])->count(),
             'en_retard' => ProductionOrder::enRetard()->count(),
             'termine'   => ProductionOrder::where('status', 'termine')->count(),
-            'metres'    => (float) \App\Modules\Production\Models\ProductionOrderLine::whereHas(
+            // [FIX KPI] Mètres réellement produits = déclarations (outputs), pas les
+            // lignes planifiées — vides pour les OF MTO générés automatiquement.
+            'metres'    => (float) \App\Modules\Production\Models\ProductionOutput::whereHas(
                             'productionOrder', fn ($q) => $q->where('status', 'termine')
                         )->sum('total_meters'),
         ];
@@ -86,9 +91,87 @@ class ProductionOrderController extends Controller
         return view('production.orders.index', compact('orders', 'stats', 'clients', 'produits', 'lignes', 'responsables'));
     }
 
+    /**
+     * [Flux tôle bac §3] Commandes éligibles à la production sans OF encore :
+     * réglées (bon de préparation = paiement caisse) OU approuvées par le gérant.
+     * Le coordinateur y crée l'OF.
+     */
+    public function eligible(Request $request): View
+    {
+        // Pré-filtre SQL (structure + approbation/BP), puis règle financière exacte :
+        // montant encaissé ≥ montant requis — MÊME méthode que la gate de lancement OF.
+        // Un BP partiel (ex. 50 000 sur 500 000 requis) n'apparaît donc plus ici.
+        //
+        // [PERF — décision documentée] confirmedReceipts() exécute ~5 requêtes par
+        // commande évaluée. Volume réel MTO simultané ≈ dizaine : un refactor batch
+        // divergerait de la gate OF pour un gain nul. La borne limit(200) protège
+        // contre toute dégénérescence future ; si elle est atteinte, il faudra un
+        // précalcul par lot partagé avec la gate.
+        $orders = Order::eligibleForProduction()
+            ->limit(200)
+            ->with([
+                'client:id,name,trade_name,payment_mode',
+                'productionApprovedBy:id,name',
+                'items.product:id,name,reference',
+                'bonPreparations:id,order_id,status,payment_amount',
+            ])
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn (Order $o) => $o->hasValidProductionApproval() || $o->isFinanciallyEligibleForProduction())
+            ->values();
+
+        return view('production.orders.eligible', compact('orders'));
+    }
+
+    /**
+     * [MTS §2.2] Tableau de planification MTS : articles fabriqués pour le stock
+     * (production_mode = mts), niveaux de stock, production déjà planifiée et
+     * besoin net. Le coordinateur crée l'OF MTS (sans commande client) depuis ici.
+     *
+     * Besoin net = stock cible (stock_max, sinon stock_min) + stock de sécurité
+     *              − stock disponible − production déjà planifiée.
+     * (Demande prévisionnelle = 0 : pas de module de prévision à ce jour.)
+     */
+    public function mts(Request $request): View
+    {
+        $products = \App\Models\Product::where('production_mode', 'mts')
+            ->where('is_stockable', true)->where('is_active', true)
+            ->orderBy('name')->get();
+
+        $stocks = \App\Models\ProductStock::whereIn('product_id', $products->pluck('id'))
+            ->selectRaw('product_id, SUM(quantity) qty, SUM(reserved_quantity) reserved')
+            ->groupBy('product_id')->get()->keyBy('product_id');
+
+        $planned = ProductionOrder::whereIn('product_id', $products->pluck('id'))
+            ->whereNotIn('status', ['termine', 'annule'])
+            ->selectRaw('product_id, SUM(quantity_requested) qty')
+            ->groupBy('product_id')->pluck('qty', 'product_id');
+
+        $rows = $products->map(function ($p) use ($stocks, $planned) {
+            $physique = (float) ($stocks[$p->id]->qty ?? 0);
+            $reserve  = (float) ($stocks[$p->id]->reserved ?? 0);
+            $dispo    = $physique - $reserve;
+            $plan     = (float) ($planned[$p->id] ?? 0);
+            $cible    = (float) ($p->stock_max ?: $p->stock_min ?: 0);
+            $besoin   = max(0, $cible + (float) ($p->stock_securite ?? 0) - $dispo - $plan);
+            $etat     = $dispo <= 0 ? 'rupture' : ($p->stock_min && $dispo < (float) $p->stock_min ? 'sous_min' : 'ok');
+
+            return compact('p', 'physique', 'reserve', 'dispo', 'plan', 'cible', 'besoin', 'etat');
+        });
+
+        return view('production.orders.mts', ['rows' => $rows]);
+    }
+
     public function create(Request $request): View
     {
         $order = new ProductionOrder();
+
+        // [MTS §2.3] Pré-remplissage d'un OF MTS depuis le tableau de planification
+        // (sans commande client — article + quantité proposée).
+        if (($pid = $request->input('product_id')) && ! $request->input('order_id')) {
+            $order->product_id         = (int) $pid;
+            $order->quantity_requested = (float) $request->input('qty', 0) ?: null;
+        }
 
         // Pré-remplissage depuis une commande de vente
         if ($srcId = $request->input('order_id')) {
@@ -131,23 +214,27 @@ class ProductionOrderController extends Controller
     {
         $order->load([
             'client', 'order', 'product', 'billOfMaterial', 'productionLine.machine', 'responsible', 'lines.unit',
-            'consumptions.coil', 'outputs.product', 'outputs.warehouse', 'wastes.machine', 'wastes.operator',
+            'consumptions.coil.supplier', 'outputs.product', 'outputs.warehouse', 'wastes.machine', 'wastes.operator',
             'cost', 'qualityControls.controller', 'reservations.product', 'timeLogs.employee',
             'operations.workCenter', 'operations.operator', 'batches',
         ]);
 
-        $consumedWeight = (float) $order->consumptions->sum('weight_consumed');
+        $consumedWeight = (float) $order->consumptions->whereNull('reversed_at')->sum('weight_consumed');
         $wasteWeight    = (float) $order->wastes->sum('weight');
 
         // [Cohérence KPI] Coût matière = bobines (consumptions) + composants BOM
         // sortis du stock à la déclaration (même formule que ProductionCostService).
         // Sans ça un OF consommant uniquement des composants affiche « 0 F ».
+        // [FIX A1] Anti double comptage : les sorties backflush du MÊME produit
+        // qu'une bobine consommée sont exclues du coût (le réel bobine prime).
+        $coilProductIds = $order->consumptions->pluck('coil.product_id')->filter()->unique();
         $outputIds = $order->outputs->pluck('id');
         $componentMoves = $outputIds->isNotEmpty()
             ? \App\Models\StockMovement::with('product:id,name,unit_id', 'product.unit:id,name,abbreviation')
                 ->where('type', 'sortie')
                 ->where('reference_type', \App\Modules\Production\Models\ProductionOutput::class)
                 ->whereIn('reference_id', $outputIds)
+                ->when($coilProductIds->isNotEmpty(), fn ($q) => $q->whereNotIn('product_id', $coilProductIds))
                 ->orderBy('id')->get()
             : collect();
         $componentCost = (float) $componentMoves->sum('total_cost');
@@ -173,7 +260,7 @@ class ProductionOrderController extends Controller
 
         $metrics = [
             'consumed_weight' => $consumedWeight,
-            'consumed_cost'   => (float) $order->consumptions->sum('cost') + $componentCost,
+            'consumed_cost'   => (float) $order->consumptions->whereNull('reversed_at')->sum('cost') + $componentCost,
             'component_qty'   => $componentQty,
             'component_unit'  => $componentUnit,
             'output_meters'   => (float) $order->outputs->sum('total_meters'),
@@ -199,6 +286,42 @@ class ProductionOrderController extends Controller
             : [];
 
         return view('production.orders.show', compact('order', 'metrics', 'componentMoves', 'coils', 'machines', 'employees', 'warehouses', 'workflow', 'opProgress', 'materialShortages'));
+    }
+
+    /**
+     * Fiche OF téléchargeable en PDF (DomPDF).
+     * Reprend les données clés de la fiche : entête, nomenclature, consommations
+     * matière, déclarations PF, contrôle qualité et coût de revient.
+     */
+    public function pdf(ProductionOrder $order)
+    {
+        $order->load([
+            'client', 'order', 'product.unit', 'product.articleAvarie.unit', 'product.articleChute.unit',
+            'billOfMaterial.lines.product.unit', 'productionLine.machine', 'responsible', 'depotProduitFini',
+            'lines.unit', 'consumptions.coil.product.unit',
+            'outputs.product.unit', 'outputs.warehouse', 'wastes', 'cost', 'qualityControls.controller',
+        ]);
+
+        $consumedWeight = (float) $order->consumptions->whereNull('reversed_at')->sum('weight_consumed');
+        $wasteWeight    = (float) $order->wastes->sum('weight');
+        $metrics = [
+            'consumed_weight' => $consumedWeight,
+            'consumed_cost'   => (float) $order->consumptions->whereNull('reversed_at')->sum('cost'),
+            'output_qty'      => (float) $order->outputs->sum('quantity'),
+            'output_meters'   => (float) $order->outputs->sum('total_meters'),
+            'waste_weight'    => $wasteWeight,
+            'yield'           => $consumedWeight > 0
+                ? round((($consumedWeight - $wasteWeight) / $consumedWeight) * 100, 1)
+                : null,
+        ];
+
+        $pdf = Pdf::loadView('production.orders.pdf', [
+            'order'   => $order,
+            'metrics' => $metrics,
+            'company' => currentCompany(),
+        ])->setPaper('a4');
+
+        return $pdf->download('OF_' . ($order->number ?? $order->id) . '.pdf');
     }
 
     public function edit(ProductionOrder $order): View
@@ -468,7 +591,11 @@ class ProductionOrderController extends Controller
         return [
             'order'     => $order,
             'clients'   => Client::orderBy('name')->get(['id', 'name', 'trade_name']),
-            'products'  => Product::orderBy('name')->get(['id', 'name', 'reference']),
+            // [FIX] « Article à lancer » = produit fini fabricable uniquement.
+            // On inclut aussi l'article de l'OF en édition s'il ne l'est plus (sécurité).
+            'products'  => Product::where('is_manufacturable', true)
+                ->when($order->product_id, fn ($q) => $q->orWhere('id', $order->product_id))
+                ->orderBy('name')->get(['id', 'name', 'reference']),
             'boms'      => BillOfMaterial::where('is_active', true)->orderBy('name')->get(['id', 'name', 'product_id']),
             'lines'     => ProductionLine::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'units'     => Unit::where('is_active', true)->orderBy('name')->get(['id', 'name', 'abbreviation']),

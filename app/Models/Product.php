@@ -38,6 +38,8 @@ class Product extends Model
         'couleur',
         'largeur_utile',
         'longueur_standard',
+        'longueur_min',
+        'longueur_max',
         'machine_defaut_id',
         'rendement_standard',
         'taux_perte',
@@ -45,9 +47,13 @@ class Product extends Model
         'article_chute_id',
         'image',
         'family_id',
+        'sub_family_id',
         'famille1_id',
         'famille2_id',
         'famille3_id',
+        'famille4_id',
+        'famille5_id',
+        'item_category_id',
         'brand_id',
         'unit_id',
         'purchase_unit_id',
@@ -84,6 +90,7 @@ class Product extends Model
         'bande',
         'metrage',
         'min_sale_price',
+        'max_sale_price',
         'margin_rate_target',
         'stock_min',
         'stock_max',
@@ -126,6 +133,8 @@ class Product extends Model
         'density'              => 'decimal:3',
         'largeur_utile'        => 'decimal:2',
         'longueur_standard'    => 'decimal:2',
+        'longueur_min'         => 'decimal:3',
+        'longueur_max'         => 'decimal:3',
         'rendement_standard'   => 'decimal:4',
         'taux_perte'           => 'decimal:4',
         'seuil_alerte'         => 'decimal:3',
@@ -176,9 +185,68 @@ class Product extends Model
         return $this->belongsTo(ProductFamily::class, 'family_id');
     }
 
+    /** [X3 §5] Sous-famille (doit appartenir à la famille — garde serveur). */
+    public function subFamily(): BelongsTo
+    {
+        return $this->belongsTo(ProductFamily::class, 'sub_family_id');
+    }
+
     public function famille1(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille1_id'); }
     public function famille2(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille2_id'); }
     public function famille3(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille3_id'); }
+    public function famille4(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille4_id'); }
+    public function famille5(): BelongsTo { return $this->belongsTo(ProductFamily::class, 'famille5_id'); }
+
+    /** [X3] Catégorie de gestion (modèle de fonctionnement — distincte de la famille). */
+    public function itemCategory(): BelongsTo { return $this->belongsTo(ItemCategory::class, 'item_category_id'); }
+
+    /** [X3 §10] Déclinaisons article-site. */
+    public function productSites(): HasMany { return $this->hasMany(ProductSite::class); }
+
+    /** [X3 §10] Valeurs des attributs dynamiques (définis par la catégorie). */
+    public function attributeValues(): HasMany { return $this->hasMany(ProductAttributeValue::class); }
+
+    /**
+     * [X3 §10] Paramètres résolus pour un site :
+     * article-site > catégorie-site > catégorie globale > valeurs de l'article.
+     */
+    public function paramsForSite(?int $siteId): array
+    {
+        $base = [
+            'mp_warehouse_id'      => $this->production_warehouse_id,
+            'pf_warehouse_id'      => $this->sale_warehouse_id,
+            'receipt_warehouse_id' => null,
+            'production_line_id'   => null,
+            'lead_time_days'       => $this->delivery_delay_days,
+            'stock_min'            => $this->stock_min,
+            'stock_max'            => $this->stock_max,
+            'stock_securite'       => $this->stock_securite,
+        ];
+
+        // Catégorie (globale puis surcharge site)
+        if ($this->itemCategory) {
+            $catSite = $this->itemCategory->forSite($siteId);
+            foreach (['mp_warehouse_id', 'pf_warehouse_id', 'receipt_warehouse_id', 'production_line_id', 'lead_time_days', 'stock_min', 'stock_max', 'stock_securite'] as $k) {
+                if (($catSite[$k] ?? null) !== null) {
+                    $base[$k] = $catSite[$k];
+                }
+            }
+        }
+
+        // Article-site : priorité maximale
+        if ($siteId) {
+            $ps = $this->productSites->firstWhere('site_id', $siteId);
+            if ($ps) {
+                foreach (array_keys($base) as $k) {
+                    if ($ps->$k !== null) {
+                        $base[$k] = $ps->$k;
+                    }
+                }
+            }
+        }
+
+        return $base;
+    }
 
     public function brand(): BelongsTo
     {

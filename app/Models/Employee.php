@@ -15,7 +15,7 @@ class Employee extends Model
     use HasFactory, SoftDeletes, HasCompanyScope;
 
     protected $fillable = [
-        'company_id', 'department_id', 'matricule', 'photo_path',
+        'company_id', 'department_id', 'job_position_id', 'matricule', 'photo_path',
         'last_name', 'first_name', 'gender', 'birth_date', 'birth_place', 'nationality',
         'cin_number', 'cnss_number',
         'email', 'phone', 'address', 'city',
@@ -39,11 +39,13 @@ class Employee extends Model
 
     public function company(): BelongsTo     { return $this->belongsTo(Company::class); }
     public function department(): BelongsTo  { return $this->belongsTo(Department::class); }
+    public function jobPosition(): BelongsTo { return $this->belongsTo(JobPosition::class); }
     public function user(): BelongsTo        { return $this->belongsTo(\App\Models\User::class); }
     public function contracts(): HasMany       { return $this->hasMany(EmployeeContract::class); }
     public function allowances(): HasMany      { return $this->hasMany(EmployeeAllowance::class); }
     public function payrollItems(): HasMany    { return $this->hasMany(PayrollItem::class); }
     public function payrollVariables(): HasMany{ return $this->hasMany(PayrollVariable::class); }
+    public function careerEvents(): HasMany     { return $this->hasMany(CareerEvent::class)->orderByDesc('effective_date')->orderByDesc('id'); }
     public function salaryAdvances(): HasMany  { return $this->hasMany(SalaryAdvance::class); }
     public function leaveRequests(): HasMany   { return $this->hasMany(LeaveRequest::class); }
     public function leaveBalances(): HasMany   { return $this->hasMany(LeaveBalance::class); }

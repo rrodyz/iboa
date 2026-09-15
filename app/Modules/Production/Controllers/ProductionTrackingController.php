@@ -45,7 +45,9 @@ class ProductionTrackingController extends Controller
 
     public function create(Request $request): View
     {
-        $orders = ProductionOrder::whereIn('status', ['en_cours', 'termine_partiellement'])
+        // [FIX] Un OF « lancé » (avant démarrage) doit déjà être suivable :
+        // pointage d'opérations et déclaration possibles dès le lancement.
+        $orders = ProductionOrder::whereIn('status', ['lance', 'en_cours', 'termine_partiellement'])
             ->orderByDesc('id')->get(['id', 'number', 'quantity_requested', 'quantity_produced', 'length', 'site_production']);
 
         $order = null;
@@ -121,7 +123,14 @@ class ProductionTrackingController extends Controller
                 }
             }
 
-            // 2. Déclaration de production (entrée stock PF + conso auto composants)
+            // 2. Suivi matière — consommation bobine AVANT la déclaration de
+            //    production : le backflush ne consomme alors que le reliquat.
+            if ($trackMat) {
+                $coil = Coil::findOrFail((int) $data['coil_id']);
+                $this->coils->consume($order, $coil, (float) $data['weight_consumed'], (float) ($data['length_consumed'] ?? 0) ?: null);
+            }
+
+            // 3. Déclaration de production (entrée stock PF + conso auto composants)
             if ($trackProd) {
                 $this->stock->recordOutput($order, [
                     'quantity'     => (float) $data['quantity'],
@@ -131,12 +140,6 @@ class ProductionTrackingController extends Controller
                     'lot_number'   => $data['lot_number'] ?? null,
                     'notes'        => $data['notes'] ?? null,
                 ]);
-            }
-
-            // 3. Suivi matière — consommation bobine
-            if ($trackMat) {
-                $coil = Coil::findOrFail((int) $data['coil_id']);
-                $this->coils->consume($order, $coil, (float) $data['weight_consumed'], (float) ($data['length_consumed'] ?? 0) ?: null);
             }
 
             return ProductionTracking::create([

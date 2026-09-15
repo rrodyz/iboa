@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\TaxRate;
 use App\Services\BonPreparationService;
 use App\Services\CommercialWorkflowService;
+use Illuminate\Http\RedirectResponse;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
 
@@ -298,6 +299,7 @@ class OrderController extends Controller
         $request->validate([
             'payment_amount'    => ['required', 'integer', 'min:1'],
             'payment_reference' => ['nullable', 'string', 'max:100'],
+            'cash_account_id'   => ['nullable', 'integer', 'exists:cash_accounts,id'],
         ]);
 
         $client = $commande->client ?? \App\Models\Client::find($commande->client_id);
@@ -316,6 +318,7 @@ class OrderController extends Controller
                 $commande,
                 (int) $request->payment_amount,
                 $request->payment_reference,
+                $request->integer('cash_account_id') ?: null,
             );
             return redirect()
                 ->route('ventes.bons-preparation.show', $bp)
@@ -323,5 +326,104 @@ class OrderController extends Controller
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * [Flux tôle bac §3] POST ventes/commandes/{commande}/approve-production
+     * Le gérant valide une commande NON réglée pour production (éligible à l'OF
+     * sans encaissement préalable). Permission DAF/DG.
+     */
+    public function approveProduction(Request $request, Order $commande): RedirectResponse
+    {
+        // [MTO §1.3 cas 2] Motif obligatoire — une approbation sans justification est refusée.
+        $request->validate([
+            'motif'       => ['required', 'string', 'min:5', 'max:500'],
+            'valide_jours' => ['nullable', 'integer', 'min:1', 'max:90'],
+        ], ['motif.required' => "Le motif de l'approbation exceptionnelle est obligatoire.",
+            'motif.min'      => 'Le motif doit contenir au moins 5 caractères.']);
+
+        if (! in_array($commande->status, ['confirme', 'en_preparation'], true)) {
+            return back()->with('error', 'La commande doit être confirmée pour être approuvée en production.');
+        }
+        if ($commande->production_approved) {
+            return back()->with('error', 'Cette commande est déjà approuvée pour la production.');
+        }
+
+        // Snapshot du montant réellement non réglé au moment de l'approbation.
+        $invoiceIds = \App\Models\Invoice::where('order_id', $commande->id)->pluck('id');
+        $paid = $invoiceIds->isNotEmpty()
+            ? (int) \App\Models\ClientPaymentAllocation::whereIn('invoice_id', $invoiceIds)
+                ->whereHas('clientPayment', fn ($q) => $q->where('status', 'confirme'))->sum('amount')
+            : 0;
+        $unpaid = max(0, (int) $commande->total_ttc - $paid);
+
+        $commande->update([
+            'production_approved'            => true,
+            'production_approved_at'         => now(),
+            'production_approved_by'         => $request->user()->id,
+            'production_approval_reason'     => $request->input('motif'),
+            'production_approval_unpaid'     => $unpaid,
+            'production_approval_expires_at' => $request->filled('valide_jours')
+                ? today()->addDays((int) $request->input('valide_jours'))
+                : null,
+        ]);
+
+        \App\Notifications\ValidationStepNotification::sendToRoles(
+            ['chef_production', 'chef_atelier'],
+            'Commande approuvée pour production',
+            'La commande ' . $commande->numero . ' (impayé ' . number_format($unpaid, 0, ',', ' ') . ' FCFA) a été approuvée par ' . $request->user()->name . ' : ' . $request->input('motif'),
+            route('production.orders.eligible'),
+            'Order', $commande->id,
+            'production_approval', 'check-badge', 'green',
+        );
+
+        return back()->with('success', 'Commande approuvée pour la production — éligible à la création d\'OF.');
+    }
+
+    /**
+     * [Audit MTO] Révocation d'une approbation de production (avant création d'OF).
+     * Même permission que l'octroi. Refusée si un OF actif existe déjà.
+     */
+    public function revokeProduction(Request $request, Order $commande): RedirectResponse
+    {
+        if (! $commande->production_approved) {
+            return back()->with('error', 'Cette commande n\'est pas approuvée pour la production.');
+        }
+        if ($commande->hasActiveProductionOrder()) {
+            return back()->with('error', 'Un OF actif existe déjà — annulez d\'abord l\'OF avant de révoquer l\'approbation.');
+        }
+
+        // [GO conditionnel #2] Mémoriser l'approbateur d'origine avant effacement
+        // pour le prévenir de la révocation.
+        $previousApproverId = $commande->production_approved_by;
+
+        $commande->update([
+            'production_approved'            => false,
+            'production_approved_at'         => null,
+            'production_approved_by'         => null,
+            'production_approval_reason'     => null,
+            'production_approval_unpaid'     => null,
+            'production_approval_expires_at' => null,
+        ]);
+
+        \App\Notifications\ValidationStepNotification::sendToRoles(
+            ['chef_production', 'chef_atelier'],
+            'Approbation de production révoquée',
+            'L\'approbation de la commande ' . $commande->numero . ' a été révoquée par ' . $request->user()->name . ' — la commande n\'est plus éligible à un OF.',
+            route('ventes.commandes.show', $commande),
+            'Order', $commande->id,
+            'production_approval_revoked', 'x-circle', 'red',
+        );
+        if ($previousApproverId && $previousApproverId !== $request->user()->id) {
+            \App\Models\User::find($previousApproverId)?->notify(new \App\Notifications\ValidationStepNotification(
+                'Votre approbation de production a été révoquée',
+                'L\'approbation que vous aviez accordée sur la commande ' . $commande->numero . ' a été révoquée par ' . $request->user()->name . '.',
+                route('ventes.commandes.show', $commande),
+                'Order', $commande->id,
+                'production_approval_revoked', 'x-circle', 'red',
+            ));
+        }
+
+        return back()->with('success', 'Approbation de production révoquée.');
     }
 }

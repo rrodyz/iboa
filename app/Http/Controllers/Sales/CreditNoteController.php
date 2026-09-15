@@ -100,6 +100,20 @@ class CreditNoteController extends Controller
         }
     }
 
+    /** [VEN Retour] Génère un BL de remplacement (brouillon) depuis un avoir validé. */
+    public function replacement(CreditNote $avoir)
+    {
+        $this->authorize('update', $avoir);
+        try {
+            $dn = $this->service->createReplacementDelivery($avoir);
+            return redirect()
+                ->route('ventes.bons-livraison.show', $dn)
+                ->with('success', 'Bon de livraison de remplacement ' . $dn->number . ' créé (brouillon).');
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function destroy(CreditNote $avoir)
     {
         $this->authorize('delete', $avoir);
@@ -173,6 +187,11 @@ class CreditNoteController extends Controller
             ->setPaper(strtolower($settings?->page_size ?? 'a4'), $settings?->orientation ?? 'portrait');
 
         $filename = 'Avoir_' . str_replace(['/', '\\', ' '], '-', $creditNote->number) . '.pdf';
+
+        // [Phase 2.8] Archiver l'exemplaire émis d'un avoir validé/appliqué/remboursé
+        if (! in_array($creditNote->status, ['brouillon', 'annule'], true)) {
+            app(\App\Services\DocumentArchiveService::class)->archive($creditNote, $pdf->output(), $creditNote->number);
+        }
 
         return $request->boolean('preview')
             ? $pdf->stream($filename)

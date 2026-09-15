@@ -22,12 +22,19 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withEvents(discover: false)
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            // [SEC-PHASE2] Coupe la session d'un compte désactivé (le login seul ne suffit pas)
+            \App\Http\Middleware\EnsureUserIsActive::class,
             \App\Http\Middleware\SetCurrentCompany::class,
             \App\Http\Middleware\TrackLastLogin::class,
             \App\Http\Middleware\SecurityHeaders::class,
             // [CONCURRENCE-MULTI-USER] Anti-double-soumission sur tous les POST
             // (s'active uniquement si le champ _idempotency_key est présent)
             \App\Http\Middleware\IdempotencyMiddleware::class,
+        ]);
+        // [SEC-PHASE2 §7] Canal API : un compte désactivé est refusé à chaque
+        // requête, indépendamment de l'existence de son token.
+        $middleware->api(append: [
+            \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,

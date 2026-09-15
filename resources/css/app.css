@@ -1,6 +1,42 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHIE GLOBALE — Inter servie en LOCAL (@fontsource, bundlée par Vite).
+   Aucune dépendance CDN : l'ERP reste utilisable sans Internet.
+   Poids chargés : 400 (texte), 500 (labels/boutons), 600 (titres), 700 (KPIs).
+═══════════════════════════════════════════════════════════════════════════ */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [FIX lisibilité formulaires] @tailwindcss/forms applique py-2 (8px) par
+   défaut aux inputs. Dans un champ compact h-8 (32px), 8+8 de padding
+   + line-height 24px = 40px de contenu → texte coupé / décentré verticalement.
+   On force py-0 sur tous les champs h-8/h-7 : le texte se centre naturellement
+   (même piège déjà corrigé au cas par cas sur les selects — règle globale ici).
+═══════════════════════════════════════════════════════════════════════════ */
+@layer base {
+    input.h-8:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select.h-8,
+    input.h-7:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select.h-7 {
+        padding-top: 0;
+        padding-bottom: 0;
+        line-height: 1.25;
+    }
+
+    /* Même famille de piège : @tailwindcss/forms réserve pr 2.5rem pour le
+       chevron du select, mais toute utilité px-2/px-3 l'écrase → flèche
+       superposée au texte (« Toutes les années⌄ »). ~40 selects concernés.
+       !important requis : la couche utilities prime sinon sur base. */
+    select:not([multiple]):not([size]) {
+        padding-right: 2rem !important;
+    }
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DESIGN TOKENS — Système ERP pro 2025
@@ -25,11 +61,11 @@
     --text-muted:      #94A3B8;   /* texte atténué */
     --text-disabled:   #CBD5E1;
 
-    /* Marque (indigo professionnel) */
-    --brand:           #4F46E5;
-    --brand-hover:     #4338CA;
-    --brand-soft:      #EEF2FF;
-    --brand-strong:    #312E81;
+    /* Marque (émeraude — charte Sage X3, violet proscrit) */
+    --brand:           #047857;
+    --brand-hover:     #065F46;
+    --brand-soft:      #ECFDF5;
+    --brand-strong:    #064E3B;
 
     /* États sémantiques */
     --success:         #059669;
@@ -76,6 +112,13 @@
         color: var(--text-primary);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* [Typo globale] Les contrôles de formulaire et tableaux héritent toujours
+       de la police de l'app (certains navigateurs imposent leur police système
+       aux <button>/<input>/<select> malgré le preflight). */
+    button, input, select, textarea, table, label {
+        font-family: inherit;
     }
 
     /* Focus visible accessible (WCAG AA) */
@@ -155,9 +198,9 @@
     .btn-primary {
         @apply text-white;
         background: var(--brand);
-        box-shadow: 0 1px 2px rgba(79, 70, 229, .15);
+        box-shadow: 0 1px 2px rgba(4, 120, 87, .15);
     }
-    .btn-primary:hover { background: var(--brand-hover); box-shadow: 0 4px 10px rgba(79, 70, 229, .25); }
+    .btn-primary:hover { background: var(--brand-hover); box-shadow: 0 4px 10px rgba(4, 120, 87, .25); }
 
     .btn-secondary {
         background: var(--surface-card);
@@ -173,7 +216,8 @@
     .btn-teal     { @apply bg-teal-600 text-white hover:bg-teal-700; }
     .btn-amber    { @apply bg-amber-600 text-white hover:bg-amber-700; }
     .btn-gray     { @apply bg-gray-700 text-white hover:bg-gray-800; }
-    .btn-purple   { @apply bg-purple-600 text-white hover:bg-purple-700; }
+    /* [Charte X3] Violet proscrit — alias secondaire blanc bordé */
+    .btn-purple   { @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50; }
     .btn-sky      { @apply bg-sky-600 text-white hover:bg-sky-700; }
 
     /* Tailles */
@@ -211,10 +255,10 @@
     .badge-green  { @apply bg-green-100  text-green-700; }
     .badge-red    { @apply bg-red-100    text-red-700; }
     .badge-orange { @apply bg-orange-100 text-orange-700; }
-    .badge-purple { @apply bg-purple-100 text-purple-700; }
+    .badge-purple { @apply bg-teal-100 text-teal-700; } /* [Charte X3] violet proscrit */
     .badge-teal   { @apply bg-teal-100   text-teal-700; }
     .badge-yellow { @apply bg-yellow-100 text-yellow-700; }
-    .badge-indigo { @apply bg-indigo-100 text-indigo-700; }
+    .badge-indigo { @apply bg-blue-100 text-blue-700; } /* [Charte X3] violet proscrit */
     .badge-amber  { @apply bg-amber-100  text-amber-700; }
     .badge-sky    { @apply bg-sky-100    text-sky-700; }
 
@@ -252,6 +296,11 @@
         color: #064e3b;
         border-bottom: 1px solid #d1d5db;
     }
+    /* .tbl thead th (0-1-2) écrase les utilités d'alignement (0-1-0) posées
+       dans les blades → en-têtes numériques bloqués à gauche alors que les
+       cellules sont à droite. Ré-autorise text-right/text-center sur les th. */
+    .tbl thead th.text-right  { text-align: right; }
+    .tbl thead th.text-center { text-align: center; }
     .tbl tbody tr {
         transition: background-color var(--t-fast);
     }
@@ -360,7 +409,10 @@
     /* Animation fade-in-up (utilisée dans le dashboard) */
     @keyframes fade-in-up {
         from { opacity: 0; transform: translateY(8px); }
-        to   { opacity: 1; transform: translateY(0); }
+        /* [FIX modales] Terminer sur `none` (pas translateY(0)) : avec animation-fill-mode
+           `both`, l'élément conserve sinon un `transform` résiduel qui fait de lui le bloc
+           conteneur de tous ses descendants `position: fixed` → modales dimensionnées 0×0. */
+        to   { opacity: 1; transform: none; }
     }
     .animate-fade-in-up { animation: fade-in-up 280ms cubic-bezier(0.4, 0, 0.2, 1) both; }
 
@@ -425,7 +477,7 @@ html.dark {
     --text-muted:      #64748B;
     --text-disabled:   #475569;
 
-    --brand-soft:      #1E1B4B;
+    --brand-soft:      #022C22;
     --success-soft:    #064E3B;
     --warning-soft:    #451A03;
     --danger-soft:     #450A0A;
@@ -459,11 +511,11 @@ html.dark .badge-blue   { background: #1E3A5F; color: #60A5FA; }
 html.dark .badge-green,
 html.dark .badge-emerald { background: #064E3B; color: #34D399; }
 html.dark .badge-red    { background: #450A0A; color: #F87171; }
-html.dark .badge-indigo { background: #1E1B4B; color: #A5B4FC; }
+html.dark .badge-indigo { background: #172554; color: #93C5FD; }
 html.dark .badge-amber  { background: #451A03; color: #FCD34D; }
 html.dark .badge-yellow { background: #422006; color: #FDE68A; }
 html.dark .badge-orange { background: #431407; color: #FB923C; }
-html.dark .badge-purple { background: #3B0764; color: #C4B5FD; }
+html.dark .badge-purple { background: #042F2E; color: #5EEAD4; }
 html.dark .badge-teal   { background: #134E4A; color: #2DD4BF; }
 html.dark .badge-sky    { background: #0C1E3C; color: #38BDF8; }
 
@@ -478,7 +530,20 @@ html.dark .badge-sky    { background: #0C1E3C; color: #38BDF8; }
 html.dark .erp-content .bg-white { background-color: var(--surface-card) !important; }
 html.dark .erp-content .bg-gray-50,
 html.dark .erp-content .bg-gray-100 { background-color: var(--surface-muted) !important; }
+/* gray-200 : pistes de toggle off, séparateurs pleins, fonds désactivés */
+html.dark .erp-content .bg-gray-200 { background-color: var(--border) !important; }
 html.dark .erp-content .bg-gray-50\/30 { background-color: transparent !important; }
+/* Bandeaux X3 en dégradé (bg-gradient-to-b from-gray-50 to-white, ~54 vues) :
+   les classes gradient ne passent pas par background-color — sans ce remap,
+   bandeau clair éblouissant en mode sombre. Dégradé aplati sur les surfaces. */
+html.dark .erp-content .from-gray-50 {
+    --tw-gradient-from: var(--surface-muted) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: transparent var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+html.dark .erp-content .to-white {
+    --tw-gradient-to: var(--surface-card) var(--tw-gradient-to-position) !important;
+}
 
 /* Texte */
 html.dark .erp-content .text-gray-900,
@@ -515,6 +580,50 @@ html.dark .erp-content textarea {
 html.dark .erp-content .shadow-sm,
 html.dark .erp-content .shadow,
 html.dark .erp-content .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,.35) !important; }
+
+/* ═══════════ [Fix dark mode systémique] Bande de section X3 + bandeaux sémantiques ═══════════
+   La bande d'en-tête de section (bg-[#eef5f0] / bg-band, ~235 vues) et les bandeaux
+   d'alerte à fond clair (bg-*-50) n'étaient pas remappés → clairs sur fond sombre.
+   On les teinte en sombre + on éclaircit texte et bordures pour garder le contraste. */
+
+/* Bande d'en-tête de section (design system X3) */
+html.dark .erp-content .bg-\[\#eef5f0\],
+html.dark .erp-content .bg-band { background-color: var(--surface-muted) !important; }
+
+/* Fonds de bandeaux/tuiles/badges sémantiques clairs (-50 et -100) → teinte sombre.
+   Le remappage -100 est indispensable pour les badges inline bg-*-100 + text-*-800 :
+   sans lui, le texte éclairci ci-dessous serait clair sur badge clair (illisible). */
+html.dark .erp-content .bg-amber-50,   html.dark .erp-content .bg-amber-100   { background-color: var(--warning-soft) !important; }
+html.dark .erp-content .bg-red-50,     html.dark .erp-content .bg-red-100,
+html.dark .erp-content .bg-rose-50,    html.dark .erp-content .bg-rose-100    { background-color: var(--danger-soft) !important; }
+html.dark .erp-content .bg-green-50,   html.dark .erp-content .bg-green-100,
+html.dark .erp-content .bg-emerald-50, html.dark .erp-content .bg-emerald-100 { background-color: var(--success-soft) !important; }
+html.dark .erp-content .bg-blue-50,    html.dark .erp-content .bg-blue-100,
+html.dark .erp-content .bg-sky-50,     html.dark .erp-content .bg-sky-100,
+html.dark .erp-content .bg-indigo-50,  html.dark .erp-content .bg-indigo-100  { background-color: var(--info-soft) !important; }
+html.dark .erp-content .bg-yellow-50,  html.dark .erp-content .bg-yellow-100  { background-color: #422006 !important; }
+html.dark .erp-content .bg-orange-50,  html.dark .erp-content .bg-orange-100  { background-color: #431407 !important; }
+html.dark .erp-content .bg-purple-50,  html.dark .erp-content .bg-purple-100,
+html.dark .erp-content .bg-violet-50,  html.dark .erp-content .bg-violet-100  { background-color: #2E1065 !important; }
+
+/* Texte des bandeaux → nuances claires lisibles sur teinte sombre */
+html.dark .erp-content .text-emerald-900, html.dark .erp-content .text-emerald-800,
+html.dark .erp-content .text-emerald-700, html.dark .erp-content .text-green-800,
+html.dark .erp-content .text-green-700    { color: #6EE7B7 !important; }
+html.dark .erp-content .text-amber-800,   html.dark .erp-content .text-amber-700   { color: #FCD34D !important; }
+html.dark .erp-content .text-red-800,     html.dark .erp-content .text-red-700,
+html.dark .erp-content .text-rose-700     { color: #FCA5A5 !important; }
+html.dark .erp-content .text-blue-800,    html.dark .erp-content .text-blue-700,
+html.dark .erp-content .text-sky-700,     html.dark .erp-content .text-indigo-700  { color: #93C5FD !important; }
+html.dark .erp-content .text-yellow-800,  html.dark .erp-content .text-yellow-700  { color: #FDE68A !important; }
+html.dark .erp-content .text-orange-800,  html.dark .erp-content .text-orange-700  { color: #FDBA74 !important; }
+html.dark .erp-content .text-purple-800,  html.dark .erp-content .text-purple-700  { color: #D8B4FE !important; }
+
+/* Bordures claires des bandeaux → teinte sombre correspondante */
+html.dark .erp-content .border-amber-200,  html.dark .erp-content .border-amber-100   { border-color: #78350F !important; }
+html.dark .erp-content .border-red-200,    html.dark .erp-content .border-red-100     { border-color: #7F1D1D !important; }
+html.dark .erp-content .border-green-200,  html.dark .erp-content .border-emerald-200 { border-color: #065F46 !important; }
+html.dark .erp-content .border-blue-200,   html.dark .erp-content .border-sky-200     { border-color: #1E3A8A !important; }
 
 /* ═══════════ [SAGE X3] Topbar sombre #11181F — lisibilité du breadcrumb ═══════════
    Les pages injectent des classes claires (text-gray-900, hover:text-gray-700)
