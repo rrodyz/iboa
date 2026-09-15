@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Treasury;
 
+use App\Models\PaymentMethod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -29,8 +30,10 @@ class StoreClientPaymentRequest extends FormRequest
 
     public function rules(): array
     {
+        $paymentMethod = PaymentMethod::query()->find($this->input('payment_method_id'));
+
         return [
-            'client_id'                          => 'required|exists:clients,id',
+            'client_id'                          => ['required', Rule::exists('clients', 'id')->whereNull('deleted_at')],
             'order_id'                           => [
                 'nullable',
                 'integer',
@@ -39,15 +42,15 @@ class StoreClientPaymentRequest extends FormRequest
                     ->where('status', '!=', 'annule')
                     ->whereNull('deleted_at')),
             ],
-            'payment_method_id'                  => 'nullable|exists:payment_methods,id',
+            'payment_method_id'                  => ['required', Rule::exists('payment_methods', 'id')->where('is_active', true)],
             // [RELATION MÉTIER] Tout encaissement entre dans UNE caisse/banque —
             // sans elle, la transaction de caisse et l'imputation comptable (571/521)
             // ne peuvent pas être rattachées au bon compte.
-            'cash_account_id'                    => 'required|exists:cash_accounts,id',
+            'cash_account_id'                    => ['required', Rule::exists('cash_accounts', 'id')->where('is_active', true)->whereNull('deleted_at')],
             'amount'                             => 'required|numeric|min:1',
             'payment_date'                       => 'required|date',
-            'reference'                          => 'nullable|string|max:100',
-            'phone_number'                       => 'nullable|string|max:20',
+            'reference'                          => [Rule::requiredIf((bool) $paymentMethod?->requires_reference), 'nullable', 'string', 'max:100'],
+            'phone_number'                       => [Rule::requiredIf((bool) $paymentMethod?->is_mobile_money), 'nullable', 'string', 'max:20'],
             'notes'                              => 'nullable|string',
             'is_acompte'                         => 'nullable|boolean',
             'force_duplicate'                    => 'nullable|boolean',
@@ -60,15 +63,15 @@ class StoreClientPaymentRequest extends FormRequest
             'value_date'                         => 'nullable|date',
             'piece_number'                       => 'nullable|string|max:60',
             'bank_reference'                     => 'nullable|string|max:100',
-            'treasury_journal'                   => 'nullable|string|max:20',
+            'treasury_journal'                   => 'required|string|max:20',
             'payment_condition'                  => 'nullable|string|max:60',
             'cost_center'                        => 'nullable|string|max:30',
             'analytic_section'                   => 'nullable|string|max:30',
             'project'                            => 'nullable|string|max:60',
             'salesperson'                        => 'nullable|string|max:100',
-            'site'                               => 'nullable|string|max:40',
+            'site'                               => 'required|string|max:40',
             'observations'                       => 'nullable|string|max:1000',
-            'documents'                          => 'nullable|array',
+            'documents'                          => [Rule::requiredIf((bool) $paymentMethod?->attachment_required), 'nullable', 'array', 'min:1'],
             'documents.*'                        => 'file|mimes:pdf,jpg,jpeg,png,doc,docx,xls,xlsx|max:5120',
         ];
     }
@@ -101,7 +104,13 @@ class StoreClientPaymentRequest extends FormRequest
             'payment_date.required'                     => 'La date de paiement est obligatoire.',
             'payment_date.date'                         => 'La date de paiement n\'est pas une date valide.',
             'payment_method_id.exists'                  => 'Le mode de paiement sélectionné est invalide.',
+            'payment_method_id.required'                => 'Veuillez sélectionner un mode de paiement.',
+            'reference.required'                        => 'La référence est obligatoire pour ce mode de paiement.',
+            'phone_number.required'                     => 'Le numéro de téléphone est obligatoire pour un règlement Mobile Money.',
             'cash_account_id.exists'                    => 'La caisse sélectionnée est invalide.',
+            'treasury_journal.required'                 => 'Le journal de trésorerie est obligatoire.',
+            'site.required'                             => 'Le site est obligatoire.',
+            'documents.required'                        => 'Un justificatif est obligatoire pour ce mode de paiement.',
             'reference.max'                             => 'La référence ne peut pas dépasser 100 caractères.',
             'allocations.*.invoice_id.required_with'    => 'Chaque imputation doit référencer une facture.',
             'allocations.*.invoice_id.exists'           => 'Une facture sélectionnée pour imputation est invalide.',

@@ -34,16 +34,31 @@ class ClientPaymentService
             $data['created_by'] = Auth::id();
 
             if (!empty($data['order_id'])) {
-                $orderIsValid = Order::query()
+                $order = Order::query()
+                    ->lockForUpdate()
                     ->whereKey($data['order_id'])
                     ->where('client_id', $data['client_id'] ?? null)
-                    ->where('status', '!=', 'annule')
-                    ->exists();
+                    ->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre', 'livre', 'facture'])
+                    ->first();
 
-                if (!$orderIsValid) {
+                if (!$order) {
                     throw new \RuntimeException(
-                        'La commande sélectionnée est annulée ou n’appartient pas au client choisi.'
+                        'La commande sélectionnée n’est pas validée ou n’appartient pas au client choisi.'
                     );
+                }
+
+                $alreadyReceived = (int) ClientPayment::query()
+                    ->where('order_id', $order->id)
+                    ->where('status', 'confirme')
+                    ->sum('amount');
+                $orderBalance = max(0, (int) $order->total_ttc - $alreadyReceived);
+
+                if ((int) ($data['amount'] ?? 0) > $orderBalance) {
+                    throw new \RuntimeException(sprintf(
+                        'Le montant dépasse le reste à encaisser de la commande %s (%s FCFA).',
+                        $order->number,
+                        number_format($orderBalance, 0, ',', ' ')
+                    ));
                 }
             }
 
@@ -98,6 +113,12 @@ class ClientPaymentService
                 if ((int) $invoice->client_id !== (int) $payment->client_id) {
                     throw new \RuntimeException(
                         'La facture ' . $invoice->number . ' n\'appartient pas au client sélectionné.'
+                    );
+                }
+
+                if ($payment->order_id && (int) $invoice->order_id !== (int) $payment->order_id) {
+                    throw new \RuntimeException(
+                        'La facture ' . $invoice->number . ' ne provient pas de la commande rattachée à cet encaissement.'
                     );
                 }
 
@@ -330,9 +351,10 @@ class ClientPaymentService
     /**
      * Return unpaid (validated or partial) invoices for a given client.
      */
-    public function getClientUnpaidInvoices(int $clientId): Collection
+    public function getClientUnpaidInvoices(int $clientId, ?int $orderId = null): Collection
     {
         return Invoice::where('client_id', $clientId)
+            ->when($orderId, fn ($query) => $query->where('order_id', $orderId))
             ->whereIn('status', ['emise', 'envoyee', 'partiellement_payee', 'en_retard'])
             ->where('remaining_amount', '>', 0)
             ->orderBy('due_at')
@@ -359,6 +381,9 @@ class ClientPaymentService
             $invoice = Invoice::lockForUpdate()->find($invoiceId);
             if (!$invoice || (int) $invoice->client_id !== (int) $payment->client_id) {
                 throw new \RuntimeException('Facture introuvable ou appartenant à un autre client.');
+            }
+            if ($payment->order_id && (int) $invoice->order_id !== (int) $payment->order_id) {
+                throw new \RuntimeException('Cette facture ne provient pas de la commande rattachée à l’encaissement.');
             }
             if (in_array($invoice->status, ['payee', 'annulee'])) {
                 throw new \RuntimeException("La facture {$invoice->number} est déjà {$invoice->status}.");
@@ -400,6 +425,100 @@ class ClientPaymentService
     }
 
     /**
+     * Annule un encaissement confirmé et restaure toutes ses conséquences.
+     */
+    public function cancel(ClientPayment $payment, string $reason): ClientPayment
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new \RuntimeException('Le motif d’annulation est obligatoire.');
+        }
+
+        return DB::transaction(function () use ($payment, $reason) {
+            $payment = ClientPayment::lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->status === 'annule') {
+                throw new \RuntimeException('Cet encaissement est déjà annulé.');
+            }
+            if ($payment->status !== 'confirme') {
+                throw new \RuntimeException('Seul un encaissement confirmé peut être annulé.');
+            }
+
+            $payment->load(['allocations', 'cashAccount', 'client']);
+
+            foreach ($payment->allocations as $allocation) {
+                $invoice = Invoice::lockForUpdate()->find($allocation->invoice_id);
+                if (!$invoice) {
+                    continue;
+                }
+
+                $newPaid = max(0, (int) $invoice->paid_amount - (int) $allocation->amount);
+                $netToPay = (int) $invoice->net_to_pay
+                    ?: max(0, (int) $invoice->total_ttc - (int) ($invoice->withholding_amount ?? 0));
+                $newRemaining = max(0, $netToPay - $newPaid);
+                $newStatus = $newPaid > 0
+                    ? 'partiellement_payee'
+                    : ($invoice->due_at?->isPast() ? 'en_retard' : 'emise');
+
+                $invoice->update([
+                    'paid_amount'      => $newPaid,
+                    'remaining_amount' => $newRemaining,
+                    'status'           => $newStatus,
+                ]);
+
+                $this->reversePaymentFromSchedule($invoice->id, (int) $allocation->amount);
+            }
+
+            $payment->allocations()->delete();
+
+            $entry = $payment->journal_entry_id
+                ? \App\Models\JournalEntry::find($payment->journal_entry_id)
+                : \App\Models\JournalEntry::where('company_id', $payment->company_id)
+                    ->where('reference', $payment->number)
+                    ->where('status', 'valide')
+                    ->first();
+            if ($entry && !$entry->reversed_by_entry_id) {
+                $this->accountingService->reverseEntry(
+                    $entry,
+                    'Annulation encaissement ' . $payment->number . ' — ' . $reason
+                );
+            }
+
+            $cashTransactionExists = \App\Models\CashTransaction::query()
+                ->where('reference_id', $payment->id)
+                ->whereIn('reference_type', ['ClientPayment', ClientPayment::class])
+                ->exists();
+            if ($cashTransactionExists && $payment->cashAccount) {
+                $this->cashService->recordTransaction($payment->cashAccount, [
+                    'type'             => 'debit',
+                    'reference_type'   => 'ClientPaymentCancellation',
+                    'reference_id'     => $payment->id,
+                    'amount'           => $payment->amount,
+                    'label'            => 'Annulation encaissement ' . $payment->number,
+                    'transaction_date' => today(),
+                ]);
+            }
+
+            $auditNote = sprintf(
+                '[ANNULATION %s par %s] %s',
+                now()->format('d/m/Y H:i'),
+                Auth::user()?->name ?? 'système',
+                $reason
+            );
+            $payment->update([
+                'status'             => 'annule',
+                'allocated_amount'   => 0,
+                'unallocated_amount' => 0,
+                'notes'              => trim(($payment->notes ?? '') . "\n\n" . $auditNote),
+            ]);
+
+            $payment->client?->recalculateBalance();
+
+            return $payment->fresh();
+        });
+    }
+
+    /**
      * [ECHEANCIER] Applique un montant reçu sur les lignes de l'échéancier de la facture,
      * en commençant par la plus ancienne échéance non réglée (ordre chronologique).
      *
@@ -427,6 +546,30 @@ class ClientPaymentService
             $toApply = min($remaining, $scheduleRemaining);
             $this->scheduleService->markPayment($schedule, $toApply);
             $remaining -= $toApply;
+        }
+    }
+
+    private function reversePaymentFromSchedule(int $invoiceId, int $amount): void
+    {
+        $schedules = ClientPaymentSchedule::where('invoice_id', $invoiceId)
+            ->where('paid_amount', '>', 0)
+            ->orderByDesc('due_date')
+            ->orderByDesc('installment_number')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($schedules as $schedule) {
+            if ($amount <= 0) {
+                break;
+            }
+
+            $toReverse = min($amount, (int) $schedule->paid_amount);
+            $newPaid = max(0, (int) $schedule->paid_amount - $toReverse);
+            $schedule->update([
+                'paid_amount' => $newPaid,
+                'status'      => $newPaid <= 0 ? 'en_attente' : 'partiel',
+            ]);
+            $amount -= $toReverse;
         }
     }
 }

@@ -16,6 +16,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\FiscalYear;
 use App\Models\Order;
+use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\TaxRate;
 use App\Models\Unit;
@@ -142,6 +143,83 @@ it('refuse de rattacher un encaissement à la commande d’un autre client', fun
         'amount'          => 1000,
         'payment_date'    => now()->toDateString(),
     ])->assertSessionHasErrors('order_id');
+});
+
+it('refuse une facture différente de la commande rattachée et un dépassement du solde commande', function () {
+    $this->actingAs(cpayAdmin());
+    $client  = Client::factory()->create();
+    $invoiceA = cpayValidatedInvoice($client);
+    $invoiceB = cpayValidatedInvoice($client);
+    $cash = cpayCashAccount();
+
+    expect(fn () => app(ClientPaymentService::class)->create([
+        'client_id'       => $client->id,
+        'order_id'        => $invoiceA->order_id,
+        'cash_account_id' => $cash->id,
+        'amount'          => 1000,
+        'payment_date'    => now()->toDateString(),
+        'allocations'     => [['invoice_id' => $invoiceB->id, 'allocated_amount' => 1000]],
+    ]))->toThrow(\RuntimeException::class, 'ne provient pas de la commande');
+
+    expect(fn () => app(ClientPaymentService::class)->create([
+        'client_id'       => $client->id,
+        'order_id'        => $invoiceA->order_id,
+        'cash_account_id' => $cash->id,
+        'amount'          => 12000,
+        'payment_date'    => now()->toDateString(),
+    ]))->toThrow(\RuntimeException::class, 'dépasse le reste à encaisser');
+});
+
+it('applique les obligations du mode de paiement', function () {
+    $this->actingAs(cpayAdmin());
+    $client = Client::factory()->create();
+    $cash   = cpayCashAccount();
+    $method = PaymentMethod::factory()->create([
+        'is_active'          => true,
+        'requires_reference' => true,
+        'is_mobile_money'    => true,
+        'attachment_required'=> true,
+    ]);
+
+    $this->post(route('tresorerie.encaissements.store'), [
+        'client_id'          => $client->id,
+        'payment_method_id'  => $method->id,
+        'cash_account_id'    => $cash->id,
+        'amount'             => 1000,
+        'payment_date'       => now()->toDateString(),
+        'site'               => '01',
+        'treasury_journal'   => 'BAN1',
+    ])->assertSessionHasErrors(['reference', 'phone_number', 'documents']);
+});
+
+it('annule un encaissement et restaure facture caisse et comptabilité', function () {
+    $this->actingAs(cpayAdmin());
+    $client  = Client::factory()->create();
+    $invoice = cpayValidatedInvoice($client);
+    $cash    = cpayCashAccount();
+
+    $payment = app(ClientPaymentService::class)->create([
+        'client_id'       => $client->id,
+        'order_id'        => $invoice->order_id,
+        'cash_account_id' => $cash->id,
+        'amount'          => 11800,
+        'payment_date'    => now()->toDateString(),
+        'allocations'     => [['invoice_id' => $invoice->id, 'allocated_amount' => 11800]],
+    ]);
+
+    expect((int) $cash->fresh()->current_balance)->toBe(11800);
+
+    app(ClientPaymentService::class)->cancel($payment, 'Erreur de saisie confirmée');
+
+    $payment->refresh();
+    $invoice->refresh();
+    expect($payment->status)->toBe('annule')
+        ->and($payment->allocations()->count())->toBe(0)
+        ->and((int) $payment->allocated_amount)->toBe(0)
+        ->and((int) $invoice->paid_amount)->toBe(0)
+        ->and((int) $invoice->remaining_amount)->toBe(11800)
+        ->and((int) $cash->fresh()->current_balance)->toBe(0)
+        ->and($payment->journalEntry?->reversed_by_entry_id)->not->toBeNull();
 });
 
 it('encaissement partiel → facture partiellement payée, reste à payer mis à jour', function () {

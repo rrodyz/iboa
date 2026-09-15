@@ -138,6 +138,11 @@ class Order extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function clientPayments(): HasMany
+    {
+        return $this->hasMany(ClientPayment::class);
+    }
+
     public function productionOrders(): HasMany
     {
         return $this->hasMany(\App\Modules\Production\Models\ProductionOrder::class);

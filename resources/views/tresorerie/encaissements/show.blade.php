@@ -10,7 +10,7 @@
 @endsection
 
 @section('content')
-<div class="space-y-3">
+<div class="space-y-3" x-data="{ showCancelModal: false, cancelReason: '', get canCancel() { return this.cancelReason.trim().length >= 5; } }">
 
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -51,6 +51,14 @@
                 </svg>
                 Reçu PDF
             </a>
+            @can('update', $payment)
+                @if($payment->status === 'confirme')
+                <button type="button" @click="showCancelModal = true; cancelReason = ''"
+                        class="inline-flex items-center gap-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-medium px-2.5 py-1.5 rounded-[4px] transition-colors">
+                    Annuler
+                </button>
+                @endif
+            @endcan
             <div class="text-right">
                 <p class="text-xs text-gray-500">Montant reçu</p>
                 <p class="text-[16px] font-bold text-green-700 tabular-nums">
@@ -346,6 +354,36 @@
             Retour à la liste
         </a>
     </div>
+
+    @can('update', $payment)
+    @if($payment->status === 'confirme')
+    <div x-show="showCancelModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @keydown.escape.window="showCancelModal = false">
+        <div class="bg-white rounded-[4px] shadow-2xl w-full max-w-md" @click.outside="showCancelModal = false">
+            <div class="px-5 py-3 border-b border-gray-200">
+                <h3 class="font-semibold text-gray-900">Annuler l’encaissement {{ $payment->number }}</h3>
+            </div>
+            <form action="{{ route('tresorerie.encaissements.cancel', $payment) }}" method="POST">
+                @csrf
+                <div class="px-5 py-4 space-y-3">
+                    <div class="bg-amber-50 border border-amber-200 rounded-[4px] p-3 text-xs text-amber-800">
+                        Les factures, l’échéancier, la caisse et l’écriture comptable seront restaurés automatiquement.
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Motif <span class="text-red-500">*</span></label>
+                        <textarea name="reason" x-model="cancelReason" required minlength="5" maxlength="500" rows="3"
+                                  class="w-full border border-gray-300 rounded-[4px] px-3 py-2 text-sm"></textarea>
+                    </div>
+                </div>
+                <div class="px-5 py-3 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+                    <button type="button" @click="showCancelModal = false" class="border border-gray-300 px-3 py-1.5 rounded-[4px] text-sm">Fermer</button>
+                    <button type="submit" :disabled="!canCancel" class="bg-red-600 text-white px-3 py-1.5 rounded-[4px] text-sm disabled:opacity-50">Confirmer l’annulation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    @endif
+    @endcan
 
 </div>
 

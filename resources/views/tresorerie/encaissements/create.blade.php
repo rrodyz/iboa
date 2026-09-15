@@ -97,12 +97,12 @@
                     </div>
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">Site <span class="text-red-500">*</span></label>
-                        <input type="text" name="site" maxlength="40" value="{{ old('site', '01') }}" class="{{ $inp }}">
+                        <input type="text" name="site" required maxlength="40" value="{{ old('site', '01') }}" class="{{ $inp }}">
                         <p class="text-[12px] text-gray-500 mt-0.5">Site principal</p>
                     </div>
                     <div class="col-span-2"><label class="{{ $lbl }}">Date encaissement <span class="text-red-500">*</span></label><input type="date" name="payment_date" required value="{{ old('payment_date', date('Y-m-d')) }}" class="{{ $errors->has('payment_date') ? $err : $inp }}"></div>
                     <div class="col-span-2"><label class="{{ $lbl }}">Heure <span class="text-red-500">*</span></label><input type="text" :value="heure || '—'" class="{{ $inpRo }} tabular-nums" readonly></div>
-                    <div class="col-span-2"><label class="{{ $lbl }}">Statut</label><input type="text" value="Brouillon" class="{{ $inpRo }}" readonly></div>
+                    <div class="col-span-2"><label class="{{ $lbl }}">Statut</label><input type="text" value="Confirmé à l’enregistrement" class="{{ $inpRo }}" readonly></div>
 
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">Client <span class="text-red-500">*</span></label>
@@ -119,16 +119,16 @@
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">N° commande</label>
                         <div class="relative">
-                            <select name="order_id" x-model="orderId" :disabled="!clientId || loadingOrders" class="{{ $errors->has('order_id') ? $err.' pr-8 appearance-none' : $lk }} disabled:bg-gray-100 disabled:text-gray-400">
+                            <select name="order_id" x-model="orderId" @change="loadInvoices()" :disabled="!clientId || loadingOrders" class="{{ $errors->has('order_id') ? $err.' pr-8 appearance-none' : $lk }} disabled:bg-gray-100 disabled:text-gray-400">
                                 <option value="" x-text="loadingOrders ? 'Chargement…' : (clientId ? '— Sans commande —' : 'Choisir un client')"></option>
                                 <template x-for="order in orders" :key="order.id">
-                                    <option :value="String(order.id)" x-text="`${order.number} — ${formatFcfa(order.total_ttc)}`"></option>
+                                    <option :value="String(order.id)" x-text="`${order.number} — reste ${formatFcfa(order.remaining_amount)}`"></option>
                                 </template>
                             </select>{!! $caret !!}
                         </div>
                         @error('order_id')<p class="text-red-500 text-[12px] mt-1">{{ $message }}</p>@enderror
                     </div>
-                    <div class="col-span-2"><label class="{{ $lbl }}">Référence paiement</label><input type="text" name="reference" maxlength="100" value="{{ old('reference') }}" class="{{ $inp }}"></div>
+                    <div class="col-span-2"><label class="{{ $lbl }}">Référence paiement <span class="text-red-500" x-show="selectedMethod?.requires_reference">*</span></label><input type="text" name="reference" maxlength="100" value="{{ old('reference') }}" :required="selectedMethod?.requires_reference" class="{{ $inp }}"></div>
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">Devise <span class="text-red-500">*</span></label>
                         <input type="text" value="XOF" class="{{ $inpRo }} font-mono" readonly>
@@ -136,13 +136,13 @@
                     </div>
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">Journal de trésorerie <span class="text-red-500">*</span></label>
-                        <input type="text" name="treasury_journal" maxlength="20" value="{{ old('treasury_journal', 'BAN1') }}" class="{{ $inp }} font-mono">
+                        <input type="text" name="treasury_journal" required maxlength="20" value="{{ old('treasury_journal', 'BAN1') }}" class="{{ $inp }} font-mono">
                         <p class="text-[12px] text-gray-500 mt-0.5">Banque principale XOF</p>
                     </div>
                     <div class="col-span-2">
                         <label class="{{ $lbl }}">Mode de règlement <span class="text-red-500">*</span></label>
                         <div class="relative">
-                            <select name="payment_method_id" x-model="paymentMethodId" class="{{ $lk }}">
+                            <select name="payment_method_id" required x-model="paymentMethodId" class="{{ $lk }}">
                                 <option value="">—</option>
                                 @foreach($paymentMethods as $pm)
                                     <option value="{{ $pm->id }}" {{ old('payment_method_id') == $pm->id ? 'selected' : '' }}>{{ $pm->name }}</option>
@@ -170,7 +170,7 @@
 
                     <div class="col-span-4" x-show="isMobileMoney" x-transition x-cloak>
                         <label class="{{ $lbl }}">Tél. Mobile Money <span class="text-red-500" x-show="isMobileMoney">*</span></label>
-                        <input type="tel" name="phone_number" maxlength="20" value="{{ old('phone_number') }}" placeholder="+226 70…" class="{{ $inp }}">
+                        <input type="tel" name="phone_number" maxlength="20" value="{{ old('phone_number') }}" :required="isMobileMoney" placeholder="+226 70…" class="{{ $inp }}">
                     </div>
                 </div>
             </section>
@@ -338,8 +338,9 @@
                     <div class="col-span-3"><label class="{{ $lbl }}">Projet</label><input type="text" name="project" maxlength="60" value="{{ old('project') }}" class="{{ $inp }}"></div>
 
                     <div class="col-span-3" x-ref="sec_pieces">
-                        <label class="{{ $lbl }}">Pièces jointes</label>
+                        <label class="{{ $lbl }}">Pièces jointes <span class="text-red-500" x-show="selectedMethod?.attachment_required">*</span></label>
                         <input type="file" name="documents[]" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                               :required="selectedMethod?.attachment_required"
                                class="w-full text-[13px] border border-gray-400 rounded-[3px] px-2 py-1.5 cursor-pointer file:mr-2 file:py-0.5 file:px-2 file:border-0 file:bg-emerald-50 file:text-emerald-700 file:rounded-[2px] file:text-[12px] file:font-semibold hover:file:bg-emerald-100">
                     </div>
                     <div class="col-span-9"><label class="{{ $lbl }}">Observations</label><textarea name="observations" rows="2" maxlength="1000" class="w-full px-2.5 py-1.5 border border-gray-400 rounded-[3px] text-[14px] text-gray-900 bg-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-400 resize-none">{{ old('observations') }}</textarea></div>
@@ -412,7 +413,8 @@ function paymentForm(config) {
             }
             this.loading  = true;
             this.invoices = [];
-            fetch(`{{ route('tresorerie.encaissements.invoices') }}?client_id=${this.clientId}`, {
+            const orderFilter = this.orderId ? `&order_id=${this.orderId}` : '';
+            fetch(`{{ route('tresorerie.encaissements.invoices') }}?client_id=${this.clientId}${orderFilter}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
             .then(r => r.json())

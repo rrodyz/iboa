@@ -30,6 +30,7 @@ class PaymentMethod extends Model
     protected $casts = [
         'is_mobile_money'    => 'boolean',
         'requires_reference' => 'boolean',
+        'attachment_required'=> 'boolean',
         'is_active'          => 'boolean',
         'sort_order'         => 'integer',
     ];

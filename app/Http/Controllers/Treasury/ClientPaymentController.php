@@ -118,7 +118,7 @@ class ClientPaymentController extends Controller
     {
         $this->authorize('create', ClientPayment::class);
         $clients        = Client::active()->orderBy('name')->get(['id', 'name', 'trade_name']);
-        $paymentMethods = PaymentMethod::where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'type', 'requires_reference', 'is_mobile_money']);
+        $paymentMethods = PaymentMethod::where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'type', 'requires_reference', 'is_mobile_money', 'attachment_required']);
         $cashAccounts   = CashAccount::where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'current_balance']);
         $selectedClient = $request->query('client_id');
 
@@ -267,6 +267,28 @@ class ClientPaymentController extends Controller
         return back()->with('success', 'Imputation enregistrée avec succès.');
     }
 
+    public function cancel(Request $request, ClientPayment $encaissement): RedirectResponse
+    {
+        $this->authorize('update', $encaissement);
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'reason.required' => 'Le motif d’annulation est obligatoire.',
+            'reason.min'      => 'Le motif doit comporter au moins 5 caractères.',
+        ]);
+
+        try {
+            $this->service->cancel($encaissement, $data['reason']);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()
+            ->route('tresorerie.encaissements.show', $encaissement)
+            ->with('success', 'Encaissement annulé : factures, caisse et comptabilité restaurées.');
+    }
+
     /**
      * AJAX: return unpaid invoices for a given client_id.
      */
@@ -274,12 +296,13 @@ class ClientPaymentController extends Controller
     {
         $this->authorize('create', ClientPayment::class);
         $clientId = (int) $request->query('client_id');
+        $orderId  = $request->integer('order_id') ?: null;
 
         if (!$clientId) {
             return response()->json([]);
         }
 
-        $invoices = $this->service->getClientUnpaidInvoices($clientId);
+        $invoices = $this->service->getClientUnpaidInvoices($clientId, $orderId);
 
         return response()->json($invoices->map(fn ($inv) => [
             'id'               => $inv->id,
@@ -306,17 +329,25 @@ class ClientPaymentController extends Controller
 
         $orders = Order::query()
             ->where('client_id', $clientId)
-            ->where('status', '!=', 'annule')
+            ->whereIn('status', ['confirme', 'en_preparation', 'partiellement_livre', 'livre', 'facture'])
+            ->withSum([
+                'clientPayments as received_amount' => fn ($query) => $query->where('status', 'confirme'),
+            ], 'amount')
             ->latest('issued_at')
             ->latest('id')
             ->get(['id', 'number', 'issued_at', 'total_ttc', 'status']);
 
-        return response()->json($orders->map(fn (Order $order) => [
-            'id'         => $order->id,
-            'number'     => $order->number,
-            'issued_at'  => $order->issued_at?->format('d/m/Y'),
-            'total_ttc'  => $order->total_ttc,
-            'status'     => $order->status,
-        ]));
+        return response()->json($orders
+            ->map(fn (Order $order) => [
+                'id'               => $order->id,
+                'number'           => $order->number,
+                'issued_at'        => $order->issued_at?->format('d/m/Y'),
+                'total_ttc'        => $order->total_ttc,
+                'received_amount'  => (int) ($order->received_amount ?? 0),
+                'remaining_amount' => max(0, (int) $order->total_ttc - (int) ($order->received_amount ?? 0)),
+                'status'           => $order->status,
+            ])
+            ->filter(fn (array $order) => $order['remaining_amount'] > 0)
+            ->values());
     }
 }
