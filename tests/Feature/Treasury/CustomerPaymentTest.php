@@ -15,6 +15,7 @@ use App\Models\CashTransaction;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\FiscalYear;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\TaxRate;
 use App\Models\Unit;
@@ -76,6 +77,7 @@ it('encaissement total → facture payée, reste à payer = 0, mouvement de tré
 
     $payment = app(ClientPaymentService::class)->create([
         'client_id'       => $client->id,
+        'order_id'        => $invoice->order_id,
         'cash_account_id' => $cash->id,
         'amount'          => 11800,
         'method'          => 'virement',
@@ -86,12 +88,60 @@ it('encaissement total → facture payée, reste à payer = 0, mouvement de tré
     $invoice->refresh();
     expect($invoice->status)->toBe('payee');
     expect((int) $invoice->remaining_amount)->toBe(0);
+    expect($payment->order_id)->toBe($invoice->order_id);
 
     // Mouvement de trésorerie (crédit) rattaché à l'encaissement.
     $tx = CashTransaction::where('reference_type', 'ClientPayment')->where('reference_id', $payment->id)->first();
     expect($tx)->not->toBeNull();
     expect($tx->type)->toBe('credit');
     expect((int) $tx->amount)->toBe(11800);
+});
+
+it('liste uniquement les commandes du client choisi pour un encaissement', function () {
+    $user = cpayAdmin();
+    $this->actingAs($user);
+
+    $client = Client::factory()->create();
+    $other  = Client::factory()->create();
+    $base   = [
+        'company_id'    => $user->company_id,
+        'fiscal_year_id'=> $user->company->current_fiscal_year_id,
+        'issued_at'     => now()->toDateString(),
+        'total_ttc'     => 25000,
+    ];
+
+    Order::create($base + ['client_id' => $client->id, 'number' => 'CMD-CLIENT-001', 'status' => 'confirme']);
+    Order::create($base + ['client_id' => $client->id, 'number' => 'CMD-ANNULEE-001', 'status' => 'annule']);
+    Order::create($base + ['client_id' => $other->id,  'number' => 'CMD-AUTRE-001', 'status' => 'confirme']);
+
+    $this->getJson(route('tresorerie.encaissements.orders', ['client_id' => $client->id]))
+        ->assertOk()
+        ->assertJsonCount(1)
+        ->assertJsonPath('0.number', 'CMD-CLIENT-001');
+});
+
+it('refuse de rattacher un encaissement à la commande d’un autre client', function () {
+    $user = cpayAdmin();
+    $this->actingAs($user);
+
+    $client = Client::factory()->create();
+    $other  = Client::factory()->create();
+    $order  = Order::create([
+        'company_id'     => $user->company_id,
+        'fiscal_year_id' => $user->company->current_fiscal_year_id,
+        'client_id'      => $other->id,
+        'number'         => 'CMD-AUTRE-002',
+        'status'         => 'confirme',
+        'issued_at'      => now()->toDateString(),
+    ]);
+
+    $this->post(route('tresorerie.encaissements.store'), [
+        'client_id'       => $client->id,
+        'order_id'        => $order->id,
+        'cash_account_id' => cpayCashAccount()->id,
+        'amount'          => 1000,
+        'payment_date'    => now()->toDateString(),
+    ])->assertSessionHasErrors('order_id');
 });
 
 it('encaissement partiel → facture partiellement payée, reste à payer mis à jour', function () {

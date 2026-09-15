@@ -118,7 +118,12 @@
                             <a href="{{ route('tresorerie.encaissements.show', $payment) }}" class="font-mono font-semibold text-emerald-700 hover:underline">{{ $payment->number }}</a>
                         </td>
                         <td class="px-3 py-1 text-gray-600 whitespace-nowrap">{{ $payment->payment_date?->format('d/m/Y') }}</td>
-                        <td class="px-3 py-1 font-medium text-gray-900">{{ $payment->client?->trade_name ?? $payment->client?->name ?? '—' }}</td>
+                        <td class="px-3 py-1 font-medium text-gray-900">
+                            <div>{{ $payment->client?->trade_name ?? $payment->client?->name ?? '—' }}</div>
+                            @if($payment->order)
+                                <div class="font-mono text-[10.5px] font-normal text-gray-500">{{ $payment->order->number }}</div>
+                            @endif
+                        </td>
                         <td class="px-3 py-1 text-right font-semibold tabular-nums text-emerald-700 whitespace-nowrap">{{ number_format($payment->amount, 0, ',', ' ') }}</td>
                         <td class="px-3 py-1 hidden md:table-cell">
                             @if($payment->paymentMethod)

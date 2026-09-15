@@ -13,6 +13,7 @@ use App\Models\CashAccount;
 use App\Models\Client;
 use App\Models\ClientPayment;
 use App\Models\Invoice;
+use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Repositories\ClientPaymentRepository;
 use App\Services\ClientPaymentService;
@@ -288,6 +289,34 @@ class ClientPaymentController extends Controller
             'total_ttc'        => $inv->total_ttc,
             'remaining_amount' => $inv->remaining_amount,
             'status'           => $inv->status,
+        ]));
+    }
+
+    /**
+     * AJAX: return the selectable sales orders for a given client.
+     */
+    public function getOrders(Request $request): JsonResponse
+    {
+        $this->authorize('create', ClientPayment::class);
+        $clientId = (int) $request->query('client_id');
+
+        if (!$clientId) {
+            return response()->json([]);
+        }
+
+        $orders = Order::query()
+            ->where('client_id', $clientId)
+            ->where('status', '!=', 'annule')
+            ->latest('issued_at')
+            ->latest('id')
+            ->get(['id', 'number', 'issued_at', 'total_ttc', 'status']);
+
+        return response()->json($orders->map(fn (Order $order) => [
+            'id'         => $order->id,
+            'number'     => $order->number,
+            'issued_at'  => $order->issued_at?->format('d/m/Y'),
+            'total_ttc'  => $order->total_ttc,
+            'status'     => $order->status,
         ]));
     }
 }

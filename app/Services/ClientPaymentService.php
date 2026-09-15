@@ -7,6 +7,7 @@ use App\Models\CashAccount;
 use App\Models\ClientPayment;
 use App\Models\ClientPaymentSchedule;
 use App\Models\Invoice;
+use App\Models\Order;
 use App\Repositories\ClientPaymentRepository;
 use App\Services\AccountingService;
 use App\Services\LettrageService;
@@ -31,6 +32,20 @@ class ClientPaymentService
             unset($data['allocations']);
 
             $data['created_by'] = Auth::id();
+
+            if (!empty($data['order_id'])) {
+                $orderIsValid = Order::query()
+                    ->whereKey($data['order_id'])
+                    ->where('client_id', $data['client_id'] ?? null)
+                    ->where('status', '!=', 'annule')
+                    ->exists();
+
+                if (!$orderIsValid) {
+                    throw new \RuntimeException(
+                        'La commande sélectionnée est annulée ou n’appartient pas au client choisi.'
+                    );
+                }
+            }
 
             // [DOUBLE-PAYMENT-GUARD] Protection anti-doublon AVANT toute écriture :
             // - refuse un encaissement strictement identique (client + montant + méthode + référence)

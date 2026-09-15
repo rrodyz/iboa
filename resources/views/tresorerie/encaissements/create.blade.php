@@ -13,6 +13,7 @@
 @php
     $formConfig = [
         'clientId'        => $selectedClient,
+        'orderId'         => old('order_id', ''),
         'amount'          => old('amount'),
         'bankFees'        => old('bank_fees', 0),
         'paymentMethodId' => old('payment_method_id', ''),
@@ -114,6 +115,18 @@
                             </select>{!! $caret !!}
                         </div>
                         @error('client_id')<p class="text-red-500 text-[12px] mt-1">{{ $message }}</p>@enderror
+                    </div>
+                    <div class="col-span-2">
+                        <label class="{{ $lbl }}">N° commande</label>
+                        <div class="relative">
+                            <select name="order_id" x-model="orderId" :disabled="!clientId || loadingOrders" class="{{ $errors->has('order_id') ? $err.' pr-8 appearance-none' : $lk }} disabled:bg-gray-100 disabled:text-gray-400">
+                                <option value="" x-text="loadingOrders ? 'Chargement…' : (clientId ? '— Sans commande —' : 'Choisir un client')"></option>
+                                <template x-for="order in orders" :key="order.id">
+                                    <option :value="String(order.id)" x-text="`${order.number} — ${formatFcfa(order.total_ttc)}`"></option>
+                                </template>
+                            </select>{!! $caret !!}
+                        </div>
+                        @error('order_id')<p class="text-red-500 text-[12px] mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div class="col-span-2"><label class="{{ $lbl }}">Référence paiement</label><input type="text" name="reference" maxlength="100" value="{{ old('reference') }}" class="{{ $inp }}"></div>
                     <div class="col-span-2">
@@ -353,12 +366,15 @@
 function paymentForm(config) {
     return {
         clientId:        config.clientId ? String(config.clientId) : '',
+        orderId:         config.orderId ? String(config.orderId) : '',
         amount:          (config.amount !== null && config.amount !== '') ? Number(config.amount) : '',
         bankFees:        Number(config.bankFees || 0),
         paymentMethodId: String(config.paymentMethodId || ''),
         paymentMethods:  config.paymentMethods || [],
         invoices:        [],
+        orders:          [],
         loading:         false,
+        loadingOrders:   false,
         submitting:      false,
         saveAndNew:      false,
 
@@ -381,10 +397,13 @@ function paymentForm(config) {
         init() {
             if (this.clientId) {
                 this.loadInvoices();
+                this.loadOrders();
             }
         },
         onClientChange() {
+            this.orderId = '';
             this.loadInvoices();
+            this.loadOrders();
         },
         loadInvoices() {
             if (!this.clientId) {
@@ -402,6 +421,31 @@ function paymentForm(config) {
                 this.loading  = false;
             })
             .catch(() => { this.loading = false; });
+        },
+        loadOrders() {
+            if (!this.clientId) {
+                this.orders = [];
+                this.orderId = '';
+                return;
+            }
+            this.loadingOrders = true;
+            this.orders = [];
+            fetch(`{{ route('tresorerie.encaissements.orders') }}?client_id=${this.clientId}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                this.orders = data;
+                if (this.orderId && !data.some(order => String(order.id) === String(this.orderId))) {
+                    this.orderId = '';
+                }
+                this.loadingOrders = false;
+            })
+            .catch(() => {
+                this.orders = [];
+                this.orderId = '';
+                this.loadingOrders = false;
+            });
         },
         autoAllocate() {
             let remaining = Number(this.amount);

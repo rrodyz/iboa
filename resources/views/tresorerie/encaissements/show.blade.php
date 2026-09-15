@@ -73,6 +73,12 @@
                         {{ $payment->client?->trade_name ?? $payment->client?->name ?? '—' }}
                     </dd>
                 </div>
+                @if($payment->order)
+                <div>
+                    <dt class="text-xs text-gray-500">Commande rattachée</dt>
+                    <dd class="font-mono font-medium text-gray-900">{{ $payment->order->number }}</dd>
+                </div>
+                @endif
                 <div>
                     <dt class="text-xs text-gray-500">Date</dt>
                     <dd class="font-medium text-gray-900">{{ $payment->payment_date?->format('d/m/Y') ?? '—' }}</dd>

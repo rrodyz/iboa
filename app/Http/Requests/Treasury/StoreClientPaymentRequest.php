@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Treasury;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreClientPaymentRequest extends FormRequest
 {
@@ -30,6 +31,14 @@ class StoreClientPaymentRequest extends FormRequest
     {
         return [
             'client_id'                          => 'required|exists:clients,id',
+            'order_id'                           => [
+                'nullable',
+                'integer',
+                Rule::exists('orders', 'id')->where(fn ($query) => $query
+                    ->where('client_id', $this->input('client_id'))
+                    ->where('status', '!=', 'annule')
+                    ->whereNull('deleted_at')),
+            ],
             'payment_method_id'                  => 'nullable|exists:payment_methods,id',
             // [RELATION MÉTIER] Tout encaissement entre dans UNE caisse/banque —
             // sans elle, la transaction de caisse et l'imputation comptable (571/521)
@@ -68,6 +77,7 @@ class StoreClientPaymentRequest extends FormRequest
     {
         return [
             'client_id'                      => 'client',
+            'order_id'                       => 'commande client',
             'payment_method_id'              => 'mode de paiement',
             'cash_account_id'                => 'caisse / compte',
             'payment_date'                   => 'date du paiement',
@@ -84,6 +94,7 @@ class StoreClientPaymentRequest extends FormRequest
         return [
             'client_id.required'                        => 'Veuillez sélectionner un client.',
             'client_id.exists'                          => 'Le client sélectionné est invalide.',
+            'order_id.exists'                           => 'La commande sélectionnée n’appartient pas au client choisi.',
             'amount.required'                           => 'Le montant encaissé est obligatoire.',
             'amount.numeric'                            => 'Le montant doit être un nombre valide.',
             'amount.min'                                => 'Le montant doit être supérieur à 0.',

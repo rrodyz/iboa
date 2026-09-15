@@ -144,6 +144,10 @@ tfoot td.r { text-align: right; }
         <div class="info-col">
             <div class="info-label">Date du paiement :</div>
             <div class="info-value">{{ $payment->payment_date?->format('d/m/Y') }}</div>
+            @if($payment->order)
+            <div class="info-label" style="margin-top:3px;">Commande :</div>
+            <div class="info-value">{{ $payment->order->number }}</div>
+            @endif
             @if($payment->reference)
             <div class="info-label" style="margin-top:3px;">Référence :</div>
             <div class="info-value">{{ $payment->reference }}</div>

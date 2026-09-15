@@ -833,6 +833,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware('permission:payments.view')->group(function () {
             Route::get('encaissements/factures',   [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'getInvoices'])->name('encaissements.invoices');
+            Route::get('encaissements/commandes',  [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'getOrders'])->name('encaissements.orders');
             Route::get('encaissements/export-pdf', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'exportPdf'])->name('encaissements.export-pdf');
             // Reçu PDF encaissement
             Route::get('encaissements/{encaissement}/recu', [\App\Http\Controllers\Treasury\ClientPaymentController::class, 'recu'])->name('encaissements.recu');

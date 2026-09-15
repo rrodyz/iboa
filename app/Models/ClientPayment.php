@@ -20,6 +20,7 @@ class ClientPayment extends Model
     protected $fillable = [
         'company_id',
         'client_id',
+        'order_id',
         'cash_account_id',
         'payment_method_id',
         'number',
@@ -70,6 +71,11 @@ class ClientPayment extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
     }
 
     public function company(): BelongsTo

@@ -27,7 +27,7 @@ class ClientPaymentRepository extends BaseRepository
         $query = ClientPayment::query()
             ->leftJoin('clients', 'client_payments.client_id', '=', 'clients.id')
             ->select('client_payments.*')
-            ->with(['client', 'paymentMethod', 'allocations.invoice'])
+            ->with(['client', 'order', 'paymentMethod', 'allocations.invoice'])
             ->when(
                 !empty($filters['client_id']),
                 fn ($q) => $q->where('client_payments.client_id', $filters['client_id'])
@@ -67,6 +67,7 @@ class ClientPaymentRepository extends BaseRepository
     {
         return ClientPayment::with([
             'client',
+            'order',
             'paymentMethod',
             'cashAccount',
             'allocations.invoice',
