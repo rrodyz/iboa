@@ -85,7 +85,11 @@ success "Migrations exécutées"
 
 # ── 7. Caches Laravel ─────────────────────────────────────────────────────────
 info "7/10 Reconstruction des caches Laravel..."
-php artisan cache:clear
+# Purger explicitement tous les artefacts d'un déploiement précédent avant de
+# reconstruire. Un simple cache:clear ne supprime ni les routes ni les vues
+# compilées et peut laisser la production exécuter un ancien écran avec le
+# nouveau code PHP.
+php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache

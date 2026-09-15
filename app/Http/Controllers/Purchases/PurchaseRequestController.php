@@ -58,8 +58,20 @@ class PurchaseRequestController extends Controller
 
     public function show(PurchaseRequest $demandesAchat): View
     {
-        $pr        = $this->service->repository->findWithDetails($demandesAchat->id);
-        $suppliers = Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $pr = $demandesAchat->load([
+            'items.product',
+            'items.unit',
+            'requestedBy',
+            'approvedBy',
+            'purchaseOrder',
+        ]);
+
+        // Le sélecteur fournisseur n'est affiché que pour une demande approuvée.
+        // Éviter cette requête pour les demandes déjà converties rend leur fiche
+        // indépendante du référentiel fournisseurs.
+        $suppliers = $pr->canBeConverted()
+            ? Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            : collect();
 
         return view('achats.demandes-achat.show', compact('pr', 'suppliers'));
     }

@@ -257,7 +257,7 @@
                     <div class="flex items-center gap-2">
                         <div class="w-2 h-2 rounded-full {{ in_array($pr->status, ['brouillon','soumis','approuve','converti']) ? 'bg-amber-400' : 'bg-gray-200' }}"></div>
                         <span class="text-gray-700">Créé</span>
-                        <span class="ml-auto text-gray-400 text-xs">{{ $pr->created_at->format('d/m/Y') }}</span>
+                        <span class="ml-auto text-gray-400 text-xs">{{ $pr->created_at?->format('d/m/Y') ?? '—' }}</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="w-2 h-2 rounded-full {{ in_array($pr->status, ['soumis','approuve','converti']) ? 'bg-blue-400' : 'bg-gray-200' }}"></div>
@@ -298,7 +298,7 @@
                     @endif
                     <div class="flex justify-between">
                         <span class="text-gray-500">Créé le</span>
-                        <span class="text-gray-700">{{ $pr->created_at->format('d/m/Y H:i') }}</span>
+                        <span class="text-gray-700">{{ $pr->created_at?->format('d/m/Y H:i') ?? '—' }}</span>
                     </div>
                 </div>
             </div>
